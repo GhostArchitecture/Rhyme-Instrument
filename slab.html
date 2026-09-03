@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>slab study — rhyme instrument</title>
+<style>
+:root {
+  /* light vector on the screen plane (unit), elevation 0..1, ambient 0..1, warmth 0..1, night 0..1 */
+  --lx: 0; --ly: 1; --elev: .6; --amb: .7; --warm: .3; --night: 0; --glow: .6; --sheen: .6; --nglow: 0px; --nglow-s: 0px; --lxpx: 0px; --lypx: 1px;
+  --rake: 6px;                 /* shadow length from sun elevation */
+  --sub: #1b1a22; --sub-hi: #2c2a36; --sub-lo: #0e0d13;
+  --edge: #0b0a10;
+  --bone: #ece3d0; --bone-lo: #b7ad9c;
+  --gilt-a: #ffe9a3; --gilt-b: #d9a52c; --gilt-c: #7a5510;
+  --amethyst: #8d5cf0; --amethyst-lo: #4a2a8c; --malachite: #3fbf7e; --malachite-lo: #1c6a45;
+  --mineral: var(--amethyst); --mineral-lo: var(--amethyst-lo);
+  --bronze-a: #d9a866; --bronze-b: #8f6a35; --bronze-c: #4f3a1c; --verdigris: #3f9a86; --verdigris-lo: #23574c;
+  --ink: #0b0a0d;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #09080d; color: var(--bone); font-family: var(--serif); -webkit-text-size-adjust: 100%; }
+body {
+  min-height: 100vh; padding: 0 0 70px;
+  background-image:
+    radial-gradient(120% 70% at 50% -10%, rgba(120,90,200,calc(.10 * var(--elev) + .05 * var(--night))) 0%, transparent 60%),
+    linear-gradient(180deg, #100e16, #09080d 40%);
+}
+
+/* ---- binding strip: the only chrome ---- */
+.binding {
+  position: sticky; top: 0; z-index: 20;
+  padding: 14px 16px 12px; padding-top: max(14px, env(safe-area-inset-top));
+  background:
+    linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,235,190,calc(.18 * var(--elev))) 0%, transparent 40%, rgba(0,0,0,.25) 100%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, var(--bronze-a) -30%, var(--bronze-b) 45%, var(--bronze-c) 100%);
+  border-bottom: 2px solid var(--verdigris-lo);
+  box-shadow: 0 1px 0 rgba(255,240,210,.35) inset, 0 -1px 0 var(--verdigris) inset, 0 10px 24px rgba(0,0,0,.6);
+  color: #f2e4c8;
+}
+.binding::after { content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 5px; pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(63,154,134,.55)); mix-blend-mode: screen; }
+.binding h1 { margin: 0; font-weight: 400; font-size: 21px; letter-spacing: .5px; color: #fff3da;
+  text-shadow: 0 1px 0 rgba(255,255,255,.25), 0 -1px 0 rgba(0,0,0,.6); }
+.binding h1 small { font-size: 13px; color: #ead9b6; opacity: .8; margin-left: 8px; }
+.sun { display: flex; align-items: baseline; gap: 14px; margin-top: 6px; font-size: 13px; color: #e6d2ac; font-variant-numeric: tabular-nums; }
+.sun b { font-weight: 400; color: #fff6e2; }
+.scrub { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.scrub input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 3px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--verdigris-lo), var(--verdigris), var(--verdigris-lo)); box-shadow: 0 1px 0 rgba(255,255,255,.15); }
+.scrub input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe9a8, #c99a2e 55%, #6a4d12); border: 1px solid #2a1f08; box-shadow: 0 0 0 3px rgba(255,220,120,.12); }
+.scrub button { font: inherit; font-size: 13px; color: #fff1d6; background: linear-gradient(180deg, #7a5c2f, #4f3a1c); border: 1px solid #2e2110; border-radius: 3px; padding: 5px 10px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.2) inset; }
+.scrub button[aria-pressed=true] { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); border-color: #163a33; color: #f4fff9; }
+.minerals { display: flex; gap: 6px; margin-top: 10px; }
+.minerals button { flex: 1; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 3px; border: 1px solid #2e2110; color: #f7ecd6;
+  background: linear-gradient(180deg, #6b5030, #43301a); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset; }
+.minerals button[aria-pressed=true] { color: #fff; border-color: rgba(0,0,0,.6); box-shadow: 0 0 0 1px var(--m) inset, 0 0 14px color-mix(in srgb, var(--m) 55%, transparent); background: linear-gradient(180deg, var(--m), color-mix(in srgb, var(--m) 55%, black)); }
+
+/* ---- the slab ---- */
+.stack { position: relative; padding: 26px 34px 0 14px; }
+.graph { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; overflow: visible; }
+.graph path { fill: none; stroke-linecap: round; }
+.graph .body { stroke: var(--vein-lo); opacity: .55; }
+.graph .thread { stroke: var(--vein-hi); }
+.graph .perfect .thread { stroke-width: 1.7; opacity: .95; }
+.graph .perfect .body { stroke-width: 5; }
+.graph .slant .thread { stroke-width: 1.1; opacity: .8; }
+.graph .slant .body { stroke-width: 3.2; }
+.graph .loose .thread { stroke-width: .9; opacity: .65; stroke-dasharray: 3 4; }
+.graph .loose .body { stroke-width: 2.4; opacity: .35; }
+.graph .internal .thread { stroke-dasharray: none; opacity: .9; }
+.graph path { filter: drop-shadow(0 0 var(--nglow-s) var(--vein-hi)); }
+.slab {
+  position: relative;
+  padding: 16px 16px 14px;
+  margin: 0 0 calc(var(--thick) + 10px);
+  border-radius: 3px 5px 4px 3px;
+  --thick: 14px;
+  background:
+    /* specular band: obsidian is glass; the sheen sits where the light hits */
+    linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg),
+      rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
+    /* mineral veins */
+    var(--veins),
+    /* conchoidal depth */
+    radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
+    radial-gradient(120% 80% at 90% 100%, color-mix(in srgb, var(--mineral-lo) 35%, var(--sub-lo)) 0%, transparent 55%),
+    linear-gradient(180deg, var(--sub-hi), var(--sub) 45%, var(--sub-lo));
+  background-blend-mode: screen, normal, normal, normal, normal;
+  box-shadow:
+    /* bevel: lit edge faces the sun, shadow edge away from it */
+    inset calc(var(--lx) * 1.5px) calc(var(--ly) * 1.5px) 0 rgba(255,255,255,calc(.30 * var(--elev) + .06)),
+    inset calc(var(--lx) * 3px) calc(var(--ly) * 3px) 0 color-mix(in srgb, var(--mineral) calc(35% * var(--elev)), transparent),
+    inset calc(var(--lx) * -2px) calc(var(--ly) * -2px) 0 rgba(0,0,0,.6),
+    /* extruded edge: thickness carries syllable count */
+    0 var(--thick) 0 -1px var(--edge),
+    0 calc(var(--thick) + 1px) 0 -1px rgba(255,255,255,.04),
+    /* cast shadow from the sun */
+    calc(var(--lx) * -1 * var(--rake)) calc(var(--ly) * -1 * var(--rake) + var(--thick)) calc(var(--rake) * 1.4) rgba(0,0,0,calc(.45 + .3 * var(--elev)));
+  background-size: auto, 100% 100%, auto, auto, auto;
+  --vein-alpha: .55;
+  transition: transform 340ms cubic-bezier(.2,.8,.2,1), box-shadow 340ms cubic-bezier(.2,.8,.2,1);
+  -webkit-tap-highlight-color: transparent;
+  overflow: visible;
+}
+.slab.lift { transform: translateY(-5px); z-index: 2;
+  box-shadow:
+    inset calc(var(--lx) * 1.5px) calc(var(--ly) * 1.5px) 0 rgba(255,255,255,calc(.22 * var(--elev) + .05)),
+    inset calc(var(--lx) * -2px) calc(var(--ly) * -2px) 0 rgba(0,0,0,.55),
+    0 var(--thick) 0 -1px var(--edge),
+    calc(var(--lx) * -1 * var(--rake) * 1.6) calc(var(--ly) * -1 * var(--rake) * 1.6 + var(--thick) + 6px) calc(var(--rake) * 2.4) rgba(0,0,0,.7); }
+.slab::before { /* grain */
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .18;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .8  0 0 0 0 .78  0 0 0 0 .85  0 0 0 .07 0'/></filter><rect width='120' height='120' filter='url(%23g)'/></svg>");
+}
+/* heat: drone run. warmth ∝ position in the run */
+.slab[data-heat] { --heat: 0; }
+.slab[data-heat]::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(270deg, rgba(255,110,30,calc(.32 * var(--heat))) 0%, rgba(255,150,50,calc(.10 * var(--heat))) 30%, transparent 62%);
+  box-shadow: inset calc(-2px - 2px * var(--heat)) 0 0 rgba(255,140,40,calc(.35 * var(--heat)));
+  mix-blend-mode: screen;
+}
+
+/* three scripts on one face */
+.text {
+  position: relative; z-index: 1;
+  font-size: 17px; line-height: 1.32; letter-spacing: .1px;
+  color: var(--bone);
+  /* engraved: the cut's lit lip lies away from the sun, the shadow lip toward it */
+  text-shadow:
+    calc(var(--lx) * -.8px) calc(var(--ly) * -.8px) 0 rgba(255,255,255,calc(.40 * var(--elev) + .06)),
+    calc(var(--lx) * .9px) calc(var(--ly) * .9px) 0 rgba(0,0,0,.9),
+    0 0 calc(10px * var(--night)) rgba(255,230,170,calc(.45 * var(--night)));
+}
+.text .w { white-space: nowrap; }
+.text .w.override {
+  color: transparent;
+  background: linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), var(--gilt-c) 0%, var(--gilt-b) 35%, var(--gilt-a) 55%, var(--gilt-b) 75%, var(--gilt-c) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(var(--lxpx) var(--lypx) 0 rgba(0,0,0,.8))
+          drop-shadow(0 0 var(--nglow) rgba(255,215,120,.7));
+}
+.text .w.rule { color: #9b9284; font-style: italic; } /* uncut: the dictionary didn't know it */
+
+.field { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px 6px; margin-top: 12px; align-items: flex-end; }
+.word { display: flex; flex-direction: column; gap: 3px; }
+.stones { display: flex; gap: 2px; }
+.stone {
+  --c: #888; position: relative; isolation: isolate;
+  min-width: 26px; height: 20px; padding: 0 5px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; line-height: 1; letter-spacing: .2px;
+  color: #fff8ec; text-shadow: 0 1px 1px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.5);
+  /* the body is translucent stone: the glow beneath it comes through */
+  background: color-mix(in srgb, var(--c) 72%, transparent);
+  box-shadow:
+    inset 0 0 6px color-mix(in srgb, var(--c) 55%, white),          /* lit from within */
+    inset 0 1px 0 rgba(255,255,255,.28),                            /* polished lip */
+    inset 0 -1px 0 rgba(0,0,0,.45),
+    0 0 0 1px rgba(0,0,0,.65);                                      /* the cut around the inlay */
+}
+.stone::before {  /* under-light: a bloom of the stone's own colour, beneath the body */
+  content: ""; position: absolute; inset: -7px -6px; border-radius: 9px; z-index: -1;
+  background: radial-gradient(closest-side, var(--c) 0%, color-mix(in srgb, var(--c) 60%, transparent) 45%, transparent 100%);
+  filter: blur(5px) saturate(1.4) brightness(1.5);
+  opacity: var(--glow);
+}
+.stone::after {   /* surface: one highlight that follows the sun */
+  content: ""; position: absolute; inset: 2px 3px; border-radius: 2px; pointer-events: none;
+  background: radial-gradient(60% 55% at 40% 35%, rgba(255,255,255,.55), rgba(255,255,255,0) 65%);
+  transform: translate(calc(var(--lx) * -4px), calc(var(--ly) * -4px));
+  opacity: var(--sheen);
+}
+.stone.s0 { background: color-mix(in srgb, var(--c) 55%, transparent); }
+.stone.s0::before { opacity: calc(var(--glow) * .7); }
+/* stress: relief marks cut below each stone */
+.marks { display: flex; gap: 2px; }
+.mark { flex: 1; min-width: 26px; height: 3px; border-radius: 1px; background: var(--sub-lo);
+  box-shadow: inset calc(var(--lx) * .6px) calc(var(--ly) * .6px) 0 rgba(0,0,0,.9),
+              inset calc(var(--lx) * -.6px) calc(var(--ly) * -.6px) 0 rgba(255,255,255,calc(.16 * var(--elev))),
+              0 0 4px color-mix(in srgb, var(--c, #888) 45%, transparent); }
+.mark.p1 { height: 5px; background: #08070a; }
+.mark.p2 { height: 4px; opacity: .85; }
+.mark.p0 { height: 1px; opacity: .6; }
+
+/* filler landing: a hairline crack */
+.crack { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+.crack path { fill: none; stroke-linecap: round; }
+.crack .dark { stroke: rgba(0,0,0,.9); stroke-width: 1.2; }
+.crack .lit { stroke: rgba(255,255,255,calc(.22 * var(--elev))); stroke-width: .8; transform: translate(calc(var(--lx) * -.8px), calc(var(--ly) * -.8px)); }
+
+.foot { position: relative; z-index: 1; display: flex; justify-content: space-between; margin-top: 12px; font-size: 12px; color: var(--bone-lo); }
+.foot span { opacity: .8; }
+
+.legend { padding: 8px 16px 0; font-size: 12.5px; line-height: 1.5; color: #9a9187; }
+.legend b { color: #cfc4b3; font-weight: 400; }
+
+@media (prefers-reduced-motion: reduce) { .slab { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="binding">
+  <h1>slab study <small>reading v2 · Middletown, Ohio</small></h1>
+  <div class="sun">
+    <span><b id="clock">—</b></span>
+    <span>sun <b id="elev">—</b> above</span>
+    <span>from <b id="azim">—</b></span>
+  </div>
+  <div class="scrub">
+    <input id="t" type="range" min="0" max="1439" step="1" value="720" aria-label="time of day">
+    <button id="live" aria-pressed="true">live</button>
+  </div>
+  <div class="minerals">
+    <button data-m="amethyst" style="--m: var(--amethyst)" aria-pressed="true">amethyst</button>
+    <button data-m="malachite" style="--m: var(--malachite)" aria-pressed="false">malachite</button>
+  </div>
+</header>
+
+<section class="stack" id="stack"></section>
+
+<p class="legend">
+  Thickness is syllable count. Stones are the vowel of each syllable; the cut beneath each is its stress.
+  <b>Gilt</b> is a word you overrode. <i>Italic</i> is a word the dictionary didn't know.
+  Warmth on the right edge is a drone run. A crack is a filler landing. Threads between words are rhymes the engine found:
+  heavy for perfect, light for slant, broken for reduced. Tap a slab to lift it.
+</p>
+
+<script>
+/* ---------- real reading() slice — engine 2.0, your draft, your override ---------- */
+const READING = {"v":2,"pop":"rap","limit":3,"flagged":[12,13,14],"runs":[{"v":"ER","len":1,"bars":[0]},{"v":"AY","len":1,"bars":[1]},{"v":"ER","len":1,"bars":[2]},{"v":"UW","len":1,"bars":[3]},{"v":"AE","len":1,"bars":[4]},{"v":"UW","len":3,"bars":[5,6,7]},{"v":"EY","len":6,"bars":[9,10,11,12,13,14]}],"bars":[{"i":0,"text":"Berreta under patent Italian leather","field":[{"word":"Berreta","source":"rule","sylls":[{"v":"ER","s":1,"c":"R"},{"v":"EH","s":1,"c":"T"},{"v":"AH","s":0,"c":""}]},{"word":"under","source":"cmu","sylls":[{"v":"AH","s":1,"c":""},{"v":"ER","s":0,"c":""}]},{"word":"patent","source":"cmu","sylls":[{"v":"AE","s":1,"c":""},{"v":"AH","s":0,"c":"NT"}]},{"word":"Italian","source":"cmu","sylls":[{"v":"IH","s":2,"c":""},{"v":"AE","s":1,"c":""},{"v":"AH","s":0,"c":"N"}]},{"word":"leather","source":"cmu","sylls":[{"v":"EH","s":1,"c":""},{"v":"ER","s":0,"c":""}]}],"syllables":12,"end":{"word":"leather","v":"ER","coda":"","source":"cmu","overridden":false},"filler":false,"cliche":null},{"i":7,"text":"Full tilt run at you","field":[{"word":"Full","source":"exception","sylls":[{"v":"UH","s":1,"c":"L"}]},{"word":"tilt","source":"cmu","sylls":[{"v":"IH","s":1,"c":"LT"}]},{"word":"run","source":"cmu","sylls":[{"v":"AH","s":1,"c":"N"}]},{"word":"at","source":"cmu","sylls":[{"v":"AE","s":1,"c":"T"}]},{"word":"you","source":"exception","sylls":[{"v":"UW","s":1,"c":""}]}],"syllables":5,"end":{"word":"you","v":"UW","coda":"","source":"exception","overridden":false},"filler":true,"cliche":null},{"i":12,"text":"Marmalade color on the shades in spain","field":[{"word":"Marmalade","source":"cmu","sylls":[{"v":"AR","s":1,"c":""},{"v":"AH","s":0,"c":""},{"v":"EY","s":2,"c":"D"}]},{"word":"color","source":"cmu","sylls":[{"v":"AH","s":1,"c":""},{"v":"ER","s":0,"c":""}]},{"word":"on","source":"exception","sylls":[{"v":"AO","s":1,"c":"N"}]},{"word":"the","source":"exception","sylls":[{"v":"AH","s":1,"c":""}]},{"word":"shades","source":"cmu","sylls":[{"v":"EY","s":1,"c":"DZ"}]},{"word":"in","source":"cmu","sylls":[{"v":"IH","s":0,"c":"N"}]},{"word":"spain","source":"cmu","sylls":[{"v":"EY","s":1,"c":"N"}]}],"syllables":10,"end":{"word":"spain","v":"EY","coda":"N","source":"cmu","overridden":false},"filler":false,"cliche":null},{"i":13,"text":"Got Brisbane baddies no lingerie","field":[{"word":"Got","source":"cmu","sylls":[{"v":"AA","s":1,"c":"T"}]},{"word":"Brisbane","source":"cmu","sylls":[{"v":"IH","s":1,"c":""},{"v":"EY","s":2,"c":"N"}]},{"word":"baddies","source":"rule","sylls":[{"v":"AE","s":1,"c":"DD"},{"v":"IY","s":1,"c":"S"}]},{"word":"no","source":"cmu","sylls":[{"v":"OW","s":1,"c":""}]},{"word":"lingerie","source":"cmu","sylls":[{"v":"AA","s":1,"c":""},{"v":"ER","s":0,"c":""},{"v":"EY","s":2,"c":""}]}],"syllables":9,"end":{"word":"lingerie","v":"EY","coda":"","source":"cmu","overridden":false},"filler":false,"cliche":null},{"i":14,"text":"Always tryna show me PDA","field":[{"word":"Always","source":"exception","sylls":[{"v":"AO","s":1,"c":"L"},{"v":"EY","s":1,"c":"Z"}]},{"word":"tryna","source":"rule","sylls":[{"v":"IH","s":1,"c":"N"},{"v":"AH","s":0,"c":""}]},{"word":"show","source":"cmu","sylls":[{"v":"OW","s":1,"c":""}]},{"word":"me","source":"exception","sylls":[{"v":"IY","s":1,"c":""}]},{"word":"PDA","source":"override","sylls":[{"v":"IY","s":1,"c":""},{"v":"IY","s":1,"c":""},{"v":"EY","s":1,"c":""}]}],"syllables":9,"end":{"word":"PDA","v":"EY","coda":"","source":"override","overridden":true},"filler":false,"cliche":null}],"edges":[{"a":0,"b":0,"kind":"loose","depth":2,"words":["under","leather"],"scope":"internal"},{"a":12,"b":12,"kind":"slant","depth":1,"words":["Marmalade","spain"],"scope":"internal"},{"a":12,"b":12,"kind":"slant","depth":1,"words":["shades","spain"],"scope":"internal"},{"a":12,"b":13,"kind":"slant","depth":1,"words":["spain","lingerie"],"scope":"terminal"},{"a":13,"b":13,"kind":"slant","depth":1,"words":["Brisbane","lingerie"],"scope":"internal"},{"a":12,"b":13,"kind":"perfect","depth":1,"words":["spain","Brisbane"],"scope":"internal"},{"a":12,"b":14,"kind":"slant","depth":1,"words":["spain","PDA"],"scope":"terminal"},{"a":13,"b":14,"kind":"perfect","depth":1,"words":["lingerie","PDA"],"scope":"terminal"},{"a":14,"b":14,"kind":"slant","depth":1,"words":["Always","PDA"],"scope":"internal"},{"a":13,"b":14,"kind":"slant","depth":1,"words":["lingerie","Always"],"scope":"internal"}]};
+const VOWEL_COLORS = { AY:"#C98A2D", IY:"#5B87A8", EY:"#8FA65B", EH:"#A0703F", AE:"#B04A3A", AH:"#9B8AA6", AA:"#C4A35A",
+  OW:"#5E9B8F", UW:"#4C7B9E", AW:"#B5835A", OY:"#8A6FA0", ER:"#7D8A6E", OR:"#A6825B", AR:"#B06A4A", IH:"#6E9BA6",
+  UH:"#8A8A7A", AIR:"#C9A27A", AO:"#A38A4E" };
+const VOWEL_NAMES = { AY:"eye", IY:"ee", EY:"ay", EH:"eh", AE:"a", AH:"uh", AA:"ah", OW:"oh", UW:"oo", AW:"ow", OY:"oy",
+  ER:"er", OR:"or", AR:"ar", IH:"ih", UH:"ŏŏ", AIR:"air", AO:"aw" };
+
+/* ---------- sundial: NOAA solar position, no network ---------- */
+const LAT = 39.515, LON = -84.398;
+function solar(date) {
+  const r = Math.PI / 180;
+  const start = new Date(date.getFullYear(), 0, 0);
+  const doy = Math.floor((date - start) / 864e5);
+  const hr = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
+  const g = 2 * Math.PI / 365 * (doy - 1 + (hr - 12) / 24);
+  const eqt = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  const tz = -date.getTimezoneOffset() / 60;
+  const tst = hr * 60 + eqt + 4 * LON - 60 * tz;
+  const ha = (tst / 4 - 180) * r;
+  const lat = LAT * r;
+  const cosZ = Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(ha);
+  const elev = 90 - Math.acos(Math.max(-1, Math.min(1, cosZ))) / r;
+  let az = Math.atan2(Math.sin(ha), Math.cos(ha) * Math.sin(lat) - Math.tan(decl) * Math.cos(lat)) / r + 180;
+  az = (az + 360) % 360;
+  return { elev, az };
+}
+function applyLight(date) {
+  const { elev, az } = solar(date);
+  const rs = document.documentElement.style;
+  /* tablet lies flat, north up: light arrives from the sun's azimuth on the screen plane */
+  const a = az * Math.PI / 180;
+  const lx = Math.sin(a), ly = -Math.cos(a);          /* east = right, south = down */
+  const e = Math.max(0, Math.min(1, Math.sin(Math.max(0, elev) * Math.PI / 180) * 1.25));
+  const night = Math.max(0, Math.min(1, (-elev - 2) / 8));            /* civil twilight → full night */
+  const twilight = 1 - Math.max(0, Math.min(1, Math.abs(elev) / 14)); /* warmth peaks at the horizon */
+  const rake = elev > 0 ? Math.min(22, 4 + 14 / Math.max(.25, Math.tan(elev * Math.PI / 180)) / 6) : 4;
+  const amb = 0.45 + 0.55 * e * (1 - night) + 0.18 * night;
+  rs.setProperty("--lx", elev > -6 ? lx.toFixed(3) : "0");
+  rs.setProperty("--ly", elev > -6 ? ly.toFixed(3) : "1");
+  rs.setProperty("--elev", e.toFixed(3));
+  rs.setProperty("--night", night.toFixed(3));
+  rs.setProperty("--amb", amb.toFixed(3));
+  rs.setProperty("--rake", rake.toFixed(1) + "px");
+  /* stones: under-light rises as the sun drops; surface sheen goes the other way */
+  rs.setProperty("--glow", (0.45 + 0.25 * (1 - e) + 0.30 * night).toFixed(2));
+  rs.setProperty("--sheen", (0.25 + 0.55 * e * (1 - night)).toFixed(2));
+  rs.setProperty("--lxpx", ((elev > -6 ? lx : 0) * .9).toFixed(2) + "px"); rs.setProperty("--lypx", ((elev > -6 ? ly : 1) * .9).toFixed(2) + "px");
+  rs.setProperty("--nglow", (6 * night).toFixed(1) + "px"); rs.setProperty("--nglow-s", (3 * night).toFixed(1) + "px");
+  /* substrate temperature: warm at the horizon, neutral at noon, cold at night */
+  const mix = (a, b, t) => a.map((c, i) => Math.round(c + (b[i] - c) * t));
+  const hex = c => "#" + c.map(v => v.toString(16).padStart(2, "0")).join("");
+  const noon = [28, 26, 36], horizon = [40, 28, 30], nightC = [14, 14, 26];
+  let sub = mix(noon, horizon, twilight * (1 - night)); sub = mix(sub, nightC, night);
+  rs.setProperty("--sub", hex(sub));
+  rs.setProperty("--sub-hi", hex(mix(sub, [255, 255, 255], .14 * (0.5 + e))));
+  rs.setProperty("--sub-lo", hex(mix(sub, [0, 0, 0], .42)));
+  const bone = mix(mix([236, 227, 208], [244, 214, 170], twilight * (1 - night)), [204, 208, 224], night);
+  rs.setProperty("--bone", hex(bone));
+  document.getElementById("elev").textContent = (elev >= 0 ? elev.toFixed(0) + "°" : "set");
+  const dirs = ["N","NE","E","SE","S","SW","W","NW"];
+  document.getElementById("azim").textContent = dirs[Math.round(az / 45) % 8] + " " + az.toFixed(0) + "°";
+  document.getElementById("clock").textContent = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/* ---------- minerals: veins are drawn once as an SVG image and set as a background layer ---------- */
+/* seeded PRNG: one seed per session, one derived seed per slab, so no two faces share a vein */
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const SESSION = (() => {
+  const fresh = () => String((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+  try { let k = sessionStorage.getItem("slab:seed"); if (!k) { k = fresh(); sessionStorage.setItem("slab:seed", k); } return +k; }
+  catch (e) { return +fresh(); }            /* storage blocked (file://, private mode): new veins every load */
+})();
+function veinSVG(hi, lo, seed) {
+  const R = mulberry32(seed);
+  const rnd = (a, b) => a + R() * (b - a);
+  const W = 480, H = 200;
+  let strokes = "";
+  const n = 2 + Math.floor(R() * 3);                       /* 2–4 veins per face */
+  for (let i = 0; i < n; i++) {
+    let x = rnd(-30, 30), y = rnd(15, H - 15);
+    let d = `M${x.toFixed(0)} ${y.toFixed(0)}`;
+    const segs = 3 + Math.floor(R() * 3), amp = rnd(18, 60), dir = R() < .5 ? -1 : 1;
+    for (let k = 0; k < segs; k++) {
+      const nx = x + (W + 60) / segs * rnd(.8, 1.2);
+      const ny = Math.max(6, Math.min(H - 6, y + dir * rnd(-amp, amp * .4) * (k % 2 ? -1 : 1)));
+      const c1x = x + (nx - x) * rnd(.25, .45), c1y = y + rnd(-amp, amp);
+      const c2x = x + (nx - x) * rnd(.55, .8), c2y = ny + rnd(-amp, amp);
+      d += ` C ${c1x.toFixed(0)} ${c1y.toFixed(0)}, ${c2x.toFixed(0)} ${c2y.toFixed(0)}, ${nx.toFixed(0)} ${ny.toFixed(0)}`;
+      /* occasional offshoot: a short branch that dies out */
+      if (R() < .35) {
+        const bx = nx + rnd(-40, 40), by = ny + rnd(-45, 45);
+        strokes += `<path d='M${nx.toFixed(0)} ${ny.toFixed(0)} Q ${((nx + bx) / 2 + rnd(-15, 15)).toFixed(0)} ${((ny + by) / 2 + rnd(-15, 15)).toFixed(0)} ${bx.toFixed(0)} ${by.toFixed(0)}' stroke='${hi}' stroke-width='${rnd(.5, 1).toFixed(2)}' opacity='${rnd(.3, .6).toFixed(2)}'/>`;
+      }
+      x = nx; y = ny;
+    }
+    const body = rnd(2.5, 6.5), thread = rnd(.9, 2.1);
+    strokes += `<path d='${d}' stroke='${lo}' stroke-width='${body.toFixed(1)}' opacity='${rnd(.2, .4).toFixed(2)}'/>` +
+               `<path d='${d}' stroke='${hi}' stroke-width='${thread.toFixed(1)}' opacity='${rnd(.35, .6).toFixed(2)}'/>`;
+  }
+  const fx = rnd(.008, .018).toFixed(3), fy = rnd(.025, .06).toFixed(3), sc = rnd(16, 34).toFixed(0), ts = Math.floor(R() * 999);
+  return `url("data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}' viewBox='0 0 ${W} ${H}'><defs><filter id='v' x='-10%' y='-20%' width='120%' height='140%'>` +
+    `<feTurbulence type='fractalNoise' baseFrequency='${fx} ${fy}' numOctaves='3' seed='${ts}'/><feDisplacementMap in='SourceGraphic' scale='${sc}' xChannelSelector='R' yChannelSelector='G'/>` +
+    `<feGaussianBlur stdDeviation='.5'/></filter></defs><g fill='none' stroke-linecap='round' filter='url(%23v)'>${strokes}</g></svg>`)}")`;
+}
+const MINERALS = { amethyst: ["#c9a6ff", "#5a36a8", "var(--amethyst)", "var(--amethyst-lo)"], malachite: ["#9ff0c5", "#1f7a50", "var(--malachite)", "var(--malachite-lo)"] };
+let MINERAL = "amethyst";
+function setMineral(name) {
+  MINERAL = name;
+  const [hi, lo, m, mlo] = MINERALS[name];
+  const rs = document.documentElement.style;
+  rs.setProperty("--mineral", m); rs.setProperty("--mineral-lo", mlo);
+  rs.setProperty("--vein-hi", hi); rs.setProperty("--vein-lo", lo);
+  document.querySelectorAll(".slab").forEach((el, i) => el.style.setProperty("--veins", veinSVG(hi, lo, SESSION ^ ((i + 1) * 0x9E3779B1))));
+  document.querySelectorAll(".minerals button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === name)));
+}
+document.querySelectorAll(".minerals button").forEach(b => b.addEventListener("click", () => setMineral(b.dataset.m)));
+
+/* ---------- render ---------- */
+const stack = document.getElementById("stack");
+const runOf = i => READING.runs.find(r => r.bars.includes(i));
+function slab(bar) {
+  const el = document.createElement("article");
+  el.className = "slab";
+  el.style.setProperty("--thick", (6 + bar.syllables * 1.3).toFixed(0) + "px");
+  const run = runOf(bar.i);
+  if (READING.flagged.includes(bar.i) && run) {
+    el.dataset.heat = "";
+    const pos = run.bars.indexOf(bar.i) - READING.limit + 1;          /* 1 = first bar past the line */
+    el.style.setProperty("--heat", Math.min(1, pos / (run.len - READING.limit)).toFixed(2));
+  }
+  const text = document.createElement("p"); text.className = "text";
+  bar.field.forEach((w, i) => {
+    const s = document.createElement("span"); s.className = "w " + w.source; s.textContent = w.word; text.appendChild(s);
+    if (i < bar.field.length - 1) text.appendChild(document.createTextNode(" "));
+  });
+  const field = document.createElement("div"); field.className = "field";
+  bar.field.forEach(w => {
+    const wd = document.createElement("div"); wd.className = "word"; wd.dataset.word = w.word.replace(/[^a-zA-Z']/g, "").toLowerCase();
+    const st = document.createElement("div"); st.className = "stones";
+    const mk = document.createElement("div"); mk.className = "marks";
+    w.sylls.forEach(sy => {
+      const c = document.createElement("span"); c.className = "stone s" + sy.s; c.style.setProperty("--c", VOWEL_COLORS[sy.v] || "#777");
+      c.textContent = VOWEL_NAMES[sy.v] || sy.v.toLowerCase(); st.appendChild(c);
+      const m = document.createElement("span"); m.className = "mark p" + sy.s; m.style.setProperty("--c", VOWEL_COLORS[sy.v] || "#777"); mk.appendChild(m);
+    });
+    wd.append(st, mk); field.appendChild(wd);
+  });
+  el.append(text, field);
+  if (bar.filler) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg"); svg.setAttribute("class", "crack"); svg.setAttribute("viewBox", "0 0 100 100"); svg.setAttribute("preserveAspectRatio", "none");
+    const d = "M62 100 L60 88 L64 79 L61 70 L66 58 L63 47 L69 36 L66 24 L72 12 L70 0";
+    for (const k of ["dark", "lit"]) { const p = document.createElementNS(ns, "path"); p.setAttribute("class", k); p.setAttribute("d", d); p.setAttribute("vector-effect", "non-scaling-stroke"); svg.appendChild(p); }
+    el.appendChild(svg);
+  }
+  const foot = document.createElement("div"); foot.className = "foot";
+  const end = document.createElement("span"); end.textContent = "ends on " + (VOWEL_NAMES[bar.end.v] || "—") + (bar.end.coda ? " +" + bar.end.coda.toLowerCase() : "");
+  const meta = document.createElement("span");
+  meta.textContent = [bar.syllables + " syllables", bar.filler ? "filler landing" : null, READING.flagged.includes(bar.i) && run ? "drone · " + run.len + " on " + VOWEL_NAMES[run.v] : null].filter(Boolean).join(" · ");
+  foot.append(end, meta); el.appendChild(foot);
+  el.dataset.bar = bar.i;
+  el.addEventListener("click", () => { document.querySelectorAll(".slab.lift").forEach(x => x !== el && x.classList.remove("lift")); el.classList.toggle("lift"); setTimeout(drawGraph, 360); });
+  return el;
+}
+
+/* ---------- rhyme graph: engine edges drawn as veins between the words they join ---------- */
+const NS = "http://www.w3.org/2000/svg";
+const gsvg = document.createElementNS(NS, "svg"); gsvg.setAttribute("class", "graph");
+function anchorOf(barIdx, word, terminal) {
+  const slab = stack.querySelector(`.slab[data-bar="${barIdx}"]`); if (!slab) return null;
+  const words = [...slab.querySelectorAll(".word")];
+  const el = terminal ? words[words.length - 1] : words.find(w => w.dataset.word === word.toLowerCase());
+  if (!el) return null;
+  const st = el.querySelector(".stones").getBoundingClientRect(), base = stack.getBoundingClientRect();
+  return { x: st.left + st.width / 2 - base.left, y: st.bottom - base.top + 2, right: base.width - 34 + 4 };
+}
+function drawGraph() {
+  while (gsvg.firstChild) gsvg.removeChild(gsvg.firstChild);
+  const base = stack.getBoundingClientRect();
+  gsvg.setAttribute("viewBox", `0 0 ${base.width} ${base.height}`);
+  gsvg.setAttribute("width", base.width); gsvg.setAttribute("height", base.height);
+  for (const e of READING.edges) {
+    const A = anchorOf(e.a, e.words[0], e.scope === "terminal" || (e.scope === "internal" && e.a !== e.b));
+    const B = anchorOf(e.b, e.words[1], e.scope === "terminal" || (e.scope === "internal" && e.a === e.b));
+    if (!A || !B) continue;
+    let d;
+    if (e.a === e.b) {            /* inside one face: a shallow dip below the stones */
+      const dip = 10 + Math.abs(B.x - A.x) * .08;
+      d = `M${A.x} ${A.y} C ${A.x} ${A.y + dip}, ${B.x} ${B.y + dip}, ${B.x} ${B.y}`;
+    } else {                      /* across faces: out through the right gutter and back */
+      const gx = A.right + 6 + Math.min(22, Math.abs(B.y - A.y) * .06);
+      d = `M${A.x} ${A.y} C ${gx} ${A.y}, ${gx} ${B.y}, ${B.x} ${B.y}`;
+    }
+    const g = document.createElementNS(NS, "g"); g.setAttribute("class", `${e.kind} ${e.scope}`);
+    for (const k of ["body", "thread"]) { const p = document.createElementNS(NS, "path"); p.setAttribute("class", k); p.setAttribute("d", d); g.appendChild(p); }
+    gsvg.appendChild(g);
+  }
+}
+READING.bars.forEach(b => stack.appendChild(slab(b)));
+stack.appendChild(gsvg);
+setMineral("amethyst");
+requestAnimationFrame(() => requestAnimationFrame(drawGraph));
+window.addEventListener("resize", drawGraph);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawGraph);
+
+/* ---------- clock ---------- */
+const t = document.getElementById("t"), live = document.getElementById("live");
+let isLive = true, timer = null;
+function tick() {
+  const now = new Date();
+  if (isLive) { t.value = now.getHours() * 60 + now.getMinutes(); applyLight(now); }
+}
+function scrubbed() {
+  isLive = false; live.setAttribute("aria-pressed", "false");
+  const d = new Date(); d.setHours(Math.floor(t.value / 60), t.value % 60, 0, 0); applyLight(d);
+}
+t.addEventListener("input", scrubbed);
+live.addEventListener("click", () => { isLive = true; live.setAttribute("aria-pressed", "true"); tick(); });
+tick(); timer = setInterval(tick, 60000);
+</script>
+</body>
+</html>

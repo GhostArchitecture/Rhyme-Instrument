@@ -215,7 +215,7 @@ function g2p(raw) {
   return sylls.length ? sylls : [{ v: "AH", c: "" }];
 }
 /* skeleton of last n syllables; phrase-aware (takes tail across words) */
-function skeleton(text, depth) {
+function skeletonV1(text, depth) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   let sylls = [];
   for (let i = words.length - 1; i >= 0 && sylls.length < depth + 2; i--) {
@@ -233,8 +233,8 @@ function skeleton(text, depth) {
   return { vowels, coda: sylls.length ? sylls[sylls.length-1].c : "",
            reduced, overridden };
 }
-function classify(a, b, depth) {
-  const sa = skeleton(a, depth), sb = skeleton(b, depth);
+function classifyV1(a, b, depth) {
+  const sa = skeletonV1(a, depth), sb = skeletonV1(b, depth);
   if (!sa.vowels.length || !sb.vowels.length) return { kind: "none", sa, sb };
   const vMatch = sa.vowels.length === sb.vowels.length &&
     sa.vowels.every((v, i) => v === sb.vowels[i]);
@@ -305,6 +305,138 @@ hunnid hunnids
 const LEXICON = [...new Set(
   LEX_RAW.split(/\s+/).map(w => w.replace(/\d+$/, "")).filter(w => w.length > 1)
 )];
+
+/* ---------- engine 2.0 (bench, behind the tune flag) ----------
+ * Pronunciation authority: override > exception (v1 hand table) > cmu (dictionary) > rule (v1 G2P).
+ * Dictionary is cmu_skel.json beside index.html, fetched on first switch to v2. */
+const E2 = (() => {
+  let DICT = null, COMMON = new Map(), INDEX = null, status = "idle", error = "";
+  const CURATED = new Set(LEXICON);
+  const RED = new Set(["AH","IH","EH","AE","AA","UH"]);
+  const clean = raw => raw.toLowerCase().replace(/[^a-z']/g, "");
+  function parseCompact(str) {
+    const [vs, coda] = str.split("-");
+    const sylls = vs.split(".").map(t => ({ v: t.replace(/\d/, ""), s: +t.slice(-1), c: "" }));
+    sylls[sylls.length-1].c = coda || "";
+    sylls.forEach(s => { s.reduced = s.v === "AH" && s.s === 0; });
+    return sylls;
+  }
+  function pronounce(raw) {
+    const w = clean(raw);
+    if (!w) return { sylls: [], source: "none" };
+    const ov = Object.hasOwn(OVERRIDES, w) ? OVERRIDES[w] : null;
+    const caps = raw.replace(/[^A-Za-z]/g, "");
+    const initialism = caps && caps === caps.toUpperCase() && caps.length <= 4 &&
+      (!/[AEIOU]/.test(caps) || !(DICT && Object.hasOwn(DICT, w)));
+    let sylls, source;
+    if (initialism) {
+      sylls = caps.toLowerCase().split("").map(ch => { const [v, c] = LETTERS[ch] || ["AH",""]; return { v, c, s: 1 }; });
+      source = "initialism";
+    } else if (Object.hasOwn(EXCEPTIONS, w)) {
+      sylls = EXCEPTIONS[w].map(t => { const [v, c] = t.split("-"); return { v, c: c || "", s: 1 }; });
+      source = "exception";
+    } else if (DICT && Object.hasOwn(DICT, w)) { sylls = parseCompact(DICT[w]); source = "cmu"; }
+    else { sylls = g2p(raw).map(s => ({ ...s, s: s.reduced ? 0 : 1 })); source = "rule"; }
+    if (ov && sylls.length) {
+      if (typeof ov === "string") { sylls[sylls.length-1].v = ov; sylls[sylls.length-1].reduced = false; }
+      else {
+        const n = Math.min(ov.vowels.length, sylls.length);
+        for (let i = 0; i < n; i++) { sylls[sylls.length-n+i].v = ov.vowels[i]; sylls[sylls.length-n+i].reduced = false; }
+        if (ov.coda != null) sylls[sylls.length-1].c = ov.coda;
+      }
+      source = "override";
+    }
+    return { sylls, source };
+  }
+  function skeleton(text, depth = 1, anchor = "count") {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    let sylls = [], source = "none";
+    for (let i = words.length - 1; i >= 0 && sylls.length < depth + 4; i--) {
+      const p = pronounce(words[i]);
+      if (i === words.length - 1) source = p.source;
+      sylls = [...p.sylls, ...sylls];
+    }
+    let tail;
+    if (anchor === "stress") {
+      let k = sylls.length - 1;
+      while (k > 0 && !(sylls[k].s > 0)) k--;
+      tail = sylls.slice(Math.min(k, sylls.length - depth));
+    } else tail = sylls.slice(-depth);
+    const last = tail[tail.length-1];
+    return { vowels: tail.map(s => s.v), stress: tail.map(s => s.s),
+      coda: last ? last.c : "", reduced: last ? !!last.reduced : false,
+      overridden: source === "override", source };
+  }
+  function classify(a, b, depth = 1, anchor = "count") {
+    const sa = skeleton(a, depth, anchor), sb = skeleton(b, depth, anchor);
+    if (!sa.vowels.length || !sb.vowels.length) return { kind: "none", sa, sb };
+    const n = Math.min(sa.vowels.length, sb.vowels.length);
+    const la = sa.vowels.slice(-n), lb = sb.vowels.slice(-n);
+    const exact = la.every((v, i) => v === lb[i]) && sa.vowels.length === sb.vowels.length;
+    if (!exact) {
+      const lastStrict = la[n-1] === lb[n-1];
+      const loose = lastStrict && n > 1 && la.every((v, i) => v === lb[i] || (RED.has(v) && RED.has(lb[i])));
+      if (loose) return { kind: "loose", sa, sb };
+      if (!lastStrict && (sa.reduced || sb.reduced) && RED.has(la[n-1]) && RED.has(lb[n-1])) return { kind: "loose", sa, sb };
+      return { kind: lastStrict ? "shallow" : "none", sa, sb };
+    }
+    if (clean(a) === clean(b)) return { kind: "identical", sa, sb };
+    return { kind: sa.coda === sb.coda ? "perfect" : "slant", sa, sb };
+  }
+  function buildIndex() {
+    INDEX = new Map();
+    const push = (key, w) => { const l = INDEX.get(key); if (l) l.push(w); else INDEX.set(key, [w]); };
+    for (const w of Object.keys(DICT)) {
+      if (w.length < 2 || w.includes("'")) continue;
+      const s = parseCompact(DICT[w]);
+      for (let d = 1; d <= Math.min(3, s.length); d++) push(d + ":" + s.slice(-d).map(x => x.v).join("|"), w);
+      let k = s.length - 1; while (k > 0 && !(s[k].s > 0)) k--;
+      push("S:" + s.slice(k).map(x => x.v).join("|"), w);
+    }
+  }
+  function lookup(query, depth = 1, extra = [], anchor = "stress") {
+    if (!INDEX) buildIndex();
+    const sq = skeleton(query, depth, anchor);
+    if (!sq.vowels.length) return { skeleton: sq, perfect: [], slant: [], loose: [] };
+    const key = (anchor === "stress" ? "S:" : depth + ":") + sq.vowels.join("|");
+    const cand = new Set([...(INDEX.get(key) || []), ...extra.map(clean)]);
+    const q = clean(query);
+    const perfect = [], slant = [], loose = [];
+    for (const w of cand) {
+      if (w === q) continue;
+      const r = classify(query, w, sq.vowels.length, anchor);
+      const item = { word: w, tier: CURATED.has(w) ? 0 : COMMON.has(w) ? 1 : 2, rank: COMMON.get(w) ?? 1e9 };
+      if (r.kind === "perfect") perfect.push(item);
+      else if (r.kind === "slant") slant.push(item);
+      else if (r.kind === "loose") loose.push(item);
+    }
+    const rank = (a, b) => a.tier - b.tier || a.rank - b.rank || a.word.localeCompare(b.word);
+    return { skeleton: sq, perfect: perfect.sort(rank), slant: slant.sort(rank), loose: loose.sort(rank) };
+  }
+  async function load(onChange) {
+    if (status === "ready" || status === "loading") return;
+    status = "loading"; error = ""; onChange && onChange(status);
+    try {
+      const [d, f] = await Promise.all([
+        fetch("./cmu_skel.json").then(r => { if (!r.ok) throw new Error("cmu_skel.json " + r.status); return r.json(); }),
+        fetch("./google10k.txt").then(r => r.ok ? r.text() : "").catch(() => ""),
+      ]);
+      DICT = d; INDEX = null;
+      COMMON = new Map(f.split("\n").filter(Boolean).map((w, i) => [w.trim(), i]));
+      status = "ready";
+    } catch (e) { status = "error"; error = String(e.message || e); }
+    onChange && onChange(status);
+  }
+  return { pronounce, skeleton, classify, lookup, load,
+    ready: () => status === "ready", status: () => status, error: () => error,
+    size: () => DICT ? Object.keys(DICT).length : 0 };
+})();
+let ENGINE = "v1";
+function setEngine(id) { ENGINE = id; }
+const useV2 = () => ENGINE === "v2" && E2.ready();
+function skeleton(text, depth) { return useV2() ? E2.skeleton(text, depth, "count") : skeletonV1(text, depth); }
+function classify(a, b, depth) { return useV2() ? E2.classify(a, b, depth, "count") : classifyV1(a, b, depth); }
+
 
 /* ---------- stock-phrase watch ---------- */
 const CLICHES_MELODIC = [
@@ -402,12 +534,16 @@ function VowelPicker({ word, overrides, setOverride, onClose, accent }) {
 }
 
 /* ---------- pivot pages ---------- */
-function Lookup({ bank, accent, dense }) {
+function Lookup({ bank, accent, dense, eng }) {
   const [q, setQ] = useState("");
   const [depth, setDepth] = useState(1);
   const pool = useMemo(() => [...new Set([...LEXICON, ...bank])], [bank]);
   const results = useMemo(() => {
     if (!q.trim()) return null;
+    if (useV2()) {
+      const r = E2.lookup(q, depth, bank);
+      return { perfect: r.perfect, slant: r.slant, loose: r.loose, shallow: [], sk: r.skeleton, v2: true };
+    }
     const perfect = [], slant = [], loose = [], shallow = [];
     for (const w of pool) {
       if (w.toLowerCase() === q.trim().toLowerCase()) continue;
@@ -418,7 +554,7 @@ function Lookup({ bank, accent, dense }) {
       else if (r.kind === "shallow" && depth > 1) shallow.push(w);
     }
     return { perfect, slant, loose, shallow, sk: skeleton(q, depth) };
-  }, [q, depth, pool]);
+  }, [q, depth, pool, eng]);
   const pad = dense ? "8px 10px" : "12px 14px";
   return (
     <div>
@@ -439,6 +575,7 @@ function Lookup({ bank, accent, dense }) {
           <div style={{ marginBottom: 12, color: MT.dim, fontSize: 12 }}>
             {results.sk.vowels.map((v, i) => <VowelChip key={i} v={v} small />)}
             {results.sk.coda && <Mono style={{ color: MT.dim2 }}> +{results.sk.coda.toLowerCase()}</Mono>}
+            {results.v2 && <Mono style={{ color: MT.dim2 }}> · anchored on stress · {E2.size().toLocaleString()} words</Mono>}
           </div>
           {[["perfect", results.perfect, accent.hi],
             ["slant — the melodic lane", results.slant, "#B78CF0"],
@@ -450,18 +587,23 @@ function Lookup({ bank, accent, dense }) {
                   textTransform: "lowercase", letterSpacing: 2, marginBottom: 6 }}>
                   {label} · {list.length}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: dense ? 5 : 8 }}>
-                  {list.slice(0, 60).map(w => (
+                  {list.slice(0, results.v2 ? 90 : 60).map(it => {
+                    const w = typeof it === "string" ? it : it.word;
+                    const tier = typeof it === "string" ? 0 : it.tier;
+                    return (
                     <span key={w} style={{ background: MT.panel,
-                      borderLeft: `4px solid ${col}`, color: MT.fg,
+                      borderLeft: `4px solid ${tier === 2 ? MT.dim2 : col}`,
+                      color: tier === 2 ? MT.dim : MT.fg, fontWeight: tier === 0 ? 700 : 400,
                       padding: dense ? "4px 8px" : "6px 10px", fontSize: 14 }}>{w}</span>
-                  ))}
+                  ); })}
                 </div>
               </div>
             )
           ))}
           {results.perfect.length + results.slant.length + (results.loose||[]).length === 0 && (
             <div style={{ color: MT.dim, fontSize: 13 }}>nothing at this depth —
-              add the word to the bank; the engine will guess its vowels.</div>
+              {results.v2 ? " try a shallower depth; the dictionary anchors on the stressed syllable." :
+                " add the word to the bank; the engine will guess its vowels."}</div>
           )}
         </div>
       )}
@@ -469,7 +611,7 @@ function Lookup({ bank, accent, dense }) {
   );
 }
 
-function Check({ accent }) {
+function Check({ accent, eng }) {
   const [a, setA] = useState(""); const [b, setB] = useState("");
   const [depth, setDepth] = useState(2);
   const r = a.trim() && b.trim() ? classify(a, b, depth) : null;
@@ -517,7 +659,7 @@ function Check({ accent }) {
   );
 }
 
-function Draft({ draft, setDraft, overrides, setOverride, accent, dense }) {
+function Draft({ draft, setDraft, overrides, setOverride, accent, dense, eng }) {
   const [pop, setPop] = useState("rap");
   const [pick, setPick] = useState(null);
   const limit = pop === "rap" ? 3 : 6;
@@ -533,7 +675,8 @@ function Draft({ draft, setDraft, overrides, setOverride, accent, dense }) {
       const watch = pop === "rap" ? CLICHES : [...CLICHES, ...CLICHES_MELODIC];
       const cliche = watch.find(c => clean.toLowerCase().includes(c));
       const filler = FILLERS.has(last.toLowerCase());
-      return { text: clean, last, v, cliche, filler, overridden: sk.overridden };
+      return { text: clean, last, v, cliche, filler, overridden: sk.overridden,
+        guess: useV2() && sk.source === "rule" };
     });
     let runs = [], cur = null;
     rows.forEach((r, i) => {
@@ -552,7 +695,7 @@ function Draft({ draft, setDraft, overrides, setOverride, accent, dense }) {
       terminal = lastR.filler || !priors.some(r => r.v === lastR.v);
     }
     return { rows, flagged, maxRun, terminal };
-  }, [draft, pop, overrides]);
+  }, [draft, pop, overrides, eng]);
   return (
     <div>
       <textarea value={draft} onChange={e => setDraft(e.target.value)}
@@ -592,6 +735,8 @@ function Draft({ draft, setDraft, overrides, setOverride, accent, dense }) {
                 ) : <span style={{ width: 40 }} />}
                 <span style={{ color: analysis.flagged.has(i) ? MT.amber : MT.fg,
                   fontSize: 14, flex: 1, fontFamily: FONT }}>{r.text}</span>
+                {r.guess && <span style={{ color: MT.dim2, fontSize: 10,
+                  fontFamily: FONT }}>guess</span>}
                 {r.filler && <span style={{ color: MT.red, fontSize: 10,
                   fontFamily: FONT }}>filler landing</span>}
                 {r.cliche && <span style={{ color: MT.red, fontSize: 10,
@@ -669,7 +814,7 @@ function Bank({ bank, setBank, overrides, setOverride, accent, dense }) {
   );
 }
 
-function Tune({ prefs, setPrefs, accent }) {
+function Tune({ prefs, setPrefs, accent, engStatus }) {
   const Row = ({ label, children }) => (
     <div style={{ marginBottom: 18 }}>
       <div style={{ color: MT.dim, fontSize: 12, letterSpacing: 2,
@@ -710,8 +855,20 @@ function Tune({ prefs, setPrefs, accent }) {
             style={{ flex: "1 0 40%", textAlign: "center" }}>{id}</Press>
         ))}
       </Row>
+      <Row label="engine">
+        {[["v1", "v1.2 · rule G2P"], ["v2", "v2.0 · dictionary"]].map(([id, l]) => (
+          <Press key={id} accent={accent} active={(prefs.engine || "v1") === id}
+            onClick={() => setPrefs({ ...prefs, engine: id })}
+            style={{ flex: 1, textAlign: "center", fontSize: 11 }}>{l}</Press>
+        ))}
+      </Row>
       <div style={{ color: MT.dim2, fontSize: 11, fontFamily: FONT }}>
-        engine v1.2 · overrides, initialisms, schwa, filler + terminal watch</div>
+        {(prefs.engine || "v1") === "v1"
+          ? "engine v1.2 · overrides, initialisms, schwa, filler + terminal watch"
+          : engStatus === "ready" ? `engine v2.0 · ${E2.size().toLocaleString()} words · stress-anchored · exception table outranks dictionary`
+          : engStatus === "loading" ? "engine v2.0 · loading dictionary (~690 KB) …"
+          : engStatus === "error" ? `engine v2.0 · dictionary failed (${E2.error()}) · running v1.2` 
+          : "engine v2.0 · idle"}</div>
     </div>
   );
 }
@@ -757,7 +914,7 @@ function Start({ prefs, bank, draft, overrides, go, accent }) {
   const motion = prefs.motion === "on";
   const tiles = {
     lookup: <Tile key="l" big color={accent.hi} txt={accent.txt} title="lookup"
-      sub="vowel-skeleton search" flip={`${LEXICON.length + bank.length} words loaded`}
+      sub="vowel-skeleton search" flip={useV2() ? `${E2.size().toLocaleString()} words · v2` : `${LEXICON.length + bank.length} words loaded`}
       motion={motion} onClick={() => go("lookup")} />,
     check: <Tile key="c" color={other.hi} txt={other.txt} title="check"
       sub="a ~ b verdict" motion={motion} onClick={() => go("check")} />,
@@ -766,7 +923,7 @@ function Start({ prefs, bank, draft, overrides, go, accent }) {
       flip={lines ? "map the end vowels" : "empty"}
       motion={motion} onClick={() => go("draft")} />,
     bank: <Tile key="b" color={other.lo} txt="#FFFFFF" title="bank"
-      sub={`${bank.length} words · ${Object.keys(overrides).length} overrides`}
+      sub={`${bank.length} word${bank.length === 1 ? "" : "s"} · ${Object.keys(overrides).length} override${Object.keys(overrides).length === 1 ? "" : "s"}`}
       flip="your mouth outranks spelling" motion={motion}
       onClick={() => go("bank")} />,
   };
@@ -775,7 +932,7 @@ function Start({ prefs, bank, draft, overrides, go, accent }) {
       <div style={{ fontSize: 42, fontWeight: 200, fontFamily: FONT,
         lineHeight: 1.05, margin: "6px 0 4px" }}>rhyme<br/>instrument</div>
       <div style={{ color: MT.dim, fontSize: 12, fontFamily: FONT,
-        marginBottom: 16, letterSpacing: 2 }}>ghost codex · v1.2 metro</div>
+        marginBottom: 16, letterSpacing: 2 }}>ghost codex · v1.3 metro</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {prefs.tiles.map(t => tiles[t])}
         <Tile key="t" color={MT.dim2} txt={MT.fg} title="tune"
@@ -797,6 +954,13 @@ function RhymeInstrument() {
     motion: "on", tiles: ["lookup", "check", "draft", "bank"] });
   const [loaded, setLoaded] = useState(false);
   const [drag, setDrag] = useState(null);
+  const [engStatus, setEngStatus] = useState("idle");
+  useEffect(() => {
+    if (!loaded) return;
+    if (prefs.engine === "v2") { setEngine("v2"); E2.load(setEngStatus); }
+    else setEngine("v1");
+  }, [prefs.engine, loaded]);
+  const eng = (prefs.engine || "v1") + ":" + engStatus;
   useEffect(() => { (async () => {
     setBank(await loadKey("ghostcodex:bank", []));
     setDraft(await loadKey("ghostcodex:draft", ""));
@@ -853,13 +1017,13 @@ function RhymeInstrument() {
               color: MT.dim2, marginLeft: 26, cursor: "pointer",
               lineHeight: 1 }}>{next}</span>
           </div>
-          {page === "lookup" && <Lookup bank={bank} accent={accent} dense={dense} />}
-          {page === "check" && <Check accent={accent} />}
+          {page === "lookup" && <Lookup bank={bank} accent={accent} dense={dense} eng={eng} />}
+          {page === "check" && <Check accent={accent} eng={eng} />}
           {page === "draft" && <Draft draft={draft} setDraft={setDraft}
-            overrides={overrides} setOverride={setOverride} accent={accent} dense={dense} />}
+            overrides={overrides} setOverride={setOverride} accent={accent} dense={dense} eng={eng} />}
           {page === "bank" && <Bank bank={bank} setBank={setBank}
             overrides={overrides} setOverride={setOverride} accent={accent} dense={dense} />}
-          {page === "tune" && <Tune prefs={prefs} setPrefs={setPrefs} accent={accent} />}
+          {page === "tune" && <Tune prefs={prefs} setPrefs={setPrefs} accent={accent} engStatus={engStatus} />}
           <div style={{ color: MT.dim2, fontSize: 11, marginTop: 26,
             fontFamily: FONT }}>swipe for {next} · tap the header for start</div>
         </div>
