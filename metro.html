@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ghost Codex — Rhyme Instrument</title>
+<style>
+  html,body{margin:0;background:#000000;-webkit-text-size-adjust:100%}
+  input,textarea,button{-webkit-appearance:none;font-size:16px}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+/* ============================================================
+   GHOST CODEX — RHYME INSTRUMENT v1.2
+   Session tool for writing. Three modes:
+   LOOKUP  — vowel-skeleton rhyme search (perfect / slant / multi-depth)
+   CHECK   — two words/phrases -> verdict + shared skeleton
+   DRAFT   — paste lyrics -> end-rhyme map, vowel-drone flags,
+             depth meter, stock-phrase watch
+   Phonetics are rule-based guesses; every word's vowel read is
+   correctable and corrections persist in the session bank.
+   ============================================================ */
+
+/* ---------- design tokens: superseded by the Metro skin below ---------- */
+const VOWEL_COLORS = {
+  AY:"#C98A2D", IY:"#5B87A8", EY:"#8FA65B", EH:"#A0703F", AE:"#B04A3A",
+  AH:"#9B8AA6", AA:"#C4A35A", OW:"#5E9B8F", UW:"#4C7B9E", AW:"#B5835A",
+  OY:"#8A6FA0", ER:"#7D8A6E", OR:"#A6825B", AR:"#B06A4A", IH:"#6E9BA6",
+  UH:"#8A8A7A", AIR:"#C9A27A", AO:"#A38A4E",
+};
+const VOWEL_NAMES = {
+  AY:"eye", IY:"ee", EY:"ay", EH:"eh", AE:"a(cat)", AH:"uh", AA:"ah",
+  OW:"oh", UW:"oo", AW:"ow", OY:"oy", ER:"er", OR:"or", AR:"ar",
+  IH:"i(hit)", UH:"oo(book)", AIR:"air", AO:"aw",
+};
+
+/* ---------- G2P: rule-based vowel-skeleton extraction ---------- */
+const EXCEPTIONS = {
+  me:["IY-"], we:["IY-"], he:["IY-"], she:["IY-"], be:["IY-"], the:["AH-"],
+  here:["IY-R"], near:["IY-R"], dear:["IY-R"], fear:["IY-R"], year:["IY-R"],
+  clear:["IY-R"], hear:["IY-R"], appear:["IY-R"], disappear:["IH-S","AH-P","IY-R"],
+  tear:["AIR-"], stare:["AIR-"], care:["AIR-"], share:["AIR-"], scare:["AIR-"],
+  dare:["AIR-"], rare:["AIR-"], bare:["AIR-"], bear:["AIR-"], wear:["AIR-"],
+  swear:["AIR-"], pair:["AIR-"], hair:["AIR-"], fair:["AIR-"], chair:["AIR-"],
+  stair:["AIR-"], there:["AIR-"], where:["AIR-"], their:["AIR-"], air:["AIR-"],
+  aware:["AIR-"], repair:["AIR-"], despair:["AIR-"], nowhere:["AIR-"],
+  both:["OW-TH"], wont:["OW-NT"], dont:["OW-NT"], ghost:["OW-ST"], most:["OW-ST"],
+  how:["AW-"], now:["AW-"], cow:["AW-"], vow:["AW-"], wow:["AW-"], allow:["AW-"],
+  pull:["UH-L"], full:["UH-L"], bull:["UH-L"], push:["UH-SH"], bush:["UH-SH"],
+  hole:["OW-L"], holes:["OW-LZ"], whole:["OW-L"], cold:["OW-LD"], alone:["OW-N"],
+  view:["UW-"], views:["UW-Z"], jewel:["UW-L"], jewels:["UW-LZ"], fuel:["UW-L"],
+  one:["AH-N"], once:["AH-NS"], two:["UW-"], through:["UW-"], though:["OW-"],
+  thought:["AO-T"], enough:["AH-F"], love:["AH-V"], move:["UW-V"],
+  come:["AH-M"], some:["AH-M"], done:["AH-N"], none:["AH-N"], gone:["AO-N"],
+  blood:["AH-D"], flood:["AH-D"], good:["UH-D"], hood:["UH-D"], wood:["UH-D"],
+  could:["UH-D"], would:["UH-D"], should:["UH-D"], put:["UH-T"],
+  eye:["AY-"], eyes:["AY-Z"], buy:["AY-"], guy:["AY-"], dry:["AY-"],
+  says:["EH-Z"], said:["EH-D"], again:["EH-N"], against:["EH-NST"],
+  been:["IH-N"], being:["IY-","IH-NG"], friend:["EH-ND"], friends:["EH-NDZ"],
+  heart:["AR-T"], hearts:["AR-TS"], great:["EY-T"], break:["EY-K"],
+  steak:["EY-K"], dead:["EH-D"], head:["EH-D"], bread:["EH-D"], read:["EH-D"],
+  ready:["EH-D","IY-"], heavy:["EH-V","IY-"], meant:["EH-NT"],
+  learn:["ER-N"], earn:["ER-N"], heard:["ER-D"], word:["ER-D"],
+  world:["ER-LD"], work:["ER-K"], worse:["ER-S"], worth:["ER-TH"],
+  door:["OR-"], floor:["OR-"], more:["OR-"], four:["OR-"], your:["OR-"],
+  pour:["OR-"], sure:["OR-"], water:["AO-T","ER-"], want:["AO-NT"],
+  war:["OR-"], warm:["OR-M"], talk:["AO-K"], walk:["AO-K"], chalk:["AO-K"],
+  all:["AO-L"], call:["AO-L"], fall:["AO-L"], small:["AO-L"], ball:["AO-L"],
+  always:["AO-L","EY-Z"], also:["AO-L","OW-"], almost:["AO-L","OW-ST"],
+  do:["UW-"], to:["UW-"], who:["UW-"], you:["UW-"], shoe:["UW-"],
+  lose:["UW-Z"], choose:["UW-Z"], juice:["UW-S"], truth:["UW-TH"],
+  give:["IH-V"], live:["IH-V"], gives:["IH-VZ"], liver:["IH-V","ER-"],
+  have:["AE-V"], gave:["EY-V"], made:["EY-D"], make:["EY-K"],
+  they:["EY-"], grey:["EY-"], hey:["EY-"], weight:["EY-T"], eight:["EY-T"],
+  height:["AY-T"], light:["AY-T"], night:["AY-T"], right:["AY-T"],
+  might:["AY-T"], fight:["AY-T"], sight:["AY-T"], tight:["AY-T"],
+  flight:["AY-T"], bright:["AY-T"],
+  find:["AY-ND"], mind:["AY-ND"], kind:["AY-ND"], blind:["AY-ND"],
+  behind:["AY-ND"], wild:["AY-LD"], child:["AY-LD"],
+  cool:["UW-L"], pool:["UW-L"], fool:["UW-L"], school:["UW-L"], rule:["UW-L"],
+  rules:["UW-LZ"], tool:["UW-L"], jewel:["UW-L"],
+  money:["AH-N","IY-"], honey:["AH-N","IY-"], monday:["AH-N","EY-"],
+  nothing:["AH-TH","IH-NG"], something:["AH-M","IH-NG"], brother:["AH-TH","ER-"],
+  mother:["AH-TH","ER-"], other:["AH-TH","ER-"], another:["AH-TH","ER-"],
+  cover:["AH-V","ER-"], above:["AH-V"], oven:["AH-V","AH-N"],
+  people:["IY-P","AH-L"], police:["OW-L","IY-S"],
+  phone:["OW-N"], home:["OW-M"], zone:["OW-N"], throne:["OW-N"],
+  alone:["OW-N"], bone:["OW-N"], stone:["OW-N"], known:["OW-N"],
+  grown:["OW-N"], shown:["OW-N"], own:["OW-N"],
+  gun:["AH-N"], guns:["AH-NZ"], young:["AH-NG"], tongue:["AH-NG"],
+  front:["AH-NT"], month:["AH-NTH"], among:["AH-NG"],
+  does:["AH-Z"], was:["AH-Z"], what:["AH-T"], from:["AH-M"], of:["AH-V"],
+  off:["AO-F"], on:["AO-N"], wrong:["AO-NG"], long:["AO-NG"], song:["AO-NG"],
+  strong:["AO-NG"], gang:["AE-NG"], thing:["IH-NG"], king:["IH-NG"],
+  ring:["IH-NG"], bring:["IH-NG"], chain:["EY-N"], rain:["EY-N"],
+  pain:["EY-N"], game:["EY-M"], name:["EY-M"], fame:["EY-M"], same:["EY-M"],
+  flame:["EY-M"], shame:["EY-M"], blame:["EY-M"], came:["EY-M"],
+  lane:["EY-N"], plane:["EY-N"], insane:["EY-N"], stay:["EY-"],
+  way:["EY-"], day:["EY-"], say:["EY-"], play:["EY-"], pay:["EY-"],
+  away:["EY-"], okay:["EY-"], today:["EY-"],
+  high:["AY-"], sky:["AY-"], fly:["AY-"], why:["AY-"], try:["AY-"],
+  cry:["AY-"], die:["AY-"], lie:["AY-"], tie:["AY-"], my:["AY-"],
+  by:["AY-"], i:["AY-"], time:["AY-M"], climb:["AY-M"], dime:["AY-M"],
+  crime:["AY-M"], prime:["AY-M"], rhyme:["AY-M"], line:["AY-N"],
+  fine:["AY-N"], mine:["AY-N"], shine:["AY-N"], sign:["AY-N"],
+  design:["AY-N"], nine:["AY-N"], wine:["AY-N"], ride:["AY-D"],
+  side:["AY-D"], slide:["AY-D"], pride:["AY-D"], inside:["AY-D"],
+  outside:["AY-D"], life:["AY-F"], knife:["AY-F"], wife:["AY-F"],
+  ice:["AY-S"], nice:["AY-S"], price:["AY-S"], twice:["AY-S"], dice:["AY-S"],
+  drank:["AE-NGK"], saran:["AE-N"], star:["AR-"], car:["AR-"], far:["AR-"],
+  bar:["AR-"], scar:["AR-"], cigar:["AR-"], guitar:["AR-"],
+  dark:["AR-K"], park:["AR-K"], spark:["AR-K"], heart2:["AR-T"],
+  start:["AR-T"], part:["AR-T"], smart:["AR-T"], art:["AR-T"],
+  hard:["AR-D"], card:["AR-D"], yard:["AR-D"], guard:["AR-D"],
+};
+const DIGRAPHS = [
+  ["igh","AY",""],["eigh","EY",""],["ough","OW",""],["augh","AO",""],
+  ["tion","SH-AH-N","*"],["sion","ZH-AH-N","*"],
+  ["oo","UW",""],["ee","IY",""],["ea","IY",""],["ai","EY",""],["ay","EY",""],
+  ["oa","OW",""],["ow","OW",""],["ou","AW",""],["oi","OY",""],["oy","OY",""],
+  ["au","AO",""],["aw","AO",""],["ew","UW",""],["ue","UW",""],["ui","UW",""],
+  ["ie","IY",""],["ey","IY",""],
+];
+const LETTERS = { a:["EY",""], b:["IY",""], c:["IY",""], d:["IY",""], e:["IY",""],
+  f:["EH","F"], g:["IY",""], h:["EY","CH"], i:["AY",""], j:["EY",""], k:["EY",""],
+  l:["EH","L"], m:["EH","M"], n:["EH","N"], o:["OW",""], p:["IY",""], q:["UW",""],
+  r:["AR",""], s:["EH","S"], t:["IY",""], u:["UW",""], v:["IY",""], w:["UW",""],
+  x:["EH","KS"], y:["AY",""], z:["IY",""] };
+let OVERRIDES = {};   // word -> final vowel class, set by the user, persisted
+function setOverrides(o) { OVERRIDES = o || {}; }
+function g2p(raw) {
+  // initialism: all-caps token with no vowel letters -> letter names (PBM, DM)
+  const caps = raw.replace(/[^A-Za-z]/g, "");
+  if (caps && caps === caps.toUpperCase() && caps.length <= 4 &&
+      !/[AEIOU]/.test(caps)) {
+    return caps.toLowerCase().split("").map(ch => {
+      const [v, c] = LETTERS[ch] || ["AH", ""]; return { v, c };
+    });
+  }
+  const w = raw.toLowerCase().replace(/[^a-z']/g, "");
+  if (!w) return [];
+  if (EXCEPTIONS[w]) return EXCEPTIONS[w].map(s => {
+    const [v, c] = s.split("-"); return { v, c: c || "" };
+  });
+  let s = w.replace(/'/g, "");
+  let suffix = "";
+  const m = s.match(/^(.+[^aeiou])e([sd])$/);   // holes, stared, names
+  if (m && !/(s|x|z|ch|sh)e[sd]$/.test(s) && m[1].length > 1) {
+    suffix = m[2]; s = m[1] + "e";
+  }
+  // final silent e (not -le)
+  if (s.length > 2 && s.endsWith("e") && !"aeiou".includes(s[s.length-2]) &&
+      s[s.length-2] !== "l") {
+    s = s.slice(0, -1) + "\u0001"; // magic-e marker lengthens prior vowel
+  }
+  s += suffix;
+  const sylls = [];
+  let i = 0, coda = "";
+  const pushV = (v) => { sylls.push({ v, c: "" }); coda = ""; };
+  while (i < s.length) {
+    let matched = false;
+    for (const [g, v] of DIGRAPHS) {
+      if (s.startsWith(g, i)) {
+        pushV(v.includes("-") ? v.split("-")[1] : v);
+        if (v.includes("-")) sylls[sylls.length-1].c = "N";
+        i += g.length; matched = true; break;
+      }
+    }
+    if (matched) continue;
+    const ch = s[i];
+    if ("aeiouy".includes(ch) && !(ch === "y" && i === 0)) {
+      const nxt = s[i+1] || "", nn = s[i+2] || "";
+      const magic = nxt === "\u0001" || nn === "\u0001" ||
+        (i+2 < s.length && !"aeiou\u0001".includes(nxt) && (nn === "e" && i+2 === s.length-1));
+      const rnext = nxt === "r";
+      let v;
+      if (ch === "a") v = rnext ? "AR" : magic ? "EY" : "AE";
+      else if (ch === "e") v = rnext ? "ER" : magic ? "IY" : "EH";
+      else if (ch === "i") v = rnext ? "ER" : magic ? "AY" : "IH";
+      else if (ch === "o") v = rnext ? "OR" : magic ? "OW" : "AA";
+      else if (ch === "u") v = rnext ? "ER" : magic ? "UW" : "AH";
+      else if (ch === "y") v = i === s.length-1 ? (s.length <= 3 ? "AY" : "IY") : "IH";
+      pushV(v);
+      if (rnext) i++; // consume the r into the vowel class
+      i++;
+    } else if (ch === "\u0001") { i++; }
+    else {
+      if (sylls.length) sylls[sylls.length-1].c += ch.toUpperCase();
+      i++;
+    }
+  }
+  // final-schwa reduction: unstressed -an/-en/-on/-ain/-ern tails on 2+ syllable
+  // words read as schwa in the mouth (Michigan, Dayton, haven)
+  if (sylls.length >= 2) {
+    const last = sylls[sylls.length-1];
+    if (/(?:[aeo]n|ain|ern)$/.test(w) && ["AE","AA","EH","IH","EY"].includes(last.v) &&
+        /^N/.test(last.c || "N") ) {
+      last.v = "AH"; last.reduced = true;
+      if (!last.c) last.c = "N";
+    } else if (/a s?$/.test(w + " ") && ["AE","AA"].includes(last.v) && !last.c) {
+      last.v = "AH"; last.reduced = true;   // wanna, jorjiana, benihanna(s)
+    } else if (/as$/.test(w) && ["AE","AA"].includes(last.v) && last.c === "S") {
+      last.v = "AH"; last.reduced = true;   // forgiatas, benihannas
+    }
+  }
+  return sylls.length ? sylls : [{ v: "AH", c: "" }];
+}
+/* skeleton of last n syllables; phrase-aware (takes tail across words) */
+function skeletonV1(text, depth) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  let sylls = [];
+  for (let i = words.length - 1; i >= 0 && sylls.length < depth + 2; i--) {
+    sylls = [...g2p(words[i]), ...sylls];
+  }
+  const tail = sylls.slice(-depth);
+  const lastWord = (words[words.length-1] || "").toLowerCase().replace(/[^a-z']/g, "");
+  let reduced = tail.length ? !!tail[tail.length-1].reduced : false;
+  let overridden = false;
+  const vowels = tail.map(s => s.v);
+  if (OVERRIDES[lastWord] && vowels.length) {
+    vowels[vowels.length-1] = OVERRIDES[lastWord];
+    reduced = false; overridden = true;
+  }
+  return { vowels, coda: sylls.length ? sylls[sylls.length-1].c : "",
+           reduced, overridden };
+}
+function classifyV1(a, b, depth) {
+  const sa = skeletonV1(a, depth), sb = skeletonV1(b, depth);
+  if (!sa.vowels.length || !sb.vowels.length) return { kind: "none", sa, sb };
+  const vMatch = sa.vowels.length === sb.vowels.length &&
+    sa.vowels.every((v, i) => v === sb.vowels[i]);
+  if (!vMatch) {
+    const n = Math.min(sa.vowels.length, sb.vowels.length);
+    const la = sa.vowels.slice(-n), lb = sb.vowels.slice(-n);
+    const RED = new Set(["AH","IH","EH","AE","AA","UH"]);
+    const lastStrict = la[n-1] === lb[n-1];
+    const loose = lastStrict && n > 1 &&
+      la.every((v, i) => v === lb[i] || (RED.has(v) && RED.has(lb[i])));
+    if (loose) return { kind: "loose", sa, sb };
+    // schwa leniency: a reduced final (Michigan) may meet any RED vowel (VIN)
+    if (!lastStrict && (sa.reduced || sb.reduced) &&
+        RED.has(la[n-1]) && RED.has(lb[n-1]))
+      return { kind: "loose", sa, sb };
+    return { kind: lastStrict ? "shallow" : "none", sa, sb };
+  }
+  const identical = a.trim().toLowerCase() === b.trim().toLowerCase();
+  if (identical) return { kind: "identical", sa, sb };
+  return { kind: sa.coda === sb.coda ? "perfect" : "slant", sa, sb };
+}
+
+/* ---------- embedded lexicon (curated, register-aware) ---------- */
+const LEX_RAW = `time mind grind shine line fine mine sign design vine spine climb dime crime prime rhyme lime ride side slide pride tide wide hide guide life knife wife strife ice nice price twice vice dice rice fly sky high why try cry die lie tie eye guy buy dry supply deny reply alive drive five hive strive thrive fire desire entire wire tire liar higher flyer light night right might fight sight tight flight bright white kite quite write bite site find kind blind behind wild child mild style mile smile while trial file pile
+see me free three key tree sea knee flee degree agree decree spree bee fee tea plea weak speak leak peak sneak freak unique clique streak seat heat beat street sweet complete elite receipt deep sleep keep creep steep leap cheap heap reap dream team scheme cream steam beam gleam scene clean mean lean green queen seen between machine routine believe leave weave grieve achieve receive breathe need feed speed greed bleed indeed succeed
+day way say play pay stay away okay today lane plane insane chain rain pain gain main brain drain train remain complain explain game name fame same flame shame blame came frame claim aim maim fade shade blade grade made paid afraid parade wave cave save brave crave slave gave behave grave rage page cage stage wage engage sage race place face space chase base case grace erase taste waste paste haste eight weight great late gate hate fate state rate create relate debate plate skate crate
+bed head dead red said bread thread spread instead fed led shed sled wed dread stress mess less bless press confess address progress possess best rest test chest quest west vest invest arrest suggest request blessed left theft depth met set bet get jet let net pet sweat threat regret upset forget check neck wreck deck respect connect direct effect protect reflect collect perfect
+cat hat bat flat mat rat sat chat brat splat back black track pack rack stack attack snack crack lack sack whack act fact pact react impact intact exact attract abstract bag tag flag drag swag brag snag rag hand band land sand stand brand grand demand command expand man plan can ban fan ran span scan clan than bran gram slam jam ham damn program madam bad mad sad glad add pad had grab stab tab lab cab crab trap map slap clap snap gap wrap strap cap app
+cut but shut what gut hut nut strut mud blood flood bud stud dud sun run fun gun done none one son ton won stun begun shun undone drum come some numb dumb thumb crumb plum slum succumb love above dove glove shove enough tough rough stuff bluff cuff huff puff buzz was does fuzz cuz because bus plus us trust must dust bust rust crust adjust disgust discuss luck stuck truck buck duck struck
+hot not shot spot got lot plot knot rot slot forgot pot dot block clock rock shock knock stock lock dock mock top stop drop shop cop pop prop crop flop swap job rob mob knob sob blob problem body copy stop2
+go show know low flow grow slow blow snow throw glow row toe foe pro bro tho so no mo dough although road load code mode explode erode episode boat coat float note wrote quote vote throat remote goat gold cold bold hold told sold fold old mold behold bone phone zone throne alone stone known grown shown own home dome chrome roam foam comb close chose rose those nose pose suppose expose froze hole whole role soul goal coal control patrol stroll roll toll bowl
+you too blue true new few crew flew grew knew threw view due sue clue glue shoe who through screw tattoo pursue avenue school cool pool fool tool rule jewel fuel cruel duel move prove groove smooth booth truth youth roof proof group loop scoop troop hoop soup loot boot shoot root fruit suit pursuit recruit flute brute mute cute acute dispute salute food mood dude rude crude conclude include attitude gratitude solitude
+now how cow wow allow vow plow brow chow down town crown brown drown frown gown clown around sound found ground round pound bound mound astound profound out about shout doubt route scout clout drought loud cloud proud crowd allowed house mouse blouse
+her stir sir fur blur slur occur prefer transfer defer refer confer turn burn learn earn yearn stern concern return word bird third heard herd nerd absurd hurt dirt shirt skirt flirt alert convert insert expert desert dessert work jerk clerk lurk perk smirk verse curse worse nurse purse rehearse reverse universe first burst thirst worst world girl curl hurl pearl swirl twirl
+star car far bar scar jar tar spar cigar guitar bizarre dark park spark mark shark stark remark heart start part smart art chart apart depart hard card yard guard regard bombard arm charm farm harm alarm army bar2
+door floor more four your pour score store shore before ignore explore restore adore galore bore core tore wore swore snore chore war warm form storm norm transform inform perform swarm born corn torn worn horn sworn adorn forlorn short sport court fort port report support resort escort north force source horse course divorce endorse remorse
+boy toy joy enjoy destroy employ annoy deploy alloy decoy soy coy
+drip trip grip flip clip whip ship hip lip rip sip tip zip skip strip equip chip snip vip win sin thin spin skin grin pin chin twin begin within bin fin gin big dig pig rig wig fig gig twig swig zig hit sit fit bit kit lit mitt quit spit split legit admit commit permit submit transmit sick quick thick trick brick click flick lick pick slick stick wick kick chick nick still hill will bill chill fill grill skill spill thrill drill mill pill will2 gill ill instill until fulfill
+brick flick trick2 rich which switch pitch ditch snitch witch glitch stitch itch twitch
+plug drug thug rug bug hug mug jug snug shrug tug slug smug
+cash flash trash smash crash stash splash dash bash gash sash clash flash2
+bank tank rank blank thank crank frank prank drank sank shrank spank plank
+cheese please breeze freeze squeeze seize tease ease disease trees keys seas fleas
+paper vapor labor favor flavor neighbor savior behavior
+water daughter slaughter quarter mortar order border corner
+lean bean dean gene keen teen preen serene obscene careen canteen thirteen fourteen fifteen sixteen eighteen nineteen caffeine gasoline magazine submarine tangerine vaseline guillotine limousine
+pint grind2 behind2
+brr skrt racks stacks packs tracks lacs facts wax tax max relax flex checks necks
+opps cops glocks blocks knots shots spots plots watts
+whip2 wraith ghost most host coast toast boast roast post
+mob rob2 job2 slob heartthrob
+lit2 gucci louis prada nada collada armada
+geeked leaked peaked tweaked freaked sneaked
+wave2 gang lang slang bang hang rang sprang fang overhang boomerang
+codeine lean2 serene2 machine2
+juice loose goose deuce noose truce moose reduce produce seduce introduce excuse abuse confuse refuse amuse
+paid2 blade2 fade2 jade shade2 upgrade renegade grenade lemonade cascade charade blockade brigade crusade
+racks2 bands grands lands hands stands brands sands demands commands
+whoa2 flow2 dough2 bro2 loco solo polo logo promo photo motto lotto ghetto
+mansion expansion action fraction traction attraction satisfaction transaction distraction passion fashion compassion
+vision decision collision precision incision division provision revision television
+paranoid void avoid android steroid
+diamond diamonds
+molly lolly dolly holly jolly volley trolley
+benjamins benjamin
+hunnid hunnids
+`;
+const LEXICON = [...new Set(
+  LEX_RAW.split(/\s+/).map(w => w.replace(/\d+$/, "")).filter(w => w.length > 1)
+)];
+
+/* ---------- engine 2.0 (bench, behind the tune flag) ----------
+ * Pronunciation authority: override > exception (v1 hand table) > cmu (dictionary) > rule (v1 G2P).
+ * Dictionary is cmu_skel.json beside index.html, fetched on first switch to v2. */
+const E2 = (() => {
+  let DICT = null, COMMON = new Map(), INDEX = null, status = "idle", error = "";
+  const CURATED = new Set(LEXICON);
+  const RED = new Set(["AH","IH","EH","AE","AA","UH"]);
+  const clean = raw => raw.toLowerCase().replace(/[^a-z']/g, "");
+  function parseCompact(str) {
+    const [vs, coda] = str.split("-");
+    const sylls = vs.split(".").map(t => ({ v: t.replace(/\d/, ""), s: +t.slice(-1), c: "" }));
+    sylls[sylls.length-1].c = coda || "";
+    sylls.forEach(s => { s.reduced = s.v === "AH" && s.s === 0; });
+    return sylls;
+  }
+  function pronounce(raw) {
+    const w = clean(raw);
+    if (!w) return { sylls: [], source: "none" };
+    const ov = Object.hasOwn(OVERRIDES, w) ? OVERRIDES[w] : null;
+    const caps = raw.replace(/[^A-Za-z]/g, "");
+    const initialism = caps && caps === caps.toUpperCase() && caps.length <= 4 &&
+      (!/[AEIOU]/.test(caps) || !(DICT && Object.hasOwn(DICT, w)));
+    let sylls, source;
+    if (initialism) {
+      sylls = caps.toLowerCase().split("").map(ch => { const [v, c] = LETTERS[ch] || ["AH",""]; return { v, c, s: 1 }; });
+      source = "initialism";
+    } else if (Object.hasOwn(EXCEPTIONS, w)) {
+      sylls = EXCEPTIONS[w].map(t => { const [v, c] = t.split("-"); return { v, c: c || "", s: 1 }; });
+      source = "exception";
+    } else if (DICT && Object.hasOwn(DICT, w)) { sylls = parseCompact(DICT[w]); source = "cmu"; }
+    else { sylls = g2p(raw).map(s => ({ ...s, s: s.reduced ? 0 : 1 })); source = "rule"; }
+    if (ov && sylls.length) {
+      if (typeof ov === "string") { sylls[sylls.length-1].v = ov; sylls[sylls.length-1].reduced = false; }
+      else {
+        const n = Math.min(ov.vowels.length, sylls.length);
+        for (let i = 0; i < n; i++) { sylls[sylls.length-n+i].v = ov.vowels[i]; sylls[sylls.length-n+i].reduced = false; }
+        if (ov.coda != null) sylls[sylls.length-1].c = ov.coda;
+      }
+      source = "override";
+    }
+    return { sylls, source };
+  }
+  function skeleton(text, depth = 1, anchor = "count") {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    let sylls = [], source = "none";
+    for (let i = words.length - 1; i >= 0 && sylls.length < depth + 4; i--) {
+      const p = pronounce(words[i]);
+      if (i === words.length - 1) source = p.source;
+      sylls = [...p.sylls, ...sylls];
+    }
+    let tail;
+    if (anchor === "stress") {
+      let k = sylls.length - 1;
+      while (k > 0 && !(sylls[k].s > 0)) k--;
+      tail = sylls.slice(Math.min(k, sylls.length - depth));
+    } else tail = sylls.slice(-depth);
+    const last = tail[tail.length-1];
+    return { vowels: tail.map(s => s.v), stress: tail.map(s => s.s),
+      coda: last ? last.c : "", reduced: last ? !!last.reduced : false,
+      overridden: source === "override", source };
+  }
+  function classify(a, b, depth = 1, anchor = "count") {
+    const sa = skeleton(a, depth, anchor), sb = skeleton(b, depth, anchor);
+    if (!sa.vowels.length || !sb.vowels.length) return { kind: "none", sa, sb };
+    const n = Math.min(sa.vowels.length, sb.vowels.length);
+    const la = sa.vowels.slice(-n), lb = sb.vowels.slice(-n);
+    const exact = la.every((v, i) => v === lb[i]) && sa.vowels.length === sb.vowels.length;
+    if (!exact) {
+      const lastStrict = la[n-1] === lb[n-1];
+      const loose = lastStrict && n > 1 && la.every((v, i) => v === lb[i] || (RED.has(v) && RED.has(lb[i])));
+      if (loose) return { kind: "loose", sa, sb };
+      if (!lastStrict && (sa.reduced || sb.reduced) && RED.has(la[n-1]) && RED.has(lb[n-1])) return { kind: "loose", sa, sb };
+      return { kind: lastStrict ? "shallow" : "none", sa, sb };
+    }
+    if (clean(a) === clean(b)) return { kind: "identical", sa, sb };
+    return { kind: sa.coda === sb.coda ? "perfect" : "slant", sa, sb };
+  }
+  function buildIndex() {
+    INDEX = new Map();
+    const push = (key, w) => { const l = INDEX.get(key); if (l) l.push(w); else INDEX.set(key, [w]); };
+    for (const w of Object.keys(DICT)) {
+      if (w.length < 2 || w.includes("'")) continue;
+      const s = parseCompact(DICT[w]);
+      for (let d = 1; d <= Math.min(3, s.length); d++) push(d + ":" + s.slice(-d).map(x => x.v).join("|"), w);
+      let k = s.length - 1; while (k > 0 && !(s[k].s > 0)) k--;
+      push("S:" + s.slice(k).map(x => x.v).join("|"), w);
+    }
+  }
+  function lookup(query, depth = 1, extra = [], anchor = "stress") {
+    if (!INDEX) buildIndex();
+    const sq = skeleton(query, depth, anchor);
+    if (!sq.vowels.length) return { skeleton: sq, perfect: [], slant: [], loose: [] };
+    const key = (anchor === "stress" ? "S:" : depth + ":") + sq.vowels.join("|");
+    const cand = new Set([...(INDEX.get(key) || []), ...extra.map(clean)]);
+    const q = clean(query);
+    const perfect = [], slant = [], loose = [];
+    for (const w of cand) {
+      if (w === q) continue;
+      const r = classify(query, w, sq.vowels.length, anchor);
+      const item = { word: w, tier: CURATED.has(w) ? 0 : COMMON.has(w) ? 1 : 2, rank: COMMON.get(w) ?? 1e9 };
+      if (r.kind === "perfect") perfect.push(item);
+      else if (r.kind === "slant") slant.push(item);
+      else if (r.kind === "loose") loose.push(item);
+    }
+    const rank = (a, b) => a.tier - b.tier || a.rank - b.rank || a.word.localeCompare(b.word);
+    return { skeleton: sq, perfect: perfect.sort(rank), slant: slant.sort(rank), loose: loose.sort(rank) };
+  }
+  async function load(onChange) {
+    if (status === "ready" || status === "loading") return;
+    status = "loading"; error = ""; onChange && onChange(status);
+    try {
+      const [d, f] = await Promise.all([
+        fetch("./cmu_skel.json").then(r => { if (!r.ok) throw new Error("cmu_skel.json " + r.status); return r.json(); }),
+        fetch("./google10k.txt").then(r => r.ok ? r.text() : "").catch(() => ""),
+      ]);
+      DICT = d; INDEX = null;
+      COMMON = new Map(f.split("\n").filter(Boolean).map((w, i) => [w.trim(), i]));
+      status = "ready";
+    } catch (e) { status = "error"; error = String(e.message || e); }
+    onChange && onChange(status);
+  }
+  return { pronounce, skeleton, classify, lookup, load,
+    ready: () => status === "ready", status: () => status, error: () => error,
+    size: () => DICT ? Object.keys(DICT).length : 0 };
+})();
+let ENGINE = "v1";
+function setEngine(id) { ENGINE = id; }
+const useV2 = () => ENGINE === "v2" && E2.ready();
+function skeleton(text, depth) { return useV2() ? E2.skeleton(text, depth, "count") : skeletonV1(text, depth); }
+function classify(a, b, depth) { return useV2() ? E2.classify(a, b, depth, "count") : classifyV1(a, b, depth); }
+
+
+/* ---------- stock-phrase watch ---------- */
+const CLICHES_MELODIC = [
+  "make me disappear","turn to stone","can't breathe","fall apart","fade away",
+  "cold inside","die alone","fall asleep forever","numb inside","tear me apart",
+  "hold me close","empty inside","broken inside","save me from myself",
+];
+const CLICHES = [
+  "pain go away","pain would go away","learn to love again","love again",
+  "end up insane","going insane","drive me crazy","lost in your eyes",
+  "heart on my sleeve","tears like rain","down on my knees","shoulder to cry on",
+  "piece of my heart","meant to be","take my breath away","light up my world",
+  "hole in my heart","fell from the sky","never let you go","can't live without",
+];
+
+/* ---------- storage helpers ---------- */
+async function loadKey(k, fallback) {
+  try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fallback; }
+  catch { return fallback; }
+}
+async function saveKey(k, v) {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.error(e); }
+}
+
+/* ============================================================
+   METRO SKIN — v1.2 engine untouched below the paint.
+   Tenets rehashed: typography as chrome, live tiles, pivot
+   headers that bleed offscreen, hard corners, press-invert,
+   content over decoration. Palette: royal ink + slime.
+   ============================================================ */
+const ACCENTS = {
+  grape: { hi: "#5B21B6", lo: "#3B1478", txt: "#FFFFFF" },
+  slime: { hi: "#9BE22D", lo: "#6FA31C", txt: "#0A0A0A" },
+};
+const MT = { bg: "#000000", fg: "#FFFFFF", dim: "#8A8A8A", dim2: "#3A3A3A",
+  panel: "#111111", red: "#E51400", amber: "#F0A30A" };
+const T = { ink: MT.bg, panel: MT.panel, line: MT.dim2, bone: MT.fg,
+  dim: MT.dim, dim2: MT.dim2, amber: "#9BE22D", cold: "#5B21B6",
+  red: MT.red, green: "#9BE22D" };
+const FONT = "'Segoe UI', -apple-system, 'Helvetica Neue', sans-serif";
+
+const Mono = ({ children, style }) => (
+  <span style={{ fontFamily: FONT, fontWeight: 400, ...style }}>{children}</span>
+);
+function VowelChip({ v, small }) {
+  return (
+    <span style={{
+      background: VOWEL_COLORS[v] || MT.dim2, color: "#000",
+      padding: small ? "2px 7px" : "3px 9px", borderRadius: 0,
+      fontFamily: FONT, fontSize: small ? 11 : 13, fontWeight: 700,
+      marginRight: 4, textTransform: "lowercase",
+    }}>{VOWEL_NAMES[v] || v}</span>
+  );
+}
+function Press({ onClick, active, children, style, accent }) {
+  const [down, setDown] = useState(false);
+  const A = accent;
+  return (
+    <div onClick={onClick}
+      onPointerDown={() => setDown(true)}
+      onPointerUp={() => setDown(false)} onPointerLeave={() => setDown(false)}
+      style={{
+        background: down ? A.hi : active ? A.hi : MT.panel,
+        color: down || active ? A.txt : MT.fg,
+        border: `2px solid ${active ? A.hi : MT.dim2}`,
+        padding: "10px 14px", cursor: "pointer", userSelect: "none",
+        fontFamily: FONT, fontSize: 13, fontWeight: 600,
+        transform: down ? "scale(0.97)" : "none",
+        transition: "transform 80ms, background 80ms", ...style,
+      }}>{children}</div>
+  );
+}
+const FILLERS = new Set(["you","too","to","that","it","them","me","a","the","at",
+  "of","for","and","so","on","in","up","do"]);
+function VowelPicker({ word, overrides, setOverride, onClose, accent }) {
+  const ALL = Object.keys(VOWEL_NAMES);
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 12px",
+      background: MT.panel, borderLeft: `6px solid ${accent.hi}`,
+      margin: "4px 0 10px 0" }}>
+      <Mono style={{ color: MT.dim, fontSize: 11, width: "100%",
+        textTransform: "lowercase", letterSpacing: 1 }}>
+        "{word}" — the vowel your mouth uses</Mono>
+      {ALL.map(v => (
+        <span key={v} onClick={() => { setOverride(word, v); onClose(); }}
+          style={{ cursor: "pointer" }}><VowelChip v={v} small /></span>
+      ))}
+      {overrides[word] && (
+        <span onClick={() => { setOverride(word, null); onClose(); }}
+          style={{ color: MT.dim, fontSize: 11, cursor: "pointer",
+            alignSelf: "center", textDecoration: "underline" }}>clear</span>
+      )}
+    </div>
+  );
+}
+
+/* ---------- pivot pages ---------- */
+function Lookup({ bank, accent, dense, eng }) {
+  const [q, setQ] = useState("");
+  const [depth, setDepth] = useState(1);
+  const pool = useMemo(() => [...new Set([...LEXICON, ...bank])], [bank]);
+  const results = useMemo(() => {
+    if (!q.trim()) return null;
+    if (useV2()) {
+      const r = E2.lookup(q, depth, bank);
+      return { perfect: r.perfect, slant: r.slant, loose: r.loose, shallow: [], sk: r.skeleton, v2: true };
+    }
+    const perfect = [], slant = [], loose = [], shallow = [];
+    for (const w of pool) {
+      if (w.toLowerCase() === q.trim().toLowerCase()) continue;
+      const r = classify(q, w, depth);
+      if (r.kind === "perfect") perfect.push(w);
+      else if (r.kind === "slant") slant.push(w);
+      else if (r.kind === "loose") loose.push(w);
+      else if (r.kind === "shallow" && depth > 1) shallow.push(w);
+    }
+    return { perfect, slant, loose, shallow, sk: skeleton(q, depth) };
+  }, [q, depth, pool, eng]);
+  const pad = dense ? "8px 10px" : "12px 14px";
+  return (
+    <div>
+      <input value={q} onChange={e => setQ(e.target.value)}
+        placeholder="type a word or phrase tail"
+        style={{ width: "100%", boxSizing: "border-box", background: MT.panel,
+          border: `2px solid ${MT.dim2}`, borderBottom: `2px solid ${accent.hi}`,
+          color: MT.fg, padding: pad, fontSize: 17, fontFamily: FONT }} />
+      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+        {[1, 2, 3].map(n => (
+          <Press key={n} accent={accent} active={depth === n}
+            onClick={() => setDepth(n)} style={{ flex: 1, textAlign: "center" }}>
+            {n} syl</Press>
+        ))}
+      </div>
+      {results && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ marginBottom: 12, color: MT.dim, fontSize: 12 }}>
+            {results.sk.vowels.map((v, i) => <VowelChip key={i} v={v} small />)}
+            {results.sk.coda && <Mono style={{ color: MT.dim2 }}> +{results.sk.coda.toLowerCase()}</Mono>}
+            {results.v2 && <Mono style={{ color: MT.dim2 }}> · anchored on stress · {E2.size().toLocaleString()} words</Mono>}
+          </div>
+          {[["perfect", results.perfect, accent.hi],
+            ["slant — the melodic lane", results.slant, "#B78CF0"],
+            ["reduced — rap-legal", results.loose, "#CDEB8B"],
+            ["last vowel only", results.shallow, MT.dim]].map(([label, list, col]) => (
+            list && list.length > 0 && (
+              <div key={label} style={{ marginBottom: 14 }}>
+                <div style={{ color: col, fontSize: 12, fontWeight: 700,
+                  textTransform: "lowercase", letterSpacing: 2, marginBottom: 6 }}>
+                  {label} · {list.length}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: dense ? 5 : 8 }}>
+                  {list.slice(0, results.v2 ? 90 : 60).map(it => {
+                    const w = typeof it === "string" ? it : it.word;
+                    const tier = typeof it === "string" ? 0 : it.tier;
+                    return (
+                    <span key={w} style={{ background: MT.panel,
+                      borderLeft: `4px solid ${tier === 2 ? MT.dim2 : col}`,
+                      color: tier === 2 ? MT.dim : MT.fg, fontWeight: tier === 0 ? 700 : 400,
+                      padding: dense ? "4px 8px" : "6px 10px", fontSize: 14 }}>{w}</span>
+                  ); })}
+                </div>
+              </div>
+            )
+          ))}
+          {results.perfect.length + results.slant.length + (results.loose||[]).length === 0 && (
+            <div style={{ color: MT.dim, fontSize: 13 }}>nothing at this depth —
+              {results.v2 ? " try a shallower depth; the dictionary anchors on the stressed syllable." :
+                " add the word to the bank; the engine will guess its vowels."}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Check({ accent, eng }) {
+  const [a, setA] = useState(""); const [b, setB] = useState("");
+  const [depth, setDepth] = useState(2);
+  const r = a.trim() && b.trim() ? classify(a, b, depth) : null;
+  const verdictCol = r ? ({ perfect: accent.hi, slant: "#B78CF0", loose: "#CDEB8B",
+    shallow: MT.dim, identical: MT.dim, none: MT.red }[r.kind]) : MT.dim;
+  const verdictTxt = r ? ({
+    perfect: "perfect — vowels + final coda match",
+    slant: "slant — vowel skeleton matches, coda free",
+    loose: "reduced — holds if unstressed vowels collapse. rap-legal.",
+    shallow: "shallow — only the last vowel agrees",
+    identical: "identical — same word, no rhyme credit",
+    none: "no match at this depth",
+  }[r.kind]) : "";
+  return (
+    <div>
+      {[["line a", a, setA], ["line b", b, setB]].map(([l, v, set]) => (
+        <input key={l} value={v} onChange={e => set(e.target.value)} placeholder={l}
+          style={{ width: "100%", boxSizing: "border-box", background: MT.panel,
+            border: `2px solid ${MT.dim2}`, borderBottom: `2px solid ${accent.hi}`,
+            color: MT.fg, padding: "12px 14px", fontSize: 17, fontFamily: FONT,
+            marginBottom: 8 }} />
+      ))}
+      <div style={{ display: "flex", gap: 6 }}>
+        {[1, 2, 3].map(n => (
+          <Press key={n} accent={accent} active={depth === n}
+            onClick={() => setDepth(n)} style={{ flex: 1, textAlign: "center" }}>
+            {n} syl</Press>
+        ))}
+      </div>
+      {r && (
+        <div style={{ marginTop: 16, padding: 14, background: MT.panel,
+          borderLeft: `6px solid ${verdictCol}` }}>
+          <div style={{ color: verdictCol, fontWeight: 700, marginBottom: 10,
+            fontFamily: FONT, textTransform: "lowercase" }}>{verdictTxt}</div>
+          {[["a", r.sa], ["b", r.sb]].map(([l, sk]) => (
+            <div key={l} style={{ marginBottom: 6, color: MT.dim, fontSize: 12 }}>
+              <Mono>{l} </Mono>
+              {sk.vowels.map((v, i) => <VowelChip key={i} v={v} small />)}
+              {sk.coda && <Mono style={{ color: MT.dim2 }}> +{sk.coda.toLowerCase()}</Mono>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Draft({ draft, setDraft, overrides, setOverride, accent, dense, eng }) {
+  const [pop, setPop] = useState("rap");
+  const [pick, setPick] = useState(null);
+  const limit = pop === "rap" ? 3 : 6;
+  const lines = draft.split("\n");
+  const analysis = useMemo(() => {
+    const rows = lines.map(ln => {
+      const clean = ln.trim();
+      if (!clean) return null;
+      const words = clean.split(/\s+/);
+      const last = words[words.length - 1].replace(/[^a-zA-Z']/g, "");
+      const sk = skeleton(last, 1);
+      const v = sk.vowels[0] || null;
+      const watch = pop === "rap" ? CLICHES : [...CLICHES, ...CLICHES_MELODIC];
+      const cliche = watch.find(c => clean.toLowerCase().includes(c));
+      const filler = FILLERS.has(last.toLowerCase());
+      return { text: clean, last, v, cliche, filler, overridden: sk.overridden,
+        guess: useV2() && sk.source === "rule" };
+    });
+    let runs = [], cur = null;
+    rows.forEach((r, i) => {
+      if (!r || !r.v) { cur = null; return; }
+      if (cur && cur.v === r.v) { cur.len++; cur.idx.push(i); }
+      else { cur = { v: r.v, len: 1, idx: [i] }; runs.push(cur); }
+    });
+    const flagged = new Set();
+    runs.filter(r => r.len > limit).forEach(r => r.idx.slice(limit).forEach(i => flagged.add(i)));
+    const maxRun = runs.reduce((m, r) => Math.max(m, r.len), 0);
+    const filled = rows.filter(Boolean);
+    let terminal = false;
+    if (filled.length >= 6) {
+      const lastR = filled[filled.length-1];
+      const priors = filled.slice(0, -1).slice(-8);
+      terminal = lastR.filler || !priors.some(r => r.v === lastR.v);
+    }
+    return { rows, flagged, maxRun, terminal };
+  }, [draft, pop, overrides, eng]);
+  return (
+    <div>
+      <textarea value={draft} onChange={e => setDraft(e.target.value)}
+        placeholder={"paste the draft — one bar per line"}
+        rows={dense ? 8 : 10}
+        style={{ width: "100%", boxSizing: "border-box", background: MT.panel,
+          border: `2px solid ${MT.dim2}`, borderBottom: `2px solid ${accent.hi}`,
+          color: MT.fg, padding: 12, fontSize: 15, fontFamily: FONT,
+          lineHeight: 1.6, resize: "vertical" }} />
+      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+        {[["rap", "rap · drone past 3"], ["melodic", "melodic · drone past 6"]].map(([id, l]) => (
+          <Press key={id} accent={accent} active={pop === id}
+            onClick={() => setPop(id)} style={{ flex: 1, textAlign: "center",
+            fontSize: 11 }}>{l}</Press>
+        ))}
+      </div>
+      {analysis.rows.some(Boolean) && (
+        <div style={{ marginTop: 14 }}>
+          {analysis.maxRun > limit && (
+            <div style={{ color: MT.amber, marginBottom: 10, fontSize: 12,
+              fontFamily: FONT }}>
+              drone: {analysis.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>
+          )}
+          {analysis.rows.map((r, i) => r && (
+            <div key={i}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8,
+                padding: dense ? "4px 6px" : "6px 8px",
+                borderLeft: analysis.flagged.has(i) ? `4px solid ${MT.amber}` : "4px solid transparent",
+                background: analysis.flagged.has(i) ? "#1A1200" : "transparent" }}>
+                {r.v ? (
+                  <span onClick={() => setPick(pick === i ? null : i)}
+                    style={{ cursor: "pointer" }}>
+                    <VowelChip v={r.v} small />
+                    {r.overridden && <span style={{ color: accent.hi, fontSize: 9,
+                      position: "relative", top: -5 }}>●</span>}
+                  </span>
+                ) : <span style={{ width: 40 }} />}
+                <span style={{ color: analysis.flagged.has(i) ? MT.amber : MT.fg,
+                  fontSize: 14, flex: 1, fontFamily: FONT }}>{r.text}</span>
+                {r.guess && <span style={{ color: MT.dim2, fontSize: 10,
+                  fontFamily: FONT }}>guess</span>}
+                {r.filler && <span style={{ color: MT.red, fontSize: 10,
+                  fontFamily: FONT }}>filler landing</span>}
+                {r.cliche && <span style={{ color: MT.red, fontSize: 10,
+                  fontFamily: FONT }}>stock: "{r.cliche}"</span>}
+              </div>
+              {pick === i && (
+                <VowelPicker word={r.last.toLowerCase()} overrides={overrides}
+                  setOverride={setOverride} onClose={() => setPick(null)} accent={accent} />
+              )}
+            </div>
+          ))}
+          {analysis.terminal && (
+            <div style={{ color: MT.dim, marginTop: 10, fontSize: 12,
+              borderTop: `1px solid ${MT.dim2}`, paddingTop: 8, fontFamily: FONT }}>
+              terminal slot reads soft — filler or unpaired vowel on the last bar.
+              the logged pattern: weakest material lands last. check it on purpose.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Bank({ bank, setBank, overrides, setOverride, accent, dense }) {
+  const [w, setW] = useState("");
+  const [pick, setPick] = useState(null);
+  const add = () => {
+    const t = w.trim().toLowerCase().replace(/[^a-z' ]/g, "");
+    if (t && !bank.includes(t)) setBank([...bank, t]);
+    setW("");
+  };
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={w} onChange={e => setW(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && add()}
+          placeholder="slang, names, coinage"
+          style={{ flex: 1, background: MT.panel, border: `2px solid ${MT.dim2}`,
+            borderBottom: `2px solid ${accent.hi}`, color: MT.fg,
+            padding: "12px 14px", fontSize: 17, fontFamily: FONT }} />
+        <Press accent={accent} onClick={add}
+          style={{ background: accent.hi, color: accent.txt,
+            border: `2px solid ${accent.hi}`, fontWeight: 700 }}>add</Press>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: dense ? 5 : 8, marginTop: 14 }}>
+        {bank.map(b => {
+          const sk = skeleton(b, 1);
+          return (
+            <span key={b} style={{ background: MT.panel,
+              borderLeft: `4px solid ${accent.hi}`, padding: "5px 10px",
+              color: MT.fg, fontSize: 14, display: "inline-flex",
+              alignItems: "center", gap: 6, fontFamily: FONT }}>
+              {b}
+              {sk.vowels[0] && (
+                <span onClick={() => setPick(pick === b ? null : b)}
+                  style={{ cursor: "pointer" }}>
+                  <VowelChip v={sk.vowels[0]} small />
+                  {sk.overridden && <span style={{ color: accent.hi, fontSize: 9,
+                    position: "relative", top: -5 }}>●</span>}
+                </span>
+              )}
+              <span onClick={() => setBank(bank.filter(x => x !== b))}
+                style={{ color: MT.dim2, cursor: "pointer" }}>✕</span>
+            </span>
+          );
+        })}
+        {bank.length === 0 && <span style={{ color: MT.dim, fontSize: 13,
+          fontFamily: FONT }}>empty. words added here join every lookup and persist.</span>}
+      </div>
+      {pick && (
+        <VowelPicker word={pick.split(" ").pop()} overrides={overrides}
+          setOverride={setOverride} onClose={() => setPick(null)} accent={accent} />
+      )}
+    </div>
+  );
+}
+
+function Tune({ prefs, setPrefs, accent, engStatus }) {
+  const Row = ({ label, children }) => (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ color: MT.dim, fontSize: 12, letterSpacing: 2,
+        textTransform: "lowercase", marginBottom: 6, fontFamily: FONT }}>{label}</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{children}</div>
+    </div>
+  );
+  return (
+    <div>
+      <Row label="accent — which color leads">
+        {[["grape", "deep grape"], ["slime", "slime"]].map(([id, l]) => (
+          <Press key={id} accent={accent} active={prefs.accent === id}
+            onClick={() => setPrefs({ ...prefs, accent: id })}
+            style={{ flex: 1, textAlign: "center" }}>{l}</Press>
+        ))}
+      </Row>
+      <Row label="density">
+        {[["comfy", "comfortable"], ["dense", "dense"]].map(([id, l]) => (
+          <Press key={id} accent={accent} active={prefs.density === id}
+            onClick={() => setPrefs({ ...prefs, density: id })}
+            style={{ flex: 1, textAlign: "center" }}>{l}</Press>
+        ))}
+      </Row>
+      <Row label="motion">
+        {[["on", "tiles move"], ["off", "tiles still"]].map(([id, l]) => (
+          <Press key={id} accent={accent} active={prefs.motion === id}
+            onClick={() => setPrefs({ ...prefs, motion: id })}
+            style={{ flex: 1, textAlign: "center" }}>{l}</Press>
+        ))}
+      </Row>
+      <Row label="start tiles">
+        {["lookup", "check", "draft", "bank"].map(id => (
+          <Press key={id} accent={accent} active={prefs.tiles.includes(id)}
+            onClick={() => setPrefs({ ...prefs,
+              tiles: prefs.tiles.includes(id)
+                ? prefs.tiles.filter(t => t !== id)
+                : [...prefs.tiles, id] })}
+            style={{ flex: "1 0 40%", textAlign: "center" }}>{id}</Press>
+        ))}
+      </Row>
+      <Row label="engine">
+        {[["v1", "v1.2 · rule G2P"], ["v2", "v2.0 · dictionary"]].map(([id, l]) => (
+          <Press key={id} accent={accent} active={(prefs.engine || "v1") === id}
+            onClick={() => setPrefs({ ...prefs, engine: id })}
+            style={{ flex: 1, textAlign: "center", fontSize: 11 }}>{l}</Press>
+        ))}
+      </Row>
+      <div style={{ color: MT.dim2, fontSize: 11, fontFamily: FONT }}>
+        {(prefs.engine || "v1") === "v1"
+          ? "engine v1.2 · overrides, initialisms, schwa, filler + terminal watch"
+          : engStatus === "ready" ? `engine v2.0 · ${E2.size().toLocaleString()} words · stress-anchored · exception table outranks dictionary`
+          : engStatus === "loading" ? "engine v2.0 · loading dictionary (~690 KB) …"
+          : engStatus === "error" ? `engine v2.0 · dictionary failed (${E2.error()}) · running v1.2` 
+          : "engine v2.0 · idle"}</div>
+    </div>
+  );
+}
+
+/* ---------- start screen: live tiles ---------- */
+function Tile({ big, color, txt, title, sub, onClick, motion, flip }) {
+  const [face, setFace] = useState(0);
+  useEffect(() => {
+    if (!motion || !flip) return;
+    const id = setInterval(() => setFace(f => 1 - f), 4200 + Math.random() * 2600);
+    return () => clearInterval(id);
+  }, [motion, flip]);
+  return (
+    <div onClick={onClick} style={{
+      gridColumn: big ? "span 2" : "span 1", aspectRatio: big ? "2.05" : "1",
+      background: color, color: txt, cursor: "pointer", position: "relative",
+      overflow: "hidden", userSelect: "none",
+      perspective: "600px",
+    }}>
+      <div style={{
+        position: "absolute", inset: 0, padding: 10,
+        display: "flex", flexDirection: "column", justifyContent: "space-between",
+        transform: motion && flip ? `rotateX(${face * 180}deg)` : "none",
+        transition: "transform 600ms cubic-bezier(.2,.8,.2,1)",
+        transformStyle: "preserve-3d",
+      }}>
+        <div style={{ transform: face ? "rotateX(180deg)" : "none",
+          backfaceVisibility: "visible" }}>
+          <div style={{ fontSize: big ? 34 : 26, fontWeight: 200,
+            fontFamily: FONT, lineHeight: 1 }}>
+            {face && flip ? flip : title}</div>
+        </div>
+        <div style={{ fontSize: 12, fontFamily: FONT, fontWeight: 600,
+          textTransform: "lowercase",
+          transform: face ? "rotateX(180deg)" : "none" }}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+function Start({ prefs, bank, draft, overrides, go, accent }) {
+  const lines = draft.split("\n").filter(l => l.trim()).length;
+  const other = prefs.accent === "grape" ? ACCENTS.slime : ACCENTS.grape;
+  const motion = prefs.motion === "on";
+  const tiles = {
+    lookup: <Tile key="l" big color={accent.hi} txt={accent.txt} title="lookup"
+      sub="vowel-skeleton search" flip={useV2() ? `${E2.size().toLocaleString()} words · v2` : `${LEXICON.length + bank.length} words loaded`}
+      motion={motion} onClick={() => go("lookup")} />,
+    check: <Tile key="c" color={other.hi} txt={other.txt} title="check"
+      sub="a ~ b verdict" motion={motion} onClick={() => go("check")} />,
+    draft: <Tile key="d" color={MT.panel} txt={MT.fg} title="draft"
+      sub={lines ? `${lines} bars in session` : "paste bars"}
+      flip={lines ? "map the end vowels" : "empty"}
+      motion={motion} onClick={() => go("draft")} />,
+    bank: <Tile key="b" color={other.lo} txt="#FFFFFF" title="bank"
+      sub={`${bank.length} word${bank.length === 1 ? "" : "s"} · ${Object.keys(overrides).length} override${Object.keys(overrides).length === 1 ? "" : "s"}`}
+      flip="your mouth outranks spelling" motion={motion}
+      onClick={() => go("bank")} />,
+  };
+  return (
+    <div>
+      <div style={{ fontSize: 42, fontWeight: 200, fontFamily: FONT,
+        lineHeight: 1.05, margin: "6px 0 4px" }}>rhyme<br/>instrument</div>
+      <div style={{ color: MT.dim, fontSize: 12, fontFamily: FONT,
+        marginBottom: 16, letterSpacing: 2 }}>ghost codex · v1.3 metro</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {prefs.tiles.map(t => tiles[t])}
+        <Tile key="t" color={MT.dim2} txt={MT.fg} title="tune"
+          sub="accent · density · tiles" motion={false}
+          onClick={() => go("tune")} />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- root: pivot shell ---------- */
+const ORDER = ["start", "lookup", "check", "draft", "bank", "tune"];
+function RhymeInstrument() {
+  const [page, setPage] = useState("start");
+  const [bank, setBank] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [overrides, setOverrides_] = useState({});
+  const [prefs, setPrefs_] = useState({ accent: "grape", density: "comfy",
+    motion: "on", tiles: ["lookup", "check", "draft", "bank"] });
+  const [loaded, setLoaded] = useState(false);
+  const [drag, setDrag] = useState(null);
+  const [engStatus, setEngStatus] = useState("idle");
+  useEffect(() => {
+    if (!loaded) return;
+    if (prefs.engine === "v2") { setEngine("v2"); E2.load(setEngStatus); }
+    else setEngine("v1");
+  }, [prefs.engine, loaded]);
+  const eng = (prefs.engine || "v1") + ":" + engStatus;
+  useEffect(() => { (async () => {
+    setBank(await loadKey("ghostcodex:bank", []));
+    setDraft(await loadKey("ghostcodex:draft", ""));
+    const o = await loadKey("ghostcodex:overrides", {});
+    setOverrides_(o); setOverrides(o);
+    setPrefs_(await loadKey("ghostcodex:metroprefs",
+      { accent: "grape", density: "comfy", motion: "on",
+        tiles: ["lookup", "check", "draft", "bank"] }));
+    setLoaded(true);
+  })(); }, []);
+  useEffect(() => { if (loaded) saveKey("ghostcodex:bank", bank); }, [bank, loaded]);
+  useEffect(() => { if (loaded) {
+    const t = setTimeout(() => saveKey("ghostcodex:draft", draft), 800);
+    return () => clearTimeout(t);
+  }}, [draft, loaded]);
+  const setOverride = (word, v) => {
+    const o = { ...overrides };
+    if (v) o[word] = v; else delete o[word];
+    setOverrides_(o); setOverrides(o);
+    if (loaded) saveKey("ghostcodex:overrides", o);
+  };
+  const setPrefs = (p) => { setPrefs_(p); if (loaded) saveKey("ghostcodex:metroprefs", p); };
+  const accent = ACCENTS[prefs.accent] || ACCENTS.grape;
+  const dense = prefs.density === "dense";
+  const idx = ORDER.indexOf(page);
+  const nextPage = () => setPage(ORDER[(idx + 1) % ORDER.length]);
+  const prevPage = () => setPage(ORDER[(idx - 1 + ORDER.length) % ORDER.length]);
+  const onDown = e => setDrag(e.clientX ?? (e.touches && e.touches[0].clientX));
+  const onUp = e => {
+    if (drag == null) return;
+    const x = e.clientX ?? (e.changedTouches && e.changedTouches[0].clientX);
+    if (x != null && Math.abs(x - drag) > 70) (x < drag ? nextPage : prevPage)();
+    setDrag(null);
+  };
+  const next = ORDER[(idx + 1) % ORDER.length];
+  return (
+    <div onPointerDown={onDown} onPointerUp={onUp}
+      style={{ minHeight: "100vh", background: MT.bg, color: MT.fg,
+        padding: "22px 16px 60px", maxWidth: 760, margin: "0 auto",
+        fontFamily: FONT, overflowX: "hidden" }}>
+      {!loaded ? (
+        <div style={{ color: MT.dim, fontFamily: FONT }}>loading session</div>
+      ) : page === "start" ? (
+        <Start prefs={prefs} bank={bank} draft={draft} overrides={overrides}
+          go={setPage} accent={accent} />
+      ) : (
+        <div key={page} style={{ animation: prefs.motion === "on"
+          ? "mslide 260ms cubic-bezier(.2,.8,.2,1)" : "none" }}>
+          <div style={{ whiteSpace: "nowrap", overflow: "hidden",
+            margin: "0 -16px 14px", padding: "0 16px" }}>
+            <span onClick={() => setPage("start")} style={{ fontSize: 40,
+              fontWeight: 200, cursor: "pointer", lineHeight: 1 }}>{page}</span>
+            <span onClick={nextPage} style={{ fontSize: 40, fontWeight: 200,
+              color: MT.dim2, marginLeft: 26, cursor: "pointer",
+              lineHeight: 1 }}>{next}</span>
+          </div>
+          {page === "lookup" && <Lookup bank={bank} accent={accent} dense={dense} eng={eng} />}
+          {page === "check" && <Check accent={accent} eng={eng} />}
+          {page === "draft" && <Draft draft={draft} setDraft={setDraft}
+            overrides={overrides} setOverride={setOverride} accent={accent} dense={dense} eng={eng} />}
+          {page === "bank" && <Bank bank={bank} setBank={setBank}
+            overrides={overrides} setOverride={setOverride} accent={accent} dense={dense} />}
+          {page === "tune" && <Tune prefs={prefs} setPrefs={setPrefs} accent={accent} engStatus={engStatus} />}
+          <div style={{ color: MT.dim2, fontSize: 11, marginTop: 26,
+            fontFamily: FONT }}>swipe for {next} · tap the header for start</div>
+        </div>
+      )}
+      <style>{`@keyframes mslide { from { opacity: 0; transform: translateX(60px); }
+        to { opacity: 1; transform: translateX(0); } }`}</style>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<RhymeInstrument />);
+
+</script>
+</body>
+</html>

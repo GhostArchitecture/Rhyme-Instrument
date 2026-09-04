@@ -1,36 +1,203 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Ghost Codex — Rhyme Instrument</title>
-<style>
-  html,body{margin:0;background:#000000;-webkit-text-size-adjust:100%}
-  input,textarea,button{-webkit-appearance:none;font-size:16px}
-</style>
+<meta name="theme-color" content="#4f3a1c">
+<title>rhyme instrument — tome</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<style>
+:root {
+  --lx: 0; --ly: 1; --elev: .6; --amb: .7; --night: 0; --glow: .6; --sheen: .6;
+  --rake: 6px; --nglow: 0px; --nglow-s: 0px; --lxpx: 0px; --lypx: 1px;
+  --hi-a: .2; --cut-a: .3; --shade-a: .6;
+  --sub: #1b1a22; --sub-hi: #2c2a36; --sub-lo: #0e0d13; --edge: #0b0a10;
+  --bone: #ece3d0; --bone-lo: #b7ad9c;
+  --gilt-a: #ffe9a3; --gilt-b: #d9a52c; --gilt-c: #7a5510;
+  --mineral: #8d5cf0; --mineral-lo: #4a2a8c; --vein-hi: #c9a6ff; --vein-lo: #5a36a8;
+  --bronze-a: #d9a866; --bronze-b: #8f6a35; --bronze-c: #4f3a1c; --verdigris: #3f9a86; --verdigris-lo: #23574c;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --pad: 16px; --text: 17px; --stone-h: 20px;
+}
+.dense { --pad: 11px; --text: 15px; --stone-h: 18px; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #09080d; color: var(--bone); font-family: var(--serif); -webkit-text-size-adjust: 100%; }
+body { min-height: 100vh; background-image: radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--mineral) 18%, transparent) 0%, transparent 60%), linear-gradient(180deg, #100e16, #09080d 40%); }
+#root { max-width: 720px; margin: 0 auto; padding: 0 0 max(24px, env(safe-area-inset-bottom)); }
+input, textarea, button { font: inherit; }
+input, textarea { -webkit-appearance: none; appearance: none; }
+
+/* ---- binding: raw bronze, verdigris in the seams ---- */
+.binding { position: sticky; top: 0; z-index: 30; padding: 12px var(--pad) 10px; padding-top: max(12px, env(safe-area-inset-top));
+  background: linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,235,190,calc(.18 * var(--elev))) 0%, transparent 40%, rgba(0,0,0,.25) 100%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, var(--bronze-a) -30%, var(--bronze-b) 45%, var(--bronze-c) 100%);
+  border-bottom: 2px solid var(--verdigris-lo); color: #f2e4c8;
+  box-shadow: 0 1px 0 rgba(255,240,210,.35) inset, 0 -1px 0 var(--verdigris) inset, 0 10px 24px rgba(0,0,0,.6);
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.binding h1 { margin: 0; font-weight: 400; font-size: 19px; color: #fff3da; text-shadow: 0 1px 0 rgba(255,255,255,.25), 0 -1px 0 rgba(0,0,0,.6); cursor: pointer; }
+.binding .sun { font-size: 12.5px; color: #e6d2ac; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.binding .sun b { font-weight: 400; color: #fff6e2; }
+
+/* ---- the stack ---- */
+.stack { padding: 22px var(--pad) 0; }
+.face { position: relative; }
+.face + .edge, .edge + .edge { margin-top: 10px; }
+
+/* an edge: a slab seen end-on */
+.edge { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 0 14px; height: 58px; border-radius: 2px 3px 3px 2px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  background: linear-gradient(180deg, var(--sub-hi) 0%, var(--sub) 30%, var(--sub-lo) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,var(--hi-a)), inset 0 -1px 0 rgba(0,0,0,.7), inset 3px 0 0 var(--mineral-lo), 0 4px 0 -1px var(--edge), 0 6px 14px rgba(0,0,0,.55);
+  transition: transform 260ms cubic-bezier(.2,.8,.2,1); }
+.edge::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .5;
+  background: repeating-linear-gradient(180deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px); }
+.edge:active { transform: translateY(2px); }
+.edge .name { font-size: 22px; font-weight: 300; color: var(--bone); text-shadow: calc(var(--lx) * -.6px) calc(var(--ly) * -.6px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .8px) calc(var(--ly) * .8px) 0 rgba(0,0,0,.9); }
+.edge .sum { font-size: 12.5px; color: var(--bone-lo); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edge .sum em { font-style: normal; color: #f0c36a; }
+.stack.open .edge { height: 44px; }
+.stack.open .edge .name { font-size: 18px; }
+
+/* the open slab */
+.slab { position: relative; padding: var(--pad); margin-bottom: 26px; border-radius: 3px 5px 4px 3px; --thick: 16px; --veins: none;
+  background:
+    linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
+    var(--veins),
+    radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
+    radial-gradient(120% 80% at 90% 100%, color-mix(in srgb, var(--mineral-lo) 35%, var(--sub-lo)) 0%, transparent 55%),
+    linear-gradient(180deg, var(--sub-hi), var(--sub) 45%, var(--sub-lo));
+  background-blend-mode: screen, normal, normal, normal, normal; background-size: auto, 100% 100%, auto, auto, auto;
+  box-shadow:
+    inset calc(var(--lx) * 1.5px) calc(var(--ly) * 1.5px) 0 rgba(255,255,255,var(--hi-a)),
+    inset calc(var(--lx) * 3px) calc(var(--ly) * 3px) 0 color-mix(in srgb, var(--mineral) 30%, transparent),
+    inset calc(var(--lx) * -2px) calc(var(--ly) * -2px) 0 rgba(0,0,0,.6),
+    0 var(--thick) 0 -1px var(--edge), 0 calc(var(--thick) + 1px) 0 -1px rgba(255,255,255,.04),
+    calc(var(--lx) * -1 * var(--rake)) calc(var(--ly) * -1 * var(--rake) + var(--thick)) calc(var(--rake) * 1.4) rgba(0,0,0,var(--shade-a)); }
+.slab::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .18;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .8  0 0 0 0 .78  0 0 0 0 .85  0 0 0 .07 0'/></filter><rect width='120' height='120' filter='url(%23g)'/></svg>"); }
+.motion .slab.rise { animation: rise 380ms cubic-bezier(.2,.8,.2,1); }
+@keyframes rise { from { transform: translateY(18px) scale(.985); opacity: .6; } to { transform: none; opacity: 1; } }
+.slab > * { position: relative; z-index: 1; }
+.slab .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; cursor: pointer; }
+.slab .head h2 { margin: 0; font-size: 30px; font-weight: 300; line-height: 1; color: var(--bone);
+  text-shadow: calc(var(--lx) * -.8px) calc(var(--ly) * -.8px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .9px) calc(var(--ly) * .9px) 0 rgba(0,0,0,.9), 0 0 var(--nglow) rgba(255,230,170,.45); }
+.slab .head .hint { font-size: 12.5px; color: var(--bone-lo); }
+
+/* engraved inputs: a cut into the glass */
+.cut { width: 100%; display: block; color: var(--bone); background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.35));
+  border: 0; border-radius: 3px; padding: 11px 12px; font-size: var(--text); line-height: 1.5; resize: vertical; outline: none;
+  box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 2px rgba(0,0,0,.9), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(255,255,255,var(--hi-a)), 0 1px 0 rgba(255,255,255,.05);
+  text-shadow: 0 0 var(--nglow) rgba(255,230,170,.35); }
+.cut:focus { box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 2px rgba(0,0,0,.9), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 60%, transparent), 0 0 12px color-mix(in srgb, var(--mineral) 30%, transparent); }
+.cut::placeholder { color: var(--bone-lo); opacity: .6; }
+textarea.cut { min-height: 9.5em; }
+
+/* cast bronze controls */
+.row { display: flex; gap: 6px; margin-top: 10px; }
+.row.wrap { flex-wrap: wrap; }
+.cast { flex: 1; min-width: 0; text-align: center; padding: 8px 8px; border-radius: 3px; border: 1px solid #2e2110; color: #f7ecd6; font-size: 13px; cursor: pointer; user-select: none;
+  background: linear-gradient(180deg, #6b5030, #43301a); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 2px 0 #1f1508; -webkit-tap-highlight-color: transparent; }
+.cast:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 1px 0 #1f1508; }
+.cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--mineral)), color-mix(in srgb, var(--m, var(--mineral)) 55%, black));
+  box-shadow: 0 0 0 1px var(--m, var(--mineral)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--mineral)) 45%, transparent), 0 2px 0 #1f1508; }
+.cast.patina.on { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); box-shadow: 0 0 0 1px var(--verdigris) inset, 0 2px 0 #1f1508; }
+.label { font-size: 12.5px; color: var(--bone-lo); margin: 14px 0 6px; }
+.note { font-size: 12.5px; line-height: 1.5; color: var(--bone-lo); margin-top: 12px; }
+.note b { font-weight: 400; color: var(--bone); }
+
+/* ---- bars: thin slabs nested in the draft face ---- */
+.bars { position: relative; padding-right: 22px; }
+.bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
+  box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 0 rgba(255,255,255,var(--hi-a)), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(0,0,0,.6),
+    0 var(--bthick) 0 -1px var(--edge), calc(var(--lx) * -.5 * var(--rake)) calc(var(--ly) * -.5 * var(--rake) + var(--bthick)) calc(var(--rake) * .8) rgba(0,0,0,.5); }
+.bar[data-heat]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; mix-blend-mode: screen;
+  background: linear-gradient(270deg, rgba(255,110,30,calc(.32 * var(--heat))) 0%, rgba(255,150,50,calc(.10 * var(--heat))) 30%, transparent 62%);
+  box-shadow: inset calc(-2px - 2px * var(--heat)) 0 0 rgba(255,140,40,calc(.35 * var(--heat))); }
+.bar > * { position: relative; z-index: 1; }
+.text { font-size: var(--text); line-height: 1.32; color: var(--bone);
+  text-shadow: calc(var(--lx) * -.8px) calc(var(--ly) * -.8px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .9px) calc(var(--ly) * .9px) 0 rgba(0,0,0,.9), 0 0 var(--nglow) rgba(255,230,170,.45); }
+.text .w { white-space: nowrap; }
+.text .w.override { color: transparent; text-shadow: none;
+  background: linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), var(--gilt-c) 0%, var(--gilt-b) 35%, var(--gilt-a) 55%, var(--gilt-b) 75%, var(--gilt-c) 100%);
+  -webkit-background-clip: text; background-clip: text; filter: drop-shadow(var(--lxpx) var(--lypx) 0 rgba(0,0,0,.8)) drop-shadow(0 0 var(--nglow) rgba(255,215,120,.7)); }
+.text .w.rule { color: #9b9284; font-style: italic; }
+.field { display: flex; flex-wrap: wrap; gap: 7px 5px; margin-top: 9px; align-items: flex-end; }
+.word { display: flex; flex-direction: column; gap: 3px; }
+.word.pick .stones { outline: 1px solid color-mix(in srgb, var(--mineral) 70%, transparent); outline-offset: 2px; border-radius: 3px; }
+.stones { display: flex; gap: 2px; cursor: pointer; }
+.stone { --c: #888; position: relative; isolation: isolate; min-width: 25px; height: var(--stone-h); padding: 0 4px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; letter-spacing: .2px;
+  color: #fff8ec; text-shadow: 0 1px 1px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.5);
+  background: color-mix(in srgb, var(--c) 72%, transparent);
+  box-shadow: inset 0 0 6px color-mix(in srgb, var(--c) 55%, white), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 0 rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.65); }
+.stone::before { content: ""; position: absolute; inset: -7px -6px; border-radius: 9px; z-index: -1; opacity: var(--glow);
+  background: radial-gradient(closest-side, var(--c) 0%, color-mix(in srgb, var(--c) 60%, transparent) 45%, transparent 100%); filter: blur(5px) saturate(1.4) brightness(1.5); }
+.stone::after { content: ""; position: absolute; inset: 2px 3px; border-radius: 2px; pointer-events: none; opacity: var(--sheen);
+  background: radial-gradient(60% 55% at 40% 35%, rgba(255,255,255,.55), rgba(255,255,255,0) 65%); transform: translate(calc(var(--lx) * -4px), calc(var(--ly) * -4px)); }
+.stone.s0 { background: color-mix(in srgb, var(--c) 55%, transparent); }
+.stone.s0::before { opacity: calc(var(--glow) * .7); }
+.stone.pickable { cursor: pointer; }
+.stone.chosen { box-shadow: inset 0 0 6px color-mix(in srgb, var(--c) 55%, white), inset 0 1px 0 rgba(255,255,255,.28), 0 0 0 2px var(--gilt-b); }
+.marks { display: flex; gap: 2px; }
+.mark { flex: 1; min-width: 25px; height: 3px; border-radius: 1px; background: var(--sub-lo);
+  box-shadow: inset calc(var(--lx) * .6px) calc(var(--ly) * .6px) 0 rgba(0,0,0,.9), inset calc(var(--lx) * -.6px) calc(var(--ly) * -.6px) 0 rgba(255,255,255,var(--hi-a)), 0 0 4px color-mix(in srgb, var(--c, #888) 45%, transparent); }
+.mark.p1 { height: 5px; background: #08070a; } .mark.p2 { height: 4px; opacity: .85; } .mark.p0 { height: 1px; opacity: .6; }
+.picker { margin: 6px 0 4px; padding: 8px 8px 6px; border-radius: 3px; background: rgba(0,0,0,.35); box-shadow: inset 0 1px 2px rgba(0,0,0,.8), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 40%, transparent); }
+.picker .who { font-size: 12px; color: var(--bone-lo); margin-bottom: 6px; }
+.picker .who i { color: var(--bone); }
+.picker .stones { flex-wrap: wrap; gap: 5px; cursor: default; }
+.picker .clear { font-size: 12px; color: #f0c36a; margin-left: 6px; align-self: center; cursor: pointer; text-decoration: underline; }
+.crack { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+.crack path { fill: none; stroke-linecap: round; }
+.crack .dark { stroke: rgba(0,0,0,.9); stroke-width: 1.2; }
+.crack .lit { stroke: rgba(255,255,255,var(--cut-a)); stroke-width: .8; transform: translate(calc(var(--lx) * -.8px), calc(var(--ly) * -.8px)); }
+.foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; font-size: 12px; color: var(--bone-lo); }
+.foot .warn { color: #f0c36a; }
+.foot .bad { color: #e0705a; }
+.graph { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; overflow: visible; }
+.graph path { fill: none; stroke-linecap: round; filter: drop-shadow(0 0 var(--nglow-s) var(--vein-hi)); }
+.graph .body { stroke: var(--vein-lo); opacity: .55; } .graph .thread { stroke: var(--vein-hi); }
+.graph .perfect .thread { stroke-width: 1.7; opacity: .95; } .graph .perfect .body { stroke-width: 5; }
+.graph .slant .thread { stroke-width: 1.1; opacity: .8; } .graph .slant .body { stroke-width: 3.2; }
+.graph .loose .thread { stroke-width: .9; opacity: .65; stroke-dasharray: 3 4; } .graph .loose .body { stroke-width: 2.4; opacity: .35; }
+.drone { font-size: 13px; color: #f0c36a; margin: 6px 0 12px; }
+.terminal { font-size: 12.5px; color: var(--bone-lo); line-height: 1.5; margin-top: 6px; }
+
+/* ---- lookup / bank: word inlays ---- */
+.group { margin-top: 14px; }
+.group .gh { font-size: 12.5px; margin-bottom: 7px; }
+.group .gh.perfect { color: var(--gilt-a); } .group .gh.slant { color: var(--vein-hi); } .group .gh.loose { color: #cdebb8; } .group .gh.shallow { color: var(--bone-lo); }
+.inlays { display: flex; flex-wrap: wrap; gap: 6px; }
+.inlay { padding: 6px 10px; border-radius: 2px; font-size: 14px; color: var(--bone); cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; position: relative;
+  background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.5)); box-shadow: inset calc(var(--lx) * .8px) calc(var(--ly) * .8px) 1px rgba(0,0,0,.9), inset calc(var(--lx) * -.6px) calc(var(--ly) * -.6px) 0 rgba(255,255,255,var(--hi-a)), inset 3px 0 0 var(--k, var(--bone-lo));
+  text-shadow: 0 0 var(--nglow) rgba(255,230,170,.35); }
+.inlay.t0 { --k: var(--gilt-b); font-weight: 600; } .inlay.t1 { --k: var(--mineral); } .inlay.t2 { --k: #3a3742; color: var(--bone-lo); }
+.inlay.banked { --k: var(--verdigris); }
+.inlay.banked::after { content: "in bank"; position: absolute; right: 6px; top: -7px; font-size: 9px; color: var(--verdigris); background: var(--sub-lo); padding: 0 4px; border-radius: 2px; }
+.inlay .x { margin-left: 8px; color: var(--bone-lo); font-size: 12px; }
+.skel { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12.5px; color: var(--bone-lo); flex-wrap: wrap; }
+.verdict { margin-top: 14px; padding: 12px; border-radius: 3px; background: rgba(0,0,0,.35); box-shadow: inset 0 1px 2px rgba(0,0,0,.8), inset 4px 0 0 var(--vk, var(--bone-lo)); }
+.verdict .kind { font-size: 15px; color: var(--vk, var(--bone)); margin-bottom: 8px; }
+.empty { font-size: 13px; color: var(--bone-lo); margin-top: 12px; line-height: 1.5; }
+.bankrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(255,255,255,.04); }
+.bankrow .wd { font-size: 16px; }
+.bankrow .wd.override { color: var(--gilt-a); }
+.bankrow .rm { font-size: 13px; color: var(--bone-lo); padding: 4px 8px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .slab, .edge { animation: none !important; transition: none !important; } }
+
+</style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo } = React;
-
-/* ============================================================
-   GHOST CODEX — RHYME INSTRUMENT v1.2
-   Session tool for writing. Three modes:
-   LOOKUP  — vowel-skeleton rhyme search (perfect / slant / multi-depth)
-   CHECK   — two words/phrases -> verdict + shared skeleton
-   DRAFT   — paste lyrics -> end-rhyme map, vowel-drone flags,
-             depth meter, stock-phrase watch
-   Phonetics are rule-based guesses; every word's vowel read is
-   correctable and corrections persist in the session bank.
-   ============================================================ */
-
-/* ---------- design tokens: superseded by the Metro skin below ---------- */
+/* ghost codex · rhyme instrument · v2.0 tome (bench) */
+/* ---------- vowel classes, v1 rule G2P (OOV fallback), curated lexicon, watch lists ---------- */
 const VOWEL_COLORS = {
   AY:"#C98A2D", IY:"#5B87A8", EY:"#8FA65B", EH:"#A0703F", AE:"#B04A3A",
   AH:"#9B8AA6", AA:"#C4A35A", OW:"#5E9B8F", UW:"#4C7B9E", AW:"#B5835A",
@@ -135,8 +302,6 @@ const LETTERS = { a:["EY",""], b:["IY",""], c:["IY",""], d:["IY",""], e:["IY",""
   l:["EH","L"], m:["EH","M"], n:["EH","N"], o:["OW",""], p:["IY",""], q:["UW",""],
   r:["AR",""], s:["EH","S"], t:["IY",""], u:["UW",""], v:["IY",""], w:["UW",""],
   x:["EH","KS"], y:["AY",""], z:["IY",""] };
-let OVERRIDES = {};   // word -> final vowel class, set by the user, persisted
-function setOverrides(o) { OVERRIDES = o || {}; }
 function g2p(raw) {
   // initialism: all-caps token with no vowel letters -> letter names (PBM, DM)
   const caps = raw.replace(/[^A-Za-z]/g, "");
@@ -214,50 +379,6 @@ function g2p(raw) {
   }
   return sylls.length ? sylls : [{ v: "AH", c: "" }];
 }
-/* skeleton of last n syllables; phrase-aware (takes tail across words) */
-function skeletonV1(text, depth) {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  let sylls = [];
-  for (let i = words.length - 1; i >= 0 && sylls.length < depth + 2; i--) {
-    sylls = [...g2p(words[i]), ...sylls];
-  }
-  const tail = sylls.slice(-depth);
-  const lastWord = (words[words.length-1] || "").toLowerCase().replace(/[^a-z']/g, "");
-  let reduced = tail.length ? !!tail[tail.length-1].reduced : false;
-  let overridden = false;
-  const vowels = tail.map(s => s.v);
-  if (OVERRIDES[lastWord] && vowels.length) {
-    vowels[vowels.length-1] = OVERRIDES[lastWord];
-    reduced = false; overridden = true;
-  }
-  return { vowels, coda: sylls.length ? sylls[sylls.length-1].c : "",
-           reduced, overridden };
-}
-function classifyV1(a, b, depth) {
-  const sa = skeletonV1(a, depth), sb = skeletonV1(b, depth);
-  if (!sa.vowels.length || !sb.vowels.length) return { kind: "none", sa, sb };
-  const vMatch = sa.vowels.length === sb.vowels.length &&
-    sa.vowels.every((v, i) => v === sb.vowels[i]);
-  if (!vMatch) {
-    const n = Math.min(sa.vowels.length, sb.vowels.length);
-    const la = sa.vowels.slice(-n), lb = sb.vowels.slice(-n);
-    const RED = new Set(["AH","IH","EH","AE","AA","UH"]);
-    const lastStrict = la[n-1] === lb[n-1];
-    const loose = lastStrict && n > 1 &&
-      la.every((v, i) => v === lb[i] || (RED.has(v) && RED.has(lb[i])));
-    if (loose) return { kind: "loose", sa, sb };
-    // schwa leniency: a reduced final (Michigan) may meet any RED vowel (VIN)
-    if (!lastStrict && (sa.reduced || sb.reduced) &&
-        RED.has(la[n-1]) && RED.has(lb[n-1]))
-      return { kind: "loose", sa, sb };
-    return { kind: lastStrict ? "shallow" : "none", sa, sb };
-  }
-  const identical = a.trim().toLowerCase() === b.trim().toLowerCase();
-  if (identical) return { kind: "identical", sa, sb };
-  return { kind: sa.coda === sb.coda ? "perfect" : "slant", sa, sb };
-}
-
-/* ---------- embedded lexicon (curated, register-aware) ---------- */
 const LEX_RAW = `time mind grind shine line fine mine sign design vine spine climb dime crime prime rhyme lime ride side slide pride tide wide hide guide life knife wife strife ice nice price twice vice dice rice fly sky high why try cry die lie tie eye guy buy dry supply deny reply alive drive five hive strive thrive fire desire entire wire tire liar higher flyer light night right might fight sight tight flight bright white kite quite write bite site find kind blind behind wild child mild style mile smile while trial file pile
 see me free three key tree sea knee flee degree agree decree spree bee fee tea plea weak speak leak peak sneak freak unique clique streak seat heat beat street sweet complete elite receipt deep sleep keep creep steep leap cheap heap reap dream team scheme cream steam beam gleam scene clean mean lean green queen seen between machine routine believe leave weave grieve achieve receive breathe need feed speed greed bleed indeed succeed
 day way say play pay stay away okay today lane plane insane chain rain pain gain main brain drain train remain complain explain game name fame same flame shame blame came frame claim aim maim fade shade blade grade made paid afraid parade wave cave save brave crave slave gave behave grave rage page cage stage wage engage sage race place face space chase base case grace erase taste waste paste haste eight weight great late gate hate fate state rate create relate debate plate skate crate
@@ -305,10 +426,25 @@ hunnid hunnids
 const LEXICON = [...new Set(
   LEX_RAW.split(/\s+/).map(w => w.replace(/\d+$/, "")).filter(w => w.length > 1)
 )];
+/* ---------- stock-phrase watch ---------- */
+const CLICHES_MELODIC = [
+  "make me disappear","turn to stone","can't breathe","fall apart","fade away",
+  "cold inside","die alone","fall asleep forever","numb inside","tear me apart",
+  "hold me close","empty inside","broken inside","save me from myself",
+];
+const CLICHES = [
+  "pain go away","pain would go away","learn to love again","love again",
+  "end up insane","going insane","drive me crazy","lost in your eyes",
+  "heart on my sleeve","tears like rain","down on my knees","shoulder to cry on",
+  "piece of my heart","meant to be","take my breath away","light up my world",
+  "hole in my heart","fell from the sky","never let you go","can't live without",
+];
+const FILLERS = new Set(["you","too","to","that","it","them","me","a","the","at",
+  "of","for","and","so","on","in","up","do"]);
 
-/* ---------- engine 2.0 (bench, behind the tune flag) ----------
- * Pronunciation authority: override > exception (v1 hand table) > cmu (dictionary) > rule (v1 G2P).
- * Dictionary is cmu_skel.json beside index.html, fetched on first switch to v2. */
+
+/* ---------- engine 2.0 ---------- */
+let OVERRIDES = {};
 const E2 = (() => {
   let DICT = null, COMMON = new Map(), INDEX = null, status = "idle", error = "";
   const CURATED = new Set(LEXICON);
@@ -395,11 +531,14 @@ const E2 = (() => {
     }
   }
   function lookup(query, depth = 1, extra = [], anchor = "stress") {
-    if (!INDEX) buildIndex();
     const sq = skeleton(query, depth, anchor);
     if (!sq.vowels.length) return { skeleton: sq, perfect: [], slant: [], loose: [] };
-    const key = (anchor === "stress" ? "S:" : depth + ":") + sq.vowels.join("|");
-    const cand = new Set([...(INDEX.get(key) || []), ...extra.map(clean)]);
+    let cand;
+    if (DICT) {
+      if (!INDEX) buildIndex();
+      const key = (anchor === "stress" ? "S:" : depth + ":") + sq.vowels.join("|");
+      cand = new Set([...(INDEX.get(key) || []), ...extra.map(clean)]);
+    } else cand = new Set([...LEXICON, ...extra.map(clean)]);
     const q = clean(query);
     const perfect = [], slant = [], loose = [];
     for (const w of cand) {
@@ -412,6 +551,62 @@ const E2 = (() => {
     }
     const rank = (a, b) => a.tier - b.tier || a.rank - b.rank || a.word.localeCompare(b.word);
     return { skeleton: sq, perfect: perfect.sort(rank), slant: slant.sort(rank), loose: loose.sort(rank) };
+  }
+  function graph(bars, { window = 8 } = {}) {
+    const filled = bars.filter(Boolean);
+    const edges = [];
+    const tailOf = w => skeleton(w, 1, "stress");
+    const link = (a, b, wa, wb, scope) => {
+      const ta = tailOf(wa), tb = tailOf(wb);
+      if (!ta.vowels.length || !tb.vowels.length) return;
+      const depth = Math.max(ta.vowels.length, tb.vowels.length);
+      const r = classify(wa, wb, depth, "stress");
+      if (r.kind === "perfect" || r.kind === "slant" || r.kind === "loose")
+        edges.push({ a, b, kind: r.kind, depth: Math.min(ta.vowels.length, tb.vowels.length), words: [wa, wb], scope });
+    };
+    for (let i = 0; i < filled.length; i++) {
+      const bi = filled[i];
+      for (let j = Math.max(0, i - window); j < i; j++) link(filled[j].i, bi.i, filled[j].end.word, bi.end.word, "terminal");
+      const inner = bi.field.slice(0, -1).filter(w => w.sylls.some(s => s.s === 1) && !FILLERS.has(w.word.toLowerCase()) && w.word.replace(/[^a-zA-Z]/g, "").length > 2);
+      for (const w of inner) {
+        const word = w.word.replace(/[^a-zA-Z']/g, "");
+        link(bi.i, bi.i, word, bi.end.word, "internal");
+        if (i > 0) link(filled[i-1].i, bi.i, filled[i-1].end.word, word, "internal");
+      }
+    }
+    return edges;
+  }
+  function reading(draft, { pop = "rap" } = {}) {
+    const limit = pop === "rap" ? 3 : 6;
+    const watch = pop === "rap" ? CLICHES : [...CLICHES, ...CLICHES_MELODIC];
+    const bars = draft.split("\n").map((ln, i) => {
+      const text = ln.trim();
+      if (!text) return null;
+      const words = text.split(/\s+/);
+      const field = words.map(w => { const p = pronounce(w); return { word: w, source: p.source, sylls: p.sylls.map(s => ({ v: s.v, s: s.s, c: s.c })) }; });
+      const last = words[words.length-1].replace(/[^a-zA-Z']/g, "");
+      const end = skeleton(last, 1);
+      const cliche = watch.find(c => text.toLowerCase().includes(c)) || null;
+      return { i, text, field, syllables: field.reduce((n, w) => n + w.sylls.length, 0),
+        end: { word: last, v: end.vowels[0] || null, coda: end.coda, source: end.source, overridden: end.overridden },
+        filler: FILLERS.has(last.toLowerCase()), cliche };
+    });
+    const runs = []; let cur = null;
+    bars.forEach(b => {
+      if (!b || !b.end.v) { cur = null; return; }
+      if (cur && cur.v === b.end.v) { cur.len++; cur.bars.push(b.i); }
+      else { cur = { v: b.end.v, len: 1, bars: [b.i] }; runs.push(cur); }
+    });
+    const flagged = new Set();
+    runs.filter(r => r.len > limit).forEach(r => r.bars.slice(limit).forEach(i => flagged.add(i)));
+    const filled = bars.filter(Boolean);
+    let terminal = false;
+    if (filled.length >= 6) {
+      const lastB = filled[filled.length-1], priors = filled.slice(0, -1).slice(-8);
+      terminal = lastB.filler || !priors.some(b => b.end.v === lastB.end.v);
+    }
+    const edges = graph(bars, { window: 8 });
+    return { v: 2, pop, limit, bars, runs, edges, flagged: [...flagged], maxRun: runs.reduce((m, r) => Math.max(m, r.len), 0), terminal };
   }
   async function load(onChange) {
     if (status === "ready" || status === "loading") return;
@@ -427,614 +622,421 @@ const E2 = (() => {
     } catch (e) { status = "error"; error = String(e.message || e); }
     onChange && onChange(status);
   }
-  return { pronounce, skeleton, classify, lookup, load,
+  return { pronounce, skeleton, classify, lookup, reading, load,
     ready: () => status === "ready", status: () => status, error: () => error,
-    size: () => DICT ? Object.keys(DICT).length : 0 };
+    size: () => DICT ? Object.keys(DICT).length : LEXICON.length };
 })();
-let ENGINE = "v1";
-function setEngine(id) { ENGINE = id; }
-const useV2 = () => ENGINE === "v2" && E2.ready();
-function skeleton(text, depth) { return useV2() ? E2.skeleton(text, depth, "count") : skeletonV1(text, depth); }
-function classify(a, b, depth) { return useV2() ? E2.classify(a, b, depth, "count") : classifyV1(a, b, depth); }
 
-
-/* ---------- stock-phrase watch ---------- */
-const CLICHES_MELODIC = [
-  "make me disappear","turn to stone","can't breathe","fall apart","fade away",
-  "cold inside","die alone","fall asleep forever","numb inside","tear me apart",
-  "hold me close","empty inside","broken inside","save me from myself",
-];
-const CLICHES = [
-  "pain go away","pain would go away","learn to love again","love again",
-  "end up insane","going insane","drive me crazy","lost in your eyes",
-  "heart on my sleeve","tears like rain","down on my knees","shoulder to cry on",
-  "piece of my heart","meant to be","take my breath away","light up my world",
-  "hole in my heart","fell from the sky","never let you go","can't live without",
-];
-
-/* ---------- storage helpers ---------- */
-async function loadKey(k, fallback) {
-  try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fallback; }
-  catch { return fallback; }
-}
-async function saveKey(k, v) {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.error(e); }
-}
-
-/* ============================================================
-   METRO SKIN — v1.2 engine untouched below the paint.
-   Tenets rehashed: typography as chrome, live tiles, pivot
-   headers that bleed offscreen, hard corners, press-invert,
-   content over decoration. Palette: royal ink + slime.
-   ============================================================ */
-const ACCENTS = {
-  grape: { hi: "#5B21B6", lo: "#3B1478", txt: "#FFFFFF" },
-  slime: { hi: "#9BE22D", lo: "#6FA31C", txt: "#0A0A0A" },
+/* ---------- storage v2, with a one-time carry from the metro keys ---------- */
+const STORE = {
+  get(k, fb) { try { const r = localStorage.getItem("tome:" + k); return r ? JSON.parse(r) : fb; } catch (e) { return fb; } },
+  set(k, v) { try { localStorage.setItem("tome:" + k, JSON.stringify(v)); } catch (e) {} },
+  migrate() {
+    try {
+      if (localStorage.getItem("tome:migrated")) return false;
+      const old = k => { const r = localStorage.getItem("ghostcodex:" + k); return r ? JSON.parse(r) : null; };
+      const bank = old("bank"), draft = old("draft"), ov = old("overrides"), mp = old("metroprefs");
+      if (bank) STORE.set("bank", bank);
+      if (draft) STORE.set("draft", draft);
+      if (ov) STORE.set("overrides", ov);
+      if (mp) STORE.set("prefs", { mineral: mp.accent === "slime" ? "malachite" : "amethyst", density: mp.density || "comfy", motion: mp.motion || "on" });
+      localStorage.setItem("tome:migrated", "1");
+      return !!(bank || draft || ov);
+    } catch (e) { return false; }
+  },
 };
-const MT = { bg: "#000000", fg: "#FFFFFF", dim: "#8A8A8A", dim2: "#3A3A3A",
-  panel: "#111111", red: "#E51400", amber: "#F0A30A" };
-const T = { ink: MT.bg, panel: MT.panel, line: MT.dim2, bone: MT.fg,
-  dim: MT.dim, dim2: MT.dim2, amber: "#9BE22D", cold: "#5B21B6",
-  red: MT.red, green: "#9BE22D" };
-const FONT = "'Segoe UI', -apple-system, 'Helvetica Neue', sans-serif";
 
-const Mono = ({ children, style }) => (
-  <span style={{ fontFamily: FONT, fontWeight: 400, ...style }}>{children}</span>
-);
-function VowelChip({ v, small }) {
-  return (
-    <span style={{
-      background: VOWEL_COLORS[v] || MT.dim2, color: "#000",
-      padding: small ? "2px 7px" : "3px 9px", borderRadius: 0,
-      fontFamily: FONT, fontSize: small ? 11 : 13, fontWeight: 700,
-      marginRight: 4, textTransform: "lowercase",
-    }}>{VOWEL_NAMES[v] || v}</span>
-  );
-}
-function Press({ onClick, active, children, style, accent }) {
-  const [down, setDown] = useState(false);
-  const A = accent;
-  return (
-    <div onClick={onClick}
-      onPointerDown={() => setDown(true)}
-      onPointerUp={() => setDown(false)} onPointerLeave={() => setDown(false)}
-      style={{
-        background: down ? A.hi : active ? A.hi : MT.panel,
-        color: down || active ? A.txt : MT.fg,
-        border: `2px solid ${active ? A.hi : MT.dim2}`,
-        padding: "10px 14px", cursor: "pointer", userSelect: "none",
-        fontFamily: FONT, fontSize: 13, fontWeight: 600,
-        transform: down ? "scale(0.97)" : "none",
-        transition: "transform 80ms, background 80ms", ...style,
-      }}>{children}</div>
-  );
-}
-const FILLERS = new Set(["you","too","to","that","it","them","me","a","the","at",
-  "of","for","and","so","on","in","up","do"]);
-function VowelPicker({ word, overrides, setOverride, onClose, accent }) {
-  const ALL = Object.keys(VOWEL_NAMES);
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 12px",
-      background: MT.panel, borderLeft: `6px solid ${accent.hi}`,
-      margin: "4px 0 10px 0" }}>
-      <Mono style={{ color: MT.dim, fontSize: 11, width: "100%",
-        textTransform: "lowercase", letterSpacing: 1 }}>
-        "{word}" — the vowel your mouth uses</Mono>
-      {ALL.map(v => (
-        <span key={v} onClick={() => { setOverride(word, v); onClose(); }}
-          style={{ cursor: "pointer" }}><VowelChip v={v} small /></span>
-      ))}
-      {overrides[word] && (
-        <span onClick={() => { setOverride(word, null); onClose(); }}
-          style={{ color: MT.dim, fontSize: 11, cursor: "pointer",
-            alignSelf: "center", textDecoration: "underline" }}>clear</span>
-      )}
-    </div>
-  );
-}
+/* ---------- sundial: NOAA solar position; Middletown by default, no permission asked ---------- */
+const SUN = (() => {
+  const LAT = 39.515, LON = -84.398;
+  function solar(date) {
+    const r = Math.PI / 180;
+    const start = new Date(date.getFullYear(), 0, 0);
+    const doy = Math.floor((date - start) / 864e5);
+    const hr = date.getHours() + date.getMinutes() / 60;
+    const g = 2 * Math.PI / 365 * (doy - 1 + (hr - 12) / 24);
+    const eqt = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+    const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+    const tz = -date.getTimezoneOffset() / 60;
+    const tst = hr * 60 + eqt + 4 * LON - 60 * tz;
+    const ha = (tst / 4 - 180) * r, lat = LAT * r;
+    const cosZ = Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(ha);
+    const elev = 90 - Math.acos(Math.max(-1, Math.min(1, cosZ))) / r;
+    let az = Math.atan2(Math.sin(ha), Math.cos(ha) * Math.sin(lat) - Math.tan(decl) * Math.cos(lat)) / r + 180;
+    return { elev, az: (az + 360) % 360 };
+  }
+  function apply(date) {
+    const { elev, az } = solar(date);
+    const rs = document.documentElement.style;
+    const a = az * Math.PI / 180;
+    const lx = elev > -6 ? Math.sin(a) : 0, ly = elev > -6 ? -Math.cos(a) : 1;
+    const e = Math.max(0, Math.min(1, Math.sin(Math.max(0, elev) * Math.PI / 180) * 1.25));
+    const night = Math.max(0, Math.min(1, (-elev - 2) / 8));
+    const twilight = 1 - Math.max(0, Math.min(1, Math.abs(elev) / 14));
+    const rake = elev > 0 ? Math.min(22, 4 + 14 / Math.max(.25, Math.tan(elev * Math.PI / 180)) / 6) : 4;
+    const amb = 0.45 + 0.55 * e * (1 - night) + 0.18 * night;
+    const set = (k, v) => rs.setProperty(k, v);
+    set("--lx", lx.toFixed(3)); set("--ly", ly.toFixed(3)); set("--elev", e.toFixed(3)); set("--night", night.toFixed(3)); set("--amb", amb.toFixed(3));
+    set("--rake", rake.toFixed(1) + "px");
+    set("--glow", (0.45 + 0.25 * (1 - e) + 0.30 * night).toFixed(2)); set("--sheen", (0.25 + 0.55 * e * (1 - night)).toFixed(2));
+    set("--lxpx", (lx * .9).toFixed(2) + "px"); set("--lypx", (ly * .9).toFixed(2) + "px");
+    set("--nglow", (6 * night).toFixed(1) + "px"); set("--nglow-s", (3 * night).toFixed(1) + "px");
+    set("--hi-a", (0.30 * e + 0.06).toFixed(3)); set("--cut-a", (0.40 * e + 0.06).toFixed(3)); set("--shade-a", (0.45 + 0.3 * e).toFixed(3));
+    const mix = (p, q, t) => p.map((c, i) => Math.round(c + (q[i] - c) * t));
+    const hex = c => "#" + c.map(v => v.toString(16).padStart(2, "0")).join("");
+    let sub = mix([28, 26, 36], [40, 28, 30], twilight * (1 - night)); sub = mix(sub, [14, 14, 26], night);
+    set("--sub", hex(sub)); set("--sub-hi", hex(mix(sub, [255, 255, 255], .14 * (0.5 + e)))); set("--sub-lo", hex(mix(sub, [0, 0, 0], .42)));
+    set("--bone", hex(mix(mix([236, 227, 208], [244, 214, 170], twilight * (1 - night)), [204, 208, 224], night)));
+    const dirs = ["N","NE","E","SE","S","SW","W","NW"];
+    return { elev, az, dir: dirs[Math.round(az / 45) % 8], night, time: date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) };
+  }
+  return { solar, apply };
+})();
 
-/* ---------- pivot pages ---------- */
-function Lookup({ bank, accent, dense, eng }) {
-  const [q, setQ] = useState("");
-  const [depth, setDepth] = useState(1);
-  const pool = useMemo(() => [...new Set([...LEXICON, ...bank])], [bank]);
-  const results = useMemo(() => {
-    if (!q.trim()) return null;
-    if (useV2()) {
-      const r = E2.lookup(q, depth, bank);
-      return { perfect: r.perfect, slant: r.slant, loose: r.loose, shallow: [], sk: r.skeleton, v2: true };
+/* ---------- veins: seeded per session, derived per face ---------- */
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const SESSION = (() => { const fresh = () => String((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+  try { let k = sessionStorage.getItem("tome:seed"); if (!k) { k = fresh(); sessionStorage.setItem("tome:seed", k); } return +k; } catch (e) { return +fresh(); } })();
+const MINERALS = {
+  amethyst:  { hi: "#c9a6ff", lo: "#5a36a8", m: "#8d5cf0", mlo: "#4a2a8c" },
+  malachite: { hi: "#9ff0c5", lo: "#1f7a50", m: "#3fbf7e", mlo: "#1c6a45" },
+};
+const VEIN_CACHE = new Map();
+function veinSVG(mineral, face) {
+  const key = mineral + ":" + face;
+  if (VEIN_CACHE.has(key)) return VEIN_CACHE.get(key);
+  const { hi, lo } = MINERALS[mineral];
+  const R = mulberry32(SESSION ^ ((face + 1) * 0x9E3779B1));
+  const rnd = (a, b) => a + R() * (b - a);
+  const W = 480, H = 200; let strokes = "";
+  const n = 2 + Math.floor(R() * 3);
+  for (let i = 0; i < n; i++) {
+    let x = rnd(-30, 30), y = rnd(15, H - 15), d = `M${x.toFixed(0)} ${y.toFixed(0)}`;
+    const segs = 3 + Math.floor(R() * 3), amp = rnd(18, 60), dir = R() < .5 ? -1 : 1;
+    for (let k = 0; k < segs; k++) {
+      const nx = x + (W + 60) / segs * rnd(.8, 1.2);
+      const ny = Math.max(6, Math.min(H - 6, y + dir * rnd(-amp, amp * .4) * (k % 2 ? -1 : 1)));
+      d += ` C ${(x + (nx - x) * rnd(.25, .45)).toFixed(0)} ${(y + rnd(-amp, amp)).toFixed(0)}, ${(x + (nx - x) * rnd(.55, .8)).toFixed(0)} ${(ny + rnd(-amp, amp)).toFixed(0)}, ${nx.toFixed(0)} ${ny.toFixed(0)}`;
+      if (R() < .35) { const bx = nx + rnd(-40, 40), by = ny + rnd(-45, 45);
+        strokes += `<path d='M${nx.toFixed(0)} ${ny.toFixed(0)} Q ${((nx + bx) / 2 + rnd(-15, 15)).toFixed(0)} ${((ny + by) / 2 + rnd(-15, 15)).toFixed(0)} ${bx.toFixed(0)} ${by.toFixed(0)}' stroke='${hi}' stroke-width='${rnd(.5, 1).toFixed(2)}' opacity='${rnd(.2, .45).toFixed(2)}'/>`; }
+      x = nx; y = ny;
     }
-    const perfect = [], slant = [], loose = [], shallow = [];
-    for (const w of pool) {
-      if (w.toLowerCase() === q.trim().toLowerCase()) continue;
-      const r = classify(q, w, depth);
-      if (r.kind === "perfect") perfect.push(w);
-      else if (r.kind === "slant") slant.push(w);
-      else if (r.kind === "loose") loose.push(w);
-      else if (r.kind === "shallow" && depth > 1) shallow.push(w);
-    }
-    return { perfect, slant, loose, shallow, sk: skeleton(q, depth) };
-  }, [q, depth, pool, eng]);
-  const pad = dense ? "8px 10px" : "12px 14px";
+    strokes += `<path d='${d}' stroke='${lo}' stroke-width='${rnd(2.5, 6.5).toFixed(1)}' opacity='${rnd(.2, .4).toFixed(2)}'/><path d='${d}' stroke='${hi}' stroke-width='${rnd(.9, 2.1).toFixed(1)}' opacity='${rnd(.35, .6).toFixed(2)}'/>`;
+  }
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}' viewBox='0 0 ${W} ${H}'><defs><filter id='v' x='-10%' y='-20%' width='120%' height='140%'><feTurbulence type='fractalNoise' baseFrequency='${rnd(.008, .018).toFixed(3)} ${rnd(.025, .06).toFixed(3)}' numOctaves='3' seed='${Math.floor(R() * 999)}'/><feDisplacementMap in='SourceGraphic' scale='${rnd(16, 34).toFixed(0)}' xChannelSelector='R' yChannelSelector='G'/><feGaussianBlur stdDeviation='.5'/></filter></defs><g fill='none' stroke-linecap='round' filter='url(%23v)'>${strokes}</g></svg>`;
+  const url = `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+  VEIN_CACHE.set(key, url); return url;
+}
+
+
+/* ---------- tome UI ---------- */
+const { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } = React;
+const NAMES = { ...VOWEL_NAMES, AE: "a", IH: "ih", UH: "ŏŏ" };
+const clean = s => (s || "").toLowerCase().replace(/[^a-z']/g, "");
+
+function Stone({ v, s = 1, onClick, chosen }) {
+  return <span className={`stone s${s}${onClick ? " pickable" : ""}${chosen ? " chosen" : ""}`}
+    style={{ "--c": VOWEL_COLORS[v] || "#777" }} onClick={onClick}>{NAMES[v] || (v || "").toLowerCase()}</span>;
+}
+function Mark({ v, s }) { return <span className={`mark p${s}`} style={{ "--c": VOWEL_COLORS[v] || "#777" }} />; }
+function Skeleton({ sk }) {
+  if (!sk || !sk.vowels.length) return null;
+  return <span className="skel">{sk.vowels.map((v, i) => <Stone key={i} v={v} s={sk.stress ? sk.stress[i] : 1} />)}
+    {sk.coda ? <span>+{sk.coda.toLowerCase()}</span> : null}</span>;
+}
+function Picker({ word, overrides, setOverride, onClose }) {
+  const cur = overrides[word];
   return (
-    <div>
-      <input value={q} onChange={e => setQ(e.target.value)}
-        placeholder="type a word or phrase tail"
-        style={{ width: "100%", boxSizing: "border-box", background: MT.panel,
-          border: `2px solid ${MT.dim2}`, borderBottom: `2px solid ${accent.hi}`,
-          color: MT.fg, padding: pad, fontSize: 17, fontFamily: FONT }} />
-      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-        {[1, 2, 3].map(n => (
-          <Press key={n} accent={accent} active={depth === n}
-            onClick={() => setDepth(n)} style={{ flex: 1, textAlign: "center" }}>
-            {n} syl</Press>
-        ))}
+    <div className="picker">
+      <div className="who">the vowel your mouth uses on <i>{word}</i></div>
+      <div className="stones">
+        {Object.keys(VOWEL_NAMES).map(v => <Stone key={v} v={v} chosen={cur === v} onClick={() => { setOverride(word, v); onClose(); }} />)}
+        {cur && <span className="clear" onClick={() => { setOverride(word, null); onClose(); }}>clear</span>}
       </div>
-      {results && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ marginBottom: 12, color: MT.dim, fontSize: 12 }}>
-            {results.sk.vowels.map((v, i) => <VowelChip key={i} v={v} small />)}
-            {results.sk.coda && <Mono style={{ color: MT.dim2 }}> +{results.sk.coda.toLowerCase()}</Mono>}
-            {results.v2 && <Mono style={{ color: MT.dim2 }}> · anchored on stress · {E2.size().toLocaleString()} words</Mono>}
-          </div>
-          {[["perfect", results.perfect, accent.hi],
-            ["slant — the melodic lane", results.slant, "#B78CF0"],
-            ["reduced — rap-legal", results.loose, "#CDEB8B"],
-            ["last vowel only", results.shallow, MT.dim]].map(([label, list, col]) => (
-            list && list.length > 0 && (
-              <div key={label} style={{ marginBottom: 14 }}>
-                <div style={{ color: col, fontSize: 12, fontWeight: 700,
-                  textTransform: "lowercase", letterSpacing: 2, marginBottom: 6 }}>
-                  {label} · {list.length}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: dense ? 5 : 8 }}>
-                  {list.slice(0, results.v2 ? 90 : 60).map(it => {
-                    const w = typeof it === "string" ? it : it.word;
-                    const tier = typeof it === "string" ? 0 : it.tier;
-                    return (
-                    <span key={w} style={{ background: MT.panel,
-                      borderLeft: `4px solid ${tier === 2 ? MT.dim2 : col}`,
-                      color: tier === 2 ? MT.dim : MT.fg, fontWeight: tier === 0 ? 700 : 400,
-                      padding: dense ? "4px 8px" : "6px 10px", fontSize: 14 }}>{w}</span>
-                  ); })}
-                </div>
-              </div>
-            )
-          ))}
-          {results.perfect.length + results.slant.length + (results.loose||[]).length === 0 && (
-            <div style={{ color: MT.dim, fontSize: 13 }}>nothing at this depth —
-              {results.v2 ? " try a shallower depth; the dictionary anchors on the stressed syllable." :
-                " add the word to the bank; the engine will guess its vowels."}</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
-
-function Check({ accent, eng }) {
-  const [a, setA] = useState(""); const [b, setB] = useState("");
-  const [depth, setDepth] = useState(2);
-  const r = a.trim() && b.trim() ? classify(a, b, depth) : null;
-  const verdictCol = r ? ({ perfect: accent.hi, slant: "#B78CF0", loose: "#CDEB8B",
-    shallow: MT.dim, identical: MT.dim, none: MT.red }[r.kind]) : MT.dim;
-  const verdictTxt = r ? ({
-    perfect: "perfect — vowels + final coda match",
-    slant: "slant — vowel skeleton matches, coda free",
-    loose: "reduced — holds if unstressed vowels collapse. rap-legal.",
-    shallow: "shallow — only the last vowel agrees",
-    identical: "identical — same word, no rhyme credit",
-    none: "no match at this depth",
-  }[r.kind]) : "";
-  return (
-    <div>
-      {[["line a", a, setA], ["line b", b, setB]].map(([l, v, set]) => (
-        <input key={l} value={v} onChange={e => set(e.target.value)} placeholder={l}
-          style={{ width: "100%", boxSizing: "border-box", background: MT.panel,
-            border: `2px solid ${MT.dim2}`, borderBottom: `2px solid ${accent.hi}`,
-            color: MT.fg, padding: "12px 14px", fontSize: 17, fontFamily: FONT,
-            marginBottom: 8 }} />
-      ))}
-      <div style={{ display: "flex", gap: 6 }}>
-        {[1, 2, 3].map(n => (
-          <Press key={n} accent={accent} active={depth === n}
-            onClick={() => setDepth(n)} style={{ flex: 1, textAlign: "center" }}>
-            {n} syl</Press>
-        ))}
-      </div>
-      {r && (
-        <div style={{ marginTop: 16, padding: 14, background: MT.panel,
-          borderLeft: `6px solid ${verdictCol}` }}>
-          <div style={{ color: verdictCol, fontWeight: 700, marginBottom: 10,
-            fontFamily: FONT, textTransform: "lowercase" }}>{verdictTxt}</div>
-          {[["a", r.sa], ["b", r.sb]].map(([l, sk]) => (
-            <div key={l} style={{ marginBottom: 6, color: MT.dim, fontSize: 12 }}>
-              <Mono>{l} </Mono>
-              {sk.vowels.map((v, i) => <VowelChip key={i} v={v} small />)}
-              {sk.coda && <Mono style={{ color: MT.dim2 }}> +{sk.coda.toLowerCase()}</Mono>}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+function Cast({ on, children, onClick, patina, style }) {
+  return <div className={`cast${on ? " on" : ""}${patina ? " patina" : ""}`} onClick={onClick} style={style}>{children}</div>;
 }
 
-function Draft({ draft, setDraft, overrides, setOverride, accent, dense, eng }) {
-  const [pop, setPop] = useState("rap");
-  const [pick, setPick] = useState(null);
-  const limit = pop === "rap" ? 3 : 6;
-  const lines = draft.split("\n");
-  const analysis = useMemo(() => {
-    const rows = lines.map(ln => {
-      const clean = ln.trim();
-      if (!clean) return null;
-      const words = clean.split(/\s+/);
-      const last = words[words.length - 1].replace(/[^a-zA-Z']/g, "");
-      const sk = skeleton(last, 1);
-      const v = sk.vowels[0] || null;
-      const watch = pop === "rap" ? CLICHES : [...CLICHES, ...CLICHES_MELODIC];
-      const cliche = watch.find(c => clean.toLowerCase().includes(c));
-      const filler = FILLERS.has(last.toLowerCase());
-      return { text: clean, last, v, cliche, filler, overridden: sk.overridden,
-        guess: useV2() && sk.source === "rule" };
-    });
-    let runs = [], cur = null;
-    rows.forEach((r, i) => {
-      if (!r || !r.v) { cur = null; return; }
-      if (cur && cur.v === r.v) { cur.len++; cur.idx.push(i); }
-      else { cur = { v: r.v, len: 1, idx: [i] }; runs.push(cur); }
-    });
-    const flagged = new Set();
-    runs.filter(r => r.len > limit).forEach(r => r.idx.slice(limit).forEach(i => flagged.add(i)));
-    const maxRun = runs.reduce((m, r) => Math.max(m, r.len), 0);
-    const filled = rows.filter(Boolean);
-    let terminal = false;
-    if (filled.length >= 6) {
-      const lastR = filled[filled.length-1];
-      const priors = filled.slice(0, -1).slice(-8);
-      terminal = lastR.filler || !priors.some(r => r.v === lastR.v);
-    }
-    return { rows, flagged, maxRun, terminal };
-  }, [draft, pop, overrides, eng]);
+/* ---- draft: the Rosetta face ---- */
+function Bar({ bar, reading, overrides, setOverride, pick, setPick }) {
+  const run = reading.runs.find(r => r.bars.includes(bar.i));
+  const flagged = reading.flagged.includes(bar.i);
+  const heat = flagged && run ? Math.min(1, (run.bars.indexOf(bar.i) - reading.limit + 1) / Math.max(1, run.len - reading.limit)) : 0;
   return (
-    <div>
-      <textarea value={draft} onChange={e => setDraft(e.target.value)}
-        placeholder={"paste the draft — one bar per line"}
-        rows={dense ? 8 : 10}
-        style={{ width: "100%", boxSizing: "border-box", background: MT.panel,
-          border: `2px solid ${MT.dim2}`, borderBottom: `2px solid ${accent.hi}`,
-          color: MT.fg, padding: 12, fontSize: 15, fontFamily: FONT,
-          lineHeight: 1.6, resize: "vertical" }} />
-      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-        {[["rap", "rap · drone past 3"], ["melodic", "melodic · drone past 6"]].map(([id, l]) => (
-          <Press key={id} accent={accent} active={pop === id}
-            onClick={() => setPop(id)} style={{ flex: 1, textAlign: "center",
-            fontSize: 11 }}>{l}</Press>
-        ))}
-      </div>
-      {analysis.rows.some(Boolean) && (
-        <div style={{ marginTop: 14 }}>
-          {analysis.maxRun > limit && (
-            <div style={{ color: MT.amber, marginBottom: 10, fontSize: 12,
-              fontFamily: FONT }}>
-              drone: {analysis.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>
-          )}
-          {analysis.rows.map((r, i) => r && (
-            <div key={i}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8,
-                padding: dense ? "4px 6px" : "6px 8px",
-                borderLeft: analysis.flagged.has(i) ? `4px solid ${MT.amber}` : "4px solid transparent",
-                background: analysis.flagged.has(i) ? "#1A1200" : "transparent" }}>
-                {r.v ? (
-                  <span onClick={() => setPick(pick === i ? null : i)}
-                    style={{ cursor: "pointer" }}>
-                    <VowelChip v={r.v} small />
-                    {r.overridden && <span style={{ color: accent.hi, fontSize: 9,
-                      position: "relative", top: -5 }}>●</span>}
-                  </span>
-                ) : <span style={{ width: 40 }} />}
-                <span style={{ color: analysis.flagged.has(i) ? MT.amber : MT.fg,
-                  fontSize: 14, flex: 1, fontFamily: FONT }}>{r.text}</span>
-                {r.guess && <span style={{ color: MT.dim2, fontSize: 10,
-                  fontFamily: FONT }}>guess</span>}
-                {r.filler && <span style={{ color: MT.red, fontSize: 10,
-                  fontFamily: FONT }}>filler landing</span>}
-                {r.cliche && <span style={{ color: MT.red, fontSize: 10,
-                  fontFamily: FONT }}>stock: "{r.cliche}"</span>}
-              </div>
-              {pick === i && (
-                <VowelPicker word={r.last.toLowerCase()} overrides={overrides}
-                  setOverride={setOverride} onClose={() => setPick(null)} accent={accent} />
-              )}
-            </div>
-          ))}
-          {analysis.terminal && (
-            <div style={{ color: MT.dim, marginTop: 10, fontSize: 12,
-              borderTop: `1px solid ${MT.dim2}`, paddingTop: 8, fontFamily: FONT }}>
-              terminal slot reads soft — filler or unpaired vowel on the last bar.
-              the logged pattern: weakest material lands last. check it on purpose.</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Bank({ bank, setBank, overrides, setOverride, accent, dense }) {
-  const [w, setW] = useState("");
-  const [pick, setPick] = useState(null);
-  const add = () => {
-    const t = w.trim().toLowerCase().replace(/[^a-z' ]/g, "");
-    if (t && !bank.includes(t)) setBank([...bank, t]);
-    setW("");
-  };
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input value={w} onChange={e => setW(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && add()}
-          placeholder="slang, names, coinage"
-          style={{ flex: 1, background: MT.panel, border: `2px solid ${MT.dim2}`,
-            borderBottom: `2px solid ${accent.hi}`, color: MT.fg,
-            padding: "12px 14px", fontSize: 17, fontFamily: FONT }} />
-        <Press accent={accent} onClick={add}
-          style={{ background: accent.hi, color: accent.txt,
-            border: `2px solid ${accent.hi}`, fontWeight: 700 }}>add</Press>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: dense ? 5 : 8, marginTop: 14 }}>
-        {bank.map(b => {
-          const sk = skeleton(b, 1);
+    <div className="bar" data-bar={bar.i} data-heat={flagged ? "" : undefined}
+      style={{ "--bthick": (5 + bar.syllables * 1.1).toFixed(0) + "px", "--heat": heat.toFixed(2) }}>
+      <p className="text" style={{ margin: 0 }}>
+        {bar.field.map((w, i) => <React.Fragment key={i}><span className={"w " + w.source}>{w.word}</span>{i < bar.field.length - 1 ? " " : ""}</React.Fragment>)}
+      </p>
+      <div className="field">
+        {bar.field.map((w, i) => {
+          const key = clean(w.word);
+          const open = pick && pick.bar === bar.i && pick.word === key && pick.idx === i;
           return (
-            <span key={b} style={{ background: MT.panel,
-              borderLeft: `4px solid ${accent.hi}`, padding: "5px 10px",
-              color: MT.fg, fontSize: 14, display: "inline-flex",
-              alignItems: "center", gap: 6, fontFamily: FONT }}>
-              {b}
-              {sk.vowels[0] && (
-                <span onClick={() => setPick(pick === b ? null : b)}
-                  style={{ cursor: "pointer" }}>
-                  <VowelChip v={sk.vowels[0]} small />
-                  {sk.overridden && <span style={{ color: accent.hi, fontSize: 9,
-                    position: "relative", top: -5 }}>●</span>}
-                </span>
-              )}
-              <span onClick={() => setBank(bank.filter(x => x !== b))}
-                style={{ color: MT.dim2, cursor: "pointer" }}>✕</span>
-            </span>
+            <div key={i} className={"word" + (open ? " pick" : "")} data-word={key}>
+              <div className="stones" onClick={() => setPick(open ? null : { bar: bar.i, word: key, idx: i })}>
+                {w.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}
+              </div>
+              <div className="marks">{w.sylls.map((s, k) => <Mark key={k} v={s.v} s={s.s} />)}</div>
+            </div>
           );
         })}
-        {bank.length === 0 && <span style={{ color: MT.dim, fontSize: 13,
-          fontFamily: FONT }}>empty. words added here join every lookup and persist.</span>}
       </div>
-      {pick && (
-        <VowelPicker word={pick.split(" ").pop()} overrides={overrides}
-          setOverride={setOverride} onClose={() => setPick(null)} accent={accent} />
+      {pick && pick.bar === bar.i && <Picker word={pick.word} overrides={overrides} setOverride={setOverride} onClose={() => setPick(null)} />}
+      {bar.filler && (
+        <svg className="crack" viewBox="0 0 100 100" preserveAspectRatio="none">
+          {["dark", "lit"].map(k => <path key={k} className={k} vectorEffect="non-scaling-stroke" d="M62 100 L60 88 L64 79 L61 70 L66 58 L63 47 L69 36 L66 24 L72 12 L70 0" />)}
+        </svg>
       )}
-    </div>
-  );
-}
-
-function Tune({ prefs, setPrefs, accent, engStatus }) {
-  const Row = ({ label, children }) => (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ color: MT.dim, fontSize: 12, letterSpacing: 2,
-        textTransform: "lowercase", marginBottom: 6, fontFamily: FONT }}>{label}</div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{children}</div>
-    </div>
-  );
-  return (
-    <div>
-      <Row label="accent — which color leads">
-        {[["grape", "deep grape"], ["slime", "slime"]].map(([id, l]) => (
-          <Press key={id} accent={accent} active={prefs.accent === id}
-            onClick={() => setPrefs({ ...prefs, accent: id })}
-            style={{ flex: 1, textAlign: "center" }}>{l}</Press>
-        ))}
-      </Row>
-      <Row label="density">
-        {[["comfy", "comfortable"], ["dense", "dense"]].map(([id, l]) => (
-          <Press key={id} accent={accent} active={prefs.density === id}
-            onClick={() => setPrefs({ ...prefs, density: id })}
-            style={{ flex: 1, textAlign: "center" }}>{l}</Press>
-        ))}
-      </Row>
-      <Row label="motion">
-        {[["on", "tiles move"], ["off", "tiles still"]].map(([id, l]) => (
-          <Press key={id} accent={accent} active={prefs.motion === id}
-            onClick={() => setPrefs({ ...prefs, motion: id })}
-            style={{ flex: 1, textAlign: "center" }}>{l}</Press>
-        ))}
-      </Row>
-      <Row label="start tiles">
-        {["lookup", "check", "draft", "bank"].map(id => (
-          <Press key={id} accent={accent} active={prefs.tiles.includes(id)}
-            onClick={() => setPrefs({ ...prefs,
-              tiles: prefs.tiles.includes(id)
-                ? prefs.tiles.filter(t => t !== id)
-                : [...prefs.tiles, id] })}
-            style={{ flex: "1 0 40%", textAlign: "center" }}>{id}</Press>
-        ))}
-      </Row>
-      <Row label="engine">
-        {[["v1", "v1.2 · rule G2P"], ["v2", "v2.0 · dictionary"]].map(([id, l]) => (
-          <Press key={id} accent={accent} active={(prefs.engine || "v1") === id}
-            onClick={() => setPrefs({ ...prefs, engine: id })}
-            style={{ flex: 1, textAlign: "center", fontSize: 11 }}>{l}</Press>
-        ))}
-      </Row>
-      <div style={{ color: MT.dim2, fontSize: 11, fontFamily: FONT }}>
-        {(prefs.engine || "v1") === "v1"
-          ? "engine v1.2 · overrides, initialisms, schwa, filler + terminal watch"
-          : engStatus === "ready" ? `engine v2.0 · ${E2.size().toLocaleString()} words · stress-anchored · exception table outranks dictionary`
-          : engStatus === "loading" ? "engine v2.0 · loading dictionary (~690 KB) …"
-          : engStatus === "error" ? `engine v2.0 · dictionary failed (${E2.error()}) · running v1.2` 
-          : "engine v2.0 · idle"}</div>
-    </div>
-  );
-}
-
-/* ---------- start screen: live tiles ---------- */
-function Tile({ big, color, txt, title, sub, onClick, motion, flip }) {
-  const [face, setFace] = useState(0);
-  useEffect(() => {
-    if (!motion || !flip) return;
-    const id = setInterval(() => setFace(f => 1 - f), 4200 + Math.random() * 2600);
-    return () => clearInterval(id);
-  }, [motion, flip]);
-  return (
-    <div onClick={onClick} style={{
-      gridColumn: big ? "span 2" : "span 1", aspectRatio: big ? "2.05" : "1",
-      background: color, color: txt, cursor: "pointer", position: "relative",
-      overflow: "hidden", userSelect: "none",
-      perspective: "600px",
-    }}>
-      <div style={{
-        position: "absolute", inset: 0, padding: 10,
-        display: "flex", flexDirection: "column", justifyContent: "space-between",
-        transform: motion && flip ? `rotateX(${face * 180}deg)` : "none",
-        transition: "transform 600ms cubic-bezier(.2,.8,.2,1)",
-        transformStyle: "preserve-3d",
-      }}>
-        <div style={{ transform: face ? "rotateX(180deg)" : "none",
-          backfaceVisibility: "visible" }}>
-          <div style={{ fontSize: big ? 34 : 26, fontWeight: 200,
-            fontFamily: FONT, lineHeight: 1 }}>
-            {face && flip ? flip : title}</div>
-        </div>
-        <div style={{ fontSize: 12, fontFamily: FONT, fontWeight: 600,
-          textTransform: "lowercase",
-          transform: face ? "rotateX(180deg)" : "none" }}>{sub}</div>
+      <div className="foot">
+        <span>ends on {NAMES[bar.end.v] || "—"}{bar.end.coda ? " +" + bar.end.coda.toLowerCase() : ""}</span>
+        <span>{bar.syllables} syl{bar.filler ? <span className="bad"> · filler landing</span> : null}
+          {bar.cliche ? <span className="bad"> · stock: “{bar.cliche}”</span> : null}
+          {flagged && run ? <span className="warn"> · drone {run.len} on {NAMES[run.v]}</span> : null}</span>
       </div>
     </div>
   );
 }
-function Start({ prefs, bank, draft, overrides, go, accent }) {
-  const lines = draft.split("\n").filter(l => l.trim()).length;
-  const other = prefs.accent === "grape" ? ACCENTS.slime : ACCENTS.grape;
-  const motion = prefs.motion === "on";
-  const tiles = {
-    lookup: <Tile key="l" big color={accent.hi} txt={accent.txt} title="lookup"
-      sub="vowel-skeleton search" flip={useV2() ? `${E2.size().toLocaleString()} words · v2` : `${LEXICON.length + bank.length} words loaded`}
-      motion={motion} onClick={() => go("lookup")} />,
-    check: <Tile key="c" color={other.hi} txt={other.txt} title="check"
-      sub="a ~ b verdict" motion={motion} onClick={() => go("check")} />,
-    draft: <Tile key="d" color={MT.panel} txt={MT.fg} title="draft"
-      sub={lines ? `${lines} bars in session` : "paste bars"}
-      flip={lines ? "map the end vowels" : "empty"}
-      motion={motion} onClick={() => go("draft")} />,
-    bank: <Tile key="b" color={other.lo} txt="#FFFFFF" title="bank"
-      sub={`${bank.length} word${bank.length === 1 ? "" : "s"} · ${Object.keys(overrides).length} override${Object.keys(overrides).length === 1 ? "" : "s"}`}
-      flip="your mouth outranks spelling" motion={motion}
-      onClick={() => go("bank")} />,
-  };
+function Threads({ reading, host }) {
+  const ref = useRef(null);
+  const draw = useCallback(() => {
+    const svg = ref.current, root = host.current; if (!svg || !root) return;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const base = root.getBoundingClientRect();
+    svg.setAttribute("viewBox", `0 0 ${base.width} ${base.height}`);
+    const anchor = (barIdx, word, terminal) => {
+      const bar = root.querySelector(`.bar[data-bar="${barIdx}"]`); if (!bar) return null;
+      const words = [...bar.querySelectorAll(".word")];
+      const el = terminal ? words[words.length - 1] : words.find(w => w.dataset.word === clean(word));
+      if (!el) return null;
+      const st = el.querySelector(".stones").getBoundingClientRect();
+      return { x: st.left + st.width / 2 - base.left, y: st.bottom - base.top + 2, right: base.width - 22 + 4 };
+    };
+    const NS = "http://www.w3.org/2000/svg";
+    for (const e of reading.edges) {
+      const A = anchor(e.a, e.words[0], e.scope === "terminal" || e.a !== e.b);
+      const B = anchor(e.b, e.words[1], e.scope === "terminal" || e.a === e.b);
+      if (!A || !B) continue;
+      let d;
+      if (e.a === e.b) { const dip = 10 + Math.abs(B.x - A.x) * .08; d = `M${A.x} ${A.y} C ${A.x} ${A.y + dip}, ${B.x} ${B.y + dip}, ${B.x} ${B.y}`; }
+      else { const gx = A.right + 6 + Math.min(22, Math.abs(B.y - A.y) * .06); d = `M${A.x} ${A.y} C ${gx} ${A.y}, ${gx} ${B.y}, ${B.x} ${B.y}`; }
+      const g = document.createElementNS(NS, "g"); g.setAttribute("class", `${e.kind} ${e.scope}`);
+      for (const k of ["body", "thread"]) { const p = document.createElementNS(NS, "path"); p.setAttribute("class", k); p.setAttribute("d", d); g.appendChild(p); }
+      svg.appendChild(g);
+    }
+  }, [reading, host]);
+  useLayoutEffect(() => { const id = requestAnimationFrame(draw); return () => cancelAnimationFrame(id); });
+  useEffect(() => { window.addEventListener("resize", draw); return () => window.removeEventListener("resize", draw); }, [draw]);
+  return <svg ref={ref} className="graph" />;
+}
+function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng }) {
+  const [pick, setPick] = useState(null);
+  const host = useRef(null);
+  const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
+  const limit = reading.limit;
   return (
     <div>
-      <div style={{ fontSize: 42, fontWeight: 200, fontFamily: FONT,
-        lineHeight: 1.05, margin: "6px 0 4px" }}>rhyme<br/>instrument</div>
-      <div style={{ color: MT.dim, fontSize: 12, fontFamily: FONT,
-        marginBottom: 16, letterSpacing: 2 }}>ghost codex · v1.3 metro</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {prefs.tiles.map(t => tiles[t])}
-        <Tile key="t" color={MT.dim2} txt={MT.fg} title="tune"
-          sub="accent · density · tiles" motion={false}
-          onClick={() => go("tune")} />
+      <textarea className="cut" value={draft} onChange={e => setDraft(e.target.value)} placeholder="cut the draft here — one bar per line" rows={9} spellCheck={false} />
+      <div className="row">
+        <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
+        <Cast on={pop === "melodic"} onClick={() => setPop("melodic")}>melodic · drone past 6</Cast>
       </div>
-    </div>
-  );
-}
-
-/* ---------- root: pivot shell ---------- */
-const ORDER = ["start", "lookup", "check", "draft", "bank", "tune"];
-function RhymeInstrument() {
-  const [page, setPage] = useState("start");
-  const [bank, setBank] = useState([]);
-  const [draft, setDraft] = useState("");
-  const [overrides, setOverrides_] = useState({});
-  const [prefs, setPrefs_] = useState({ accent: "grape", density: "comfy",
-    motion: "on", tiles: ["lookup", "check", "draft", "bank"] });
-  const [loaded, setLoaded] = useState(false);
-  const [drag, setDrag] = useState(null);
-  const [engStatus, setEngStatus] = useState("idle");
-  useEffect(() => {
-    if (!loaded) return;
-    if (prefs.engine === "v2") { setEngine("v2"); E2.load(setEngStatus); }
-    else setEngine("v1");
-  }, [prefs.engine, loaded]);
-  const eng = (prefs.engine || "v1") + ":" + engStatus;
-  useEffect(() => { (async () => {
-    setBank(await loadKey("ghostcodex:bank", []));
-    setDraft(await loadKey("ghostcodex:draft", ""));
-    const o = await loadKey("ghostcodex:overrides", {});
-    setOverrides_(o); setOverrides(o);
-    setPrefs_(await loadKey("ghostcodex:metroprefs",
-      { accent: "grape", density: "comfy", motion: "on",
-        tiles: ["lookup", "check", "draft", "bank"] }));
-    setLoaded(true);
-  })(); }, []);
-  useEffect(() => { if (loaded) saveKey("ghostcodex:bank", bank); }, [bank, loaded]);
-  useEffect(() => { if (loaded) {
-    const t = setTimeout(() => saveKey("ghostcodex:draft", draft), 800);
-    return () => clearTimeout(t);
-  }}, [draft, loaded]);
-  const setOverride = (word, v) => {
-    const o = { ...overrides };
-    if (v) o[word] = v; else delete o[word];
-    setOverrides_(o); setOverrides(o);
-    if (loaded) saveKey("ghostcodex:overrides", o);
-  };
-  const setPrefs = (p) => { setPrefs_(p); if (loaded) saveKey("ghostcodex:metroprefs", p); };
-  const accent = ACCENTS[prefs.accent] || ACCENTS.grape;
-  const dense = prefs.density === "dense";
-  const idx = ORDER.indexOf(page);
-  const nextPage = () => setPage(ORDER[(idx + 1) % ORDER.length]);
-  const prevPage = () => setPage(ORDER[(idx - 1 + ORDER.length) % ORDER.length]);
-  const onDown = e => setDrag(e.clientX ?? (e.touches && e.touches[0].clientX));
-  const onUp = e => {
-    if (drag == null) return;
-    const x = e.clientX ?? (e.changedTouches && e.changedTouches[0].clientX);
-    if (x != null && Math.abs(x - drag) > 70) (x < drag ? nextPage : prevPage)();
-    setDrag(null);
-  };
-  const next = ORDER[(idx + 1) % ORDER.length];
-  return (
-    <div onPointerDown={onDown} onPointerUp={onUp}
-      style={{ minHeight: "100vh", background: MT.bg, color: MT.fg,
-        padding: "22px 16px 60px", maxWidth: 760, margin: "0 auto",
-        fontFamily: FONT, overflowX: "hidden" }}>
-      {!loaded ? (
-        <div style={{ color: MT.dim, fontFamily: FONT }}>loading session</div>
-      ) : page === "start" ? (
-        <Start prefs={prefs} bank={bank} draft={draft} overrides={overrides}
-          go={setPage} accent={accent} />
-      ) : (
-        <div key={page} style={{ animation: prefs.motion === "on"
-          ? "mslide 260ms cubic-bezier(.2,.8,.2,1)" : "none" }}>
-          <div style={{ whiteSpace: "nowrap", overflow: "hidden",
-            margin: "0 -16px 14px", padding: "0 16px" }}>
-            <span onClick={() => setPage("start")} style={{ fontSize: 40,
-              fontWeight: 200, cursor: "pointer", lineHeight: 1 }}>{page}</span>
-            <span onClick={nextPage} style={{ fontSize: 40, fontWeight: 200,
-              color: MT.dim2, marginLeft: 26, cursor: "pointer",
-              lineHeight: 1 }}>{next}</span>
+      {reading.bars.some(Boolean) && (
+        <div style={{ marginTop: 16 }}>
+          {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
+          <div className="bars" ref={host}>
+            {reading.bars.map(b => b && <Bar key={b.i} bar={b} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} />)}
+            <Threads reading={reading} host={host} />
           </div>
-          {page === "lookup" && <Lookup bank={bank} accent={accent} dense={dense} eng={eng} />}
-          {page === "check" && <Check accent={accent} eng={eng} />}
-          {page === "draft" && <Draft draft={draft} setDraft={setDraft}
-            overrides={overrides} setOverride={setOverride} accent={accent} dense={dense} eng={eng} />}
-          {page === "bank" && <Bank bank={bank} setBank={setBank}
-            overrides={overrides} setOverride={setOverride} accent={accent} dense={dense} />}
-          {page === "tune" && <Tune prefs={prefs} setPrefs={setPrefs} accent={accent} engStatus={engStatus} />}
-          <div style={{ color: MT.dim2, fontSize: 11, marginTop: 26,
-            fontFamily: FONT }}>swipe for {next} · tap the header for start</div>
+          {reading.terminal && <div className="terminal">terminal slot reads soft — filler or unpaired vowel on the last bar. the logged pattern: weakest material lands last. check it on purpose.</div>}
         </div>
       )}
-      <style>{`@keyframes mslide { from { opacity: 0; transform: translateX(60px); }
-        to { opacity: 1; transform: translateX(0); } }`}</style>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<RhymeInstrument />);
+/* ---- lookup ---- */
+function Lookup({ bank, setBank, eng }) {
+  const [q, setQ] = useState(""); const [depth, setDepth] = useState(1);
+  const r = useMemo(() => q.trim() ? E2.lookup(q, depth, bank) : null, [q, depth, bank, eng]);
+  const banked = useMemo(() => new Set(bank.map(clean)), [bank]);
+  const toggle = w => setBank(banked.has(w) ? bank.filter(b => clean(b) !== w) : [...bank, w]);
+  const groups = r ? [["perfect", r.perfect], ["slant — the melodic lane", r.slant], ["reduced — rap-legal", r.loose]] : [];
+  return (
+    <div>
+      <input className="cut" value={q} onChange={e => setQ(e.target.value)} placeholder="a word, or the tail of a phrase" autoCapitalize="off" autoCorrect="off" />
+      <div className="row">{[1, 2, 3].map(n => <Cast key={n} on={depth === n} onClick={() => setDepth(n)}>{n} syl</Cast>)}</div>
+      {r && (
+        <div>
+          <Skeleton sk={r.skeleton} />
+          <div className="note" style={{ marginTop: 6 }}>anchored on the stressed syllable · {E2.ready() ? E2.size().toLocaleString() + " words" : "curated list only — dictionary not loaded"} · tap a word to bank it</div>
+          {groups.map(([label, list]) => list.length > 0 && (
+            <div className="group" key={label}>
+              <div className={"gh " + label.split(" ")[0]}>{label} · {list.length}</div>
+              <div className="inlays">
+                {list.slice(0, 90).map(it => <span key={it.word} className={`inlay t${it.tier}${banked.has(it.word) ? " banked" : ""}`} onClick={() => toggle(it.word)}>{it.word}</span>)}
+              </div>
+            </div>
+          ))}
+          {r.perfect.length + r.slant.length + r.loose.length === 0 && <div className="empty">nothing at this depth. the anchor is the stressed syllable — try a shallower depth, or bank the word and cut its vowel by hand.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- check ---- */
+function Check({ eng }) {
+  const [a, setA] = useState(""); const [b, setB] = useState(""); const [depth, setDepth] = useState(2);
+  const r = useMemo(() => a.trim() && b.trim() ? E2.classify(a, b, depth, "count") : null, [a, b, depth, eng]);
+  const K = { perfect: ["var(--gilt-a)", "perfect — vowels and final coda match"], slant: ["var(--vein-hi)", "slant — vowel skeleton matches, coda free"],
+    loose: ["#cdebb8", "reduced — holds if the unstressed vowels collapse. rap-legal."], shallow: ["var(--bone-lo)", "shallow — only the last vowel agrees"],
+    identical: ["var(--bone-lo)", "identical — same word, no rhyme credit"], none: ["#e0705a", "no match at this depth"] };
+  return (
+    <div>
+      <input className="cut" value={a} onChange={e => setA(e.target.value)} placeholder="line a" autoCapitalize="off" autoCorrect="off" style={{ marginBottom: 8 }} />
+      <input className="cut" value={b} onChange={e => setB(e.target.value)} placeholder="line b" autoCapitalize="off" autoCorrect="off" />
+      <div className="row">{[1, 2, 3].map(n => <Cast key={n} on={depth === n} onClick={() => setDepth(n)}>{n} syl</Cast>)}</div>
+      {r && (
+        <div className="verdict" style={{ "--vk": K[r.kind][0] }}>
+          <div className="kind">{K[r.kind][1]}</div>
+          <div className="skel"><span>a</span><Skeleton sk={r.sa} /></div>
+          <div className="skel"><span>b</span><Skeleton sk={r.sb} /></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- bank ---- */
+function Bank({ bank, setBank, overrides, setOverride, eng }) {
+  const [add, setAdd] = useState(""); const [pick, setPick] = useState(null);
+  const commit = () => { const w = add.trim(); if (!w) return; if (!bank.some(b => clean(b) === clean(w))) setBank([...bank, w]); setAdd(""); };
+  return (
+    <div>
+      <input className="cut" value={add} onChange={e => setAdd(e.target.value)} onKeyDown={e => e.key === "Enter" && commit()} placeholder="add a word — names, slang, coinages" autoCapitalize="off" autoCorrect="off" />
+      <div className="row"><Cast on onClick={commit} patina>add</Cast></div>
+      <div className="note">every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears.</div>
+      {bank.length === 0 && <div className="empty">nothing banked yet.</div>}
+      {bank.map(w => {
+        const key = clean(w), p = E2.pronounce(w), open = pick === key;
+        return (
+          <div key={w}>
+            <div className="bankrow">
+              <span className={"wd" + (overrides[key] ? " override" : "")}>{w}</span>
+              <div className={"word" + (open ? " pick" : "")} style={{ flex: 1, alignItems: "flex-end" }}>
+                <div className="stones" onClick={() => setPick(open ? null : key)}>{p.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}</div>
+              </div>
+              <span className="rm" onClick={() => setBank(bank.filter(b => b !== w))}>remove</span>
+            </div>
+            {open && <Picker word={key} overrides={overrides} setOverride={setOverride} onClose={() => setPick(null)} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---- tune ---- */
+function Tune({ prefs, setPrefs, engStatus, migrated }) {
+  return (
+    <div>
+      <div className="label">mineral</div>
+      <div className="row">
+        {Object.keys(MINERALS).map(m => <Cast key={m} on={prefs.mineral === m} onClick={() => setPrefs({ ...prefs, mineral: m })} style={{ "--m": MINERALS[m].m }}>{m}</Cast>)}
+      </div>
+      <div className="label">spacing</div>
+      <div className="row">{["comfy", "dense"].map(d => <Cast key={d} on={prefs.density === d} patina onClick={() => setPrefs({ ...prefs, density: d })}>{d}</Cast>)}</div>
+      <div className="label">motion</div>
+      <div className="row">{["on", "off"].map(m => <Cast key={m} on={prefs.motion === m} patina onClick={() => setPrefs({ ...prefs, motion: m })}>{m}</Cast>)}</div>
+      <div className="note">
+        <b>engine 2.0</b> · {engStatus === "ready" ? `${E2.size().toLocaleString()} words, stress carried. your exception table outranks the dictionary; the v1 rules only speak for words neither knows.`
+          : engStatus === "loading" ? "loading the dictionary (about 690 KB, once)…"
+          : engStatus === "error" ? `dictionary didn't load (${E2.error()}). running on the curated list and the v1 rules until it does.` : "…"}
+        <br /><b>light</b> · solar position for Middletown, computed on the phone. nothing is sent anywhere.
+        {migrated && <><br /><b>carried over</b> · your bank, draft, and vowel cuts from the metro build.</>}
+      </div>
+    </div>
+  );
+}
+
+/* ---- the stack ---- */
+const FACES = [
+  { id: "draft", name: "draft" }, { id: "lookup", name: "lookup" }, { id: "check", name: "check" }, { id: "bank", name: "bank" }, { id: "tune", name: "tune" },
+];
+function Tome() {
+  const [open, setOpen] = useState(null);
+  const [bank, setBank_] = useState([]); const [draft, setDraft_] = useState(""); const [overrides, setOverrides_] = useState({});
+  const [prefs, setPrefs_] = useState({ mineral: "amethyst", density: "comfy", motion: "on" });
+  const [pop, setPop_] = useState("rap");
+  const [loaded, setLoaded] = useState(false); const [migrated, setMigrated] = useState(false);
+  const [engStatus, setEngStatus] = useState("idle"); const [sun, setSun] = useState(null);
+  useEffect(() => {
+    setMigrated(STORE.migrate());
+    setBank_(STORE.get("bank", [])); setDraft_(STORE.get("draft", ""));
+    const o = STORE.get("overrides", {}); OVERRIDES = o; setOverrides_(o);
+    setPrefs_(STORE.get("prefs", { mineral: "amethyst", density: "comfy", motion: "on" })); setPop_(STORE.get("pop", "rap"));
+    setLoaded(true); E2.load(setEngStatus);
+  }, []);
+  useEffect(() => { const t = () => setSun(SUN.apply(new Date())); t(); const id = setInterval(t, 60000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    const m = MINERALS[prefs.mineral] || MINERALS.amethyst, rs = document.documentElement.style;
+    rs.setProperty("--mineral", m.m); rs.setProperty("--mineral-lo", m.mlo); rs.setProperty("--vein-hi", m.hi); rs.setProperty("--vein-lo", m.lo);
+    document.body.className = (prefs.density === "dense" ? "dense " : "") + (prefs.motion === "on" ? "motion" : "");
+  }, [prefs]);
+  const setBank = v => { setBank_(v); STORE.set("bank", v); };
+  const setPrefs = v => { setPrefs_(v); STORE.set("prefs", v); };
+  const setPop = v => { setPop_(v); STORE.set("pop", v); };
+  const draftTimer = useRef(null);
+  const setDraft = v => { setDraft_(v); clearTimeout(draftTimer.current); draftTimer.current = setTimeout(() => STORE.set("draft", v), 700); };
+  const setOverride = (word, v) => { const o = { ...overrides }; if (v) o[word] = v; else delete o[word]; OVERRIDES = o; setOverrides_(o); STORE.set("overrides", o); };
+  const eng = engStatus;
+  const bars = draft.split("\n").filter(l => l.trim()).length;
+  const nOv = Object.keys(overrides).length;
+  const quick = useMemo(() => bars ? E2.reading(draft, { pop }) : null, [draft, pop, overrides, eng]);
+  const sums = {
+    draft: bars ? <>{bars} bar{bars === 1 ? "" : "s"}{quick && quick.maxRun > quick.limit ? <em> · drone {quick.maxRun}</em> : null}</> : "empty",
+    lookup: engStatus === "ready" ? `${E2.size().toLocaleString()} words` : engStatus === "loading" ? "loading…" : "curated list",
+    check: "a ~ b",
+    bank: `${bank.length} word${bank.length === 1 ? "" : "s"} · ${nOv} cut${nOv === 1 ? "" : "s"}`,
+    tune: `${prefs.mineral} · ${prefs.density}`,
+  };
+  const face = id => ({
+    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} />,
+    lookup: <Lookup bank={bank} setBank={setBank} eng={eng} />,
+    check: <Check eng={eng} />,
+    bank: <Bank bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride} eng={eng} />,
+    tune: <Tune prefs={prefs} setPrefs={setPrefs} engStatus={engStatus} migrated={migrated} />,
+  }[id]);
+  const idx = FACES.findIndex(f => f.id === open);
+  return (
+    <div>
+      <header className="binding">
+        <h1 onClick={() => setOpen(null)}>rhyme instrument</h1>
+        {sun && <div className="sun"><b>{sun.time}</b> · sun {sun.elev >= 0 ? sun.elev.toFixed(0) + "°" : "set"} · {sun.dir}</div>}
+      </header>
+      {!loaded ? <div className="stack note">opening</div> : (
+        <div className={"stack" + (open ? " open" : "")}>
+          {open && (
+            <section key={open} className={"slab rise"} style={{ "--veins": veinSVG(prefs.mineral, idx), "--thick": "16px" }}>
+              <div className="head" onClick={() => setOpen(null)}><h2>{open}</h2><span className="hint">tap to close</span></div>
+              {face(open)}
+            </section>
+          )}
+          {FACES.filter(f => f.id !== open).map((f, i) => (
+            <div key={f.id} className="edge" onClick={() => setOpen(f.id)}>
+              <span className="name">{f.name}</span><span className="sum">{sums[f.id]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Tome />);
 
 </script>
 </body>
