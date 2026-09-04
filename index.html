@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#4f3a1c">
+<link rel="manifest" href="./manifest.json">
 <title>rhyme instrument — tome</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
@@ -177,7 +178,8 @@ textarea.cut { min-height: 9.5em; }
 .inlay { padding: 6px 10px; border-radius: 2px; font-size: 14px; color: var(--bone); cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; position: relative;
   background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.5)); box-shadow: inset calc(var(--lx) * .8px) calc(var(--ly) * .8px) 1px rgba(0,0,0,.9), inset calc(var(--lx) * -.6px) calc(var(--ly) * -.6px) 0 rgba(255,255,255,var(--hi-a)), inset 3px 0 0 var(--k, var(--bone-lo));
   text-shadow: 0 0 var(--nglow) rgba(255,230,170,.35); }
-.inlay.t0 { --k: var(--gilt-b); font-weight: 600; } .inlay.t1 { --k: var(--mineral); } .inlay.t2 { --k: #3a3742; color: var(--bone-lo); }
+.inlay.t0 { --k: var(--gilt-b); font-weight: 600; } .inlay.t1 { --k: var(--mineral); } .inlay.t2 { --k: var(--bone-lo); } .inlay.t3 { --k: #3a3742; color: var(--bone-lo); }
+.k0 { color: var(--gilt-a); } .k1 { color: var(--vein-hi); } .k3 { color: #6b6674; }
 .inlay.banked { --k: var(--verdigris); }
 .inlay.banked::after { content: "in bank"; position: absolute; right: 6px; top: -7px; font-size: 9px; color: var(--verdigris); background: var(--sub-lo); padding: 0 4px; border-radius: 2px; }
 .inlay .x { margin-left: 8px; color: var(--bone-lo); font-size: 12px; }
@@ -191,12 +193,23 @@ textarea.cut { min-height: 9.5em; }
 .bankrow .rm { font-size: 13px; color: var(--bone-lo); padding: 4px 8px; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .slab, .edge { animation: none !important; transition: none !important; } }
 
+/* scheme letter, engraved at the bar's right edge */
+.scheme { position: absolute; right: -19px; top: 8px; font-size: 13px; color: var(--bone-lo); z-index: 2;
+  text-shadow: calc(var(--lx) * -.6px) calc(var(--ly) * -.6px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .7px) calc(var(--ly) * .7px) 0 rgba(0,0,0,.9); }
+/* shelf */
+.shelf { margin-bottom: 10px; }
+.shelf .dim, .shelflist .dim { color: var(--bone-lo); font-size: 12px; }
+.shelflist { margin: 8px 0 4px; padding: 4px 10px; border-radius: 3px; background: rgba(0,0,0,.3); box-shadow: inset 0 1px 2px rgba(0,0,0,.8); }
+.shelflist .bankrow.cur .wd { color: var(--gilt-a); }
+.shelflist .wd { cursor: pointer; }
+
 </style>
 </head>
 <body>
 <div id="root"></div>
+<script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));</script>
 <script type="text/babel" data-presets="react">
-/* ghost codex · rhyme instrument · v2.0 tome (bench) */
+/* ghost codex · rhyme instrument · v2.1 tome */
 /* ---------- vowel classes, v1 rule G2P (OOV fallback), curated lexicon, watch lists ---------- */
 const VOWEL_COLORS = {
   AY:"#C98A2D", IY:"#5B87A8", EY:"#8FA65B", EH:"#A0703F", AE:"#B04A3A",
@@ -448,6 +461,8 @@ let OVERRIDES = {};
 const E2 = (() => {
   let DICT = null, COMMON = new Map(), INDEX = null, status = "idle", error = "";
   const CURATED = new Set(LEXICON);
+  let OWN = new Set();                       // the tier you write in: bank + every shelved draft
+  function setOwn(words) { OWN = new Set(words.map(clean).filter(w => w.length > 1)); }
   const RED = new Set(["AH","IH","EH","AE","AA","UH"]);
   const clean = raw => raw.toLowerCase().replace(/[^a-z']/g, "");
   function parseCompact(str) {
@@ -537,14 +552,14 @@ const E2 = (() => {
     if (DICT) {
       if (!INDEX) buildIndex();
       const key = (anchor === "stress" ? "S:" : depth + ":") + sq.vowels.join("|");
-      cand = new Set([...(INDEX.get(key) || []), ...extra.map(clean)]);
-    } else cand = new Set([...LEXICON, ...extra.map(clean)]);
+      cand = new Set([...(INDEX.get(key) || []), ...extra.map(clean), ...OWN]);
+    } else cand = new Set([...LEXICON, ...extra.map(clean), ...OWN]);
     const q = clean(query);
     const perfect = [], slant = [], loose = [];
     for (const w of cand) {
       if (w === q) continue;
       const r = classify(query, w, sq.vowels.length, anchor);
-      const item = { word: w, tier: CURATED.has(w) ? 0 : COMMON.has(w) ? 1 : 2, rank: COMMON.get(w) ?? 1e9 };
+      const item = { word: w, tier: OWN.has(w) ? 0 : CURATED.has(w) ? 1 : COMMON.has(w) ? 2 : 3, rank: COMMON.get(w) ?? 1e9 };
       if (r.kind === "perfect") perfect.push(item);
       else if (r.kind === "slant") slant.push(item);
       else if (r.kind === "loose") loose.push(item);
@@ -606,6 +621,19 @@ const E2 = (() => {
       terminal = lastB.filler || !priors.some(b => b.end.v === lastB.end.v);
     }
     const edges = graph(bars, { window: 8 });
+    /* scheme: union-find over terminal edges (perfect + slant); letters in order of first appearance */
+    const parent = new Map(filled.map(b => [b.i, b.i]));
+    const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+    edges.filter(e => e.scope === "terminal" && e.kind !== "loose").forEach(e => parent.set(find(e.a), find(e.b)));
+    const letters = new Map(); let next = 0;
+    filled.forEach(b => { const r = find(b.i); if (!letters.has(r)) letters.set(r, String.fromCharCode(65 + (next++ % 26))); b.scheme = letters.get(r); });
+    /* meter drift: a bar that sits ±3 syllables off the median of its neighbours */
+    filled.forEach((b, k) => {
+      const nb = filled.slice(Math.max(0, k - 2), k).concat(filled.slice(k + 1, k + 3)).map(x => x.syllables).sort((p, q) => p - q);
+      if (nb.length < 2) { b.drift = 0; return; }
+      const med = nb.length % 2 ? nb[(nb.length - 1) / 2] : (nb[nb.length / 2 - 1] + nb[nb.length / 2]) / 2;
+      const d = Math.round(b.syllables - med); b.drift = Math.abs(d) >= 3 ? d : 0;
+    });
     return { v: 2, pop, limit, bars, runs, edges, flagged: [...flagged], maxRun: runs.reduce((m, r) => Math.max(m, r.len), 0), terminal };
   }
   async function load(onChange) {
@@ -622,7 +650,7 @@ const E2 = (() => {
     } catch (e) { status = "error"; error = String(e.message || e); }
     onChange && onChange(status);
   }
-  return { pronounce, skeleton, classify, lookup, reading, load,
+  return { pronounce, skeleton, classify, lookup, reading, load, setOwn,
     ready: () => status === "ready", status: () => status, error: () => error,
     size: () => DICT ? Object.keys(DICT).length : LEXICON.length };
 })();
@@ -637,7 +665,8 @@ const STORE = {
       const old = k => { const r = localStorage.getItem("ghostcodex:" + k); return r ? JSON.parse(r) : null; };
       const bank = old("bank"), draft = old("draft"), ov = old("overrides"), mp = old("metroprefs");
       if (bank) STORE.set("bank", bank);
-      if (draft) STORE.set("draft", draft);
+      if (draft) STORE.set("shelf", [{ id: "carried", name: "carried draft", text: draft, updated: Date.now() }]);
+      if (draft) STORE.set("current", "carried");
       if (ov) STORE.set("overrides", ov);
       if (mp) STORE.set("prefs", { mineral: mp.accent === "slime" ? "malachite" : "amethyst", density: mp.density || "comfy", motion: mp.motion || "on" });
       localStorage.setItem("tome:migrated", "1");
@@ -648,7 +677,9 @@ const STORE = {
 
 /* ---------- sundial: NOAA solar position; Middletown by default, no permission asked ---------- */
 const SUN = (() => {
-  const LAT = 39.515, LON = -84.398;
+  const DAYTON = { lat: 39.7589, lon: -84.1916, name: "Dayton, Ohio" };
+  let LAT = DAYTON.lat, LON = DAYTON.lon;
+  function setPlace(p) { LAT = p && isFinite(p.lat) ? p.lat : DAYTON.lat; LON = p && isFinite(p.lon) ? p.lon : DAYTON.lon; }
   function solar(date) {
     const r = Math.PI / 180;
     const start = new Date(date.getFullYear(), 0, 0);
@@ -690,7 +721,7 @@ const SUN = (() => {
     const dirs = ["N","NE","E","SE","S","SW","W","NW"];
     return { elev, az, dir: dirs[Math.round(az / 45) % 8], night, time: date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) };
   }
-  return { solar, apply };
+  return { solar, apply, setPlace, DAYTON };
 })();
 
 /* ---------- veins: seeded per session, derived per face ---------- */
@@ -793,10 +824,11 @@ function Bar({ bar, reading, overrides, setOverride, pick, setPick }) {
       )}
       <div className="foot">
         <span>ends on {NAMES[bar.end.v] || "—"}{bar.end.coda ? " +" + bar.end.coda.toLowerCase() : ""}</span>
-        <span>{bar.syllables} syl{bar.filler ? <span className="bad"> · filler landing</span> : null}
+        <span>{bar.syllables} syl{bar.drift ? <span className="warn"> · meter {bar.drift > 0 ? "+" : ""}{bar.drift}</span> : null}{bar.filler ? <span className="bad"> · filler landing</span> : null}
           {bar.cliche ? <span className="bad"> · stock: “{bar.cliche}”</span> : null}
           {flagged && run ? <span className="warn"> · drone {run.len} on {NAMES[run.v]}</span> : null}</span>
       </div>
+      {bar.scheme && <span className="scheme">{bar.scheme}</span>}
     </div>
   );
 }
@@ -832,13 +864,38 @@ function Threads({ reading, host }) {
   useEffect(() => { window.addEventListener("resize", draw); return () => window.removeEventListener("resize", draw); }, [draw]);
   return <svg ref={ref} className="graph" />;
 }
-function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng }) {
+function Shelf({ shelf, current, setCurrent, newDraft, renameDraft, removeDraft }) {
+  const [open, setOpen] = useState(false);
+  const cur = shelf.find(d => d.id === current);
+  const when = t => { const d = new Date(t); return d.toLocaleDateString([], { month: "short", day: "numeric" }); };
+  return (
+    <div className="shelf">
+      <div className="row" style={{ marginTop: 0 }}>
+        <Cast on onClick={() => setOpen(!open)} style={{ flex: 2, textAlign: "left" }}>{cur ? cur.name : "untitled"} <span className="dim">· {shelf.length} on the shelf</span></Cast>
+        <Cast onClick={() => { const n = prompt("name this draft", cur ? cur.name : ""); if (n != null && n.trim()) renameDraft(current, n.trim()); }}>name</Cast>
+        <Cast patina on onClick={newDraft}>new</Cast>
+      </div>
+      {open && (
+        <div className="shelflist">
+          {shelf.slice().sort((a, b) => b.updated - a.updated).map(d => (
+            <div key={d.id} className={"bankrow" + (d.id === current ? " cur" : "")}>
+              <span className="wd" onClick={() => { setCurrent(d.id); setOpen(false); }}>{d.name}<span className="dim"> · {d.text.split("\n").filter(l => l.trim()).length} bars · {when(d.updated)}</span></span>
+              {shelf.length > 1 && <span className="rm" onClick={() => { if (confirm(`remove “${d.name}” from the shelf?`)) removeDraft(d.id); }}>remove</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps }) {
   const [pick, setPick] = useState(null);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
   const limit = reading.limit;
   return (
     <div>
+      <Shelf {...shelfProps} />
       <textarea className="cut" value={draft} onChange={e => setDraft(e.target.value)} placeholder="cut the draft here — one bar per line" rows={9} spellCheck={false} />
       <div className="row">
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
@@ -872,7 +929,7 @@ function Lookup({ bank, setBank, eng }) {
       {r && (
         <div>
           <Skeleton sk={r.skeleton} />
-          <div className="note" style={{ marginTop: 6 }}>anchored on the stressed syllable · {E2.ready() ? E2.size().toLocaleString() + " words" : "curated list only — dictionary not loaded"} · tap a word to bank it</div>
+          <div className="note" style={{ marginTop: 6 }}>anchored on the stressed syllable · {E2.ready() ? E2.size().toLocaleString() + " words" : "curated list only — dictionary not loaded"} · <span className="k0">yours</span> · <span className="k1">curated</span> · common · <span className="k3">rest</span> · tap a word to bank it</div>
           {groups.map(([label, list]) => list.length > 0 && (
             <div className="group" key={label}>
               <div className={"gh " + label.split(" ")[0]}>{label} · {list.length}</div>
@@ -942,8 +999,23 @@ function Bank({ bank, setBank, overrides, setOverride, eng }) {
 
 /* ---- tune ---- */
 function Tune({ prefs, setPrefs, engStatus, migrated }) {
+  const [geo, setGeo] = useState("");
+  const locate = () => {
+    if (!navigator.geolocation) { setGeo("no location on this device"); return; }
+    setGeo("asking…");
+    navigator.geolocation.getCurrentPosition(
+      p => { setPrefs({ ...prefs, place: { lat: +p.coords.latitude.toFixed(4), lon: +p.coords.longitude.toFixed(4), name: "your location" } }); setGeo(""); },
+      e => setGeo("no fix — " + (e.message || "declined")), { timeout: 8000, maximumAge: 600000 });
+  };
+  const place = prefs.place;
   return (
     <div>
+      <div className="label">light</div>
+      <div className="row">
+        <Cast on={!place} patina onClick={() => setPrefs({ ...prefs, place: null })}>{SUN.DAYTON.name}</Cast>
+        <Cast on={!!place} patina onClick={locate}>{place ? `${place.name} · ${place.lat}, ${place.lon}` : "use my location"}</Cast>
+      </div>
+      {geo && <div className="note" style={{ marginTop: 6 }}>{geo}</div>}
       <div className="label">mineral</div>
       <div className="row">
         {Object.keys(MINERALS).map(m => <Cast key={m} on={prefs.mineral === m} onClick={() => setPrefs({ ...prefs, mineral: m })} style={{ "--m": MINERALS[m].m }}>{m}</Cast>)}
@@ -956,7 +1028,7 @@ function Tune({ prefs, setPrefs, engStatus, migrated }) {
         <b>engine 2.0</b> · {engStatus === "ready" ? `${E2.size().toLocaleString()} words, stress carried. your exception table outranks the dictionary; the v1 rules only speak for words neither knows.`
           : engStatus === "loading" ? "loading the dictionary (about 690 KB, once)…"
           : engStatus === "error" ? `dictionary didn't load (${E2.error()}). running on the curated list and the v1 rules until it does.` : "…"}
-        <br /><b>light</b> · solar position for Middletown, computed on the phone. nothing is sent anywhere.
+        <br /><b>light</b> · solar position for {place ? "your location" : SUN.DAYTON.name}, computed on the phone. the coordinates stay in this browser.
         {migrated && <><br /><b>carried over</b> · your bank, draft, and vowel cuts from the metro build.</>}
       </div>
     </div>
@@ -969,19 +1041,26 @@ const FACES = [
 ];
 function Tome() {
   const [open, setOpen] = useState(null);
-  const [bank, setBank_] = useState([]); const [draft, setDraft_] = useState(""); const [overrides, setOverrides_] = useState({});
+  const [bank, setBank_] = useState([]); const [overrides, setOverrides_] = useState({});
+  const [shelf, setShelf_] = useState([]); const [current, setCurrent_] = useState(null);
   const [prefs, setPrefs_] = useState({ mineral: "amethyst", density: "comfy", motion: "on" });
   const [pop, setPop_] = useState("rap");
   const [loaded, setLoaded] = useState(false); const [migrated, setMigrated] = useState(false);
   const [engStatus, setEngStatus] = useState("idle"); const [sun, setSun] = useState(null);
   useEffect(() => {
     setMigrated(STORE.migrate());
-    setBank_(STORE.get("bank", [])); setDraft_(STORE.get("draft", ""));
+    setBank_(STORE.get("bank", []));
+    let sh = STORE.get("shelf", null), cur = STORE.get("current", null);
+    if (!sh || !sh.length) { sh = [{ id: "d" + Date.now(), name: "first draft", text: STORE.get("draft", ""), updated: Date.now() }]; cur = sh[0].id; STORE.set("shelf", sh); STORE.set("current", cur); }
+    if (!sh.some(d => d.id === cur)) cur = sh[0].id;
+    setShelf_(sh); setCurrent_(cur);
     const o = STORE.get("overrides", {}); OVERRIDES = o; setOverrides_(o);
     setPrefs_(STORE.get("prefs", { mineral: "amethyst", density: "comfy", motion: "on" })); setPop_(STORE.get("pop", "rap"));
     setLoaded(true); E2.load(setEngStatus);
   }, []);
   useEffect(() => { const t = () => setSun(SUN.apply(new Date())); t(); const id = setInterval(t, 60000); return () => clearInterval(id); }, []);
+  useEffect(() => { SUN.setPlace(prefs.place); setSun(SUN.apply(new Date())); }, [prefs.place]);
+  useEffect(() => { E2.setOwn([...bank, ...shelf.flatMap(d => d.text.split(/\s+/))]); }, [bank, shelf]);
   useEffect(() => {
     const m = MINERALS[prefs.mineral] || MINERALS.amethyst, rs = document.documentElement.style;
     rs.setProperty("--mineral", m.m); rs.setProperty("--mineral-lo", m.mlo); rs.setProperty("--vein-hi", m.hi); rs.setProperty("--vein-lo", m.lo);
@@ -990,22 +1069,29 @@ function Tome() {
   const setBank = v => { setBank_(v); STORE.set("bank", v); };
   const setPrefs = v => { setPrefs_(v); STORE.set("prefs", v); };
   const setPop = v => { setPop_(v); STORE.set("pop", v); };
-  const draftTimer = useRef(null);
-  const setDraft = v => { setDraft_(v); clearTimeout(draftTimer.current); draftTimer.current = setTimeout(() => STORE.set("draft", v), 700); };
+  const draft = (shelf.find(d => d.id === current) || { text: "" }).text;
+  const shelfTimer = useRef(null);
+  const setShelf = (v, now) => { setShelf_(v); clearTimeout(shelfTimer.current); if (now) STORE.set("shelf", v); else shelfTimer.current = setTimeout(() => STORE.set("shelf", v), 700); };
+  const setDraft = v => setShelf(shelf.map(d => d.id === current ? { ...d, text: v, updated: Date.now() } : d));
+  const setCurrent = id => { setCurrent_(id); STORE.set("current", id); };
+  const newDraft = () => { const d = { id: "d" + Date.now(), name: "draft " + (shelf.length + 1), text: "", updated: Date.now() }; setShelf([...shelf, d], true); setCurrent(d.id); };
+  const renameDraft = (id, name) => setShelf(shelf.map(d => d.id === id ? { ...d, name } : d), true);
+  const removeDraft = id => { const rest = shelf.filter(d => d.id !== id); setShelf(rest, true); if (current === id) setCurrent(rest[0].id); };
+  const shelfProps = { shelf, current, setCurrent, newDraft, renameDraft, removeDraft };
   const setOverride = (word, v) => { const o = { ...overrides }; if (v) o[word] = v; else delete o[word]; OVERRIDES = o; setOverrides_(o); STORE.set("overrides", o); };
   const eng = engStatus;
   const bars = draft.split("\n").filter(l => l.trim()).length;
   const nOv = Object.keys(overrides).length;
   const quick = useMemo(() => bars ? E2.reading(draft, { pop }) : null, [draft, pop, overrides, eng]);
   const sums = {
-    draft: bars ? <>{bars} bar{bars === 1 ? "" : "s"}{quick && quick.maxRun > quick.limit ? <em> · drone {quick.maxRun}</em> : null}</> : "empty",
+    draft: <>{(shelf.find(d => d.id === current) || {}).name || ""} · {bars ? <>{bars} bar{bars === 1 ? "" : "s"}{quick && quick.maxRun > quick.limit ? <em> · drone {quick.maxRun}</em> : null}</> : "empty"}</>,
     lookup: engStatus === "ready" ? `${E2.size().toLocaleString()} words` : engStatus === "loading" ? "loading…" : "curated list",
     check: "a ~ b",
     bank: `${bank.length} word${bank.length === 1 ? "" : "s"} · ${nOv} cut${nOv === 1 ? "" : "s"}`,
     tune: `${prefs.mineral} · ${prefs.density}`,
   };
   const face = id => ({
-    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} />,
+    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} />,
     lookup: <Lookup bank={bank} setBank={setBank} eng={eng} />,
     check: <Check eng={eng} />,
     bank: <Bank bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride} eng={eng} />,
