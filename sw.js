@@ -1,5 +1,5 @@
 /* rhyme instrument — offline shell. network-first for the page (so updates land), cache-first for the dictionary and libraries. */
-const V = "tome-v2.2";
+const V = "tome-v2.3";
 const SHELL = ["./", "./index.html", "./cmu_skel.json", "./google10k.txt", "./subtlex_rank.txt",
   "https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js",
