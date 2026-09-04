@@ -154,6 +154,11 @@ textarea.cut { min-height: 9.5em; }
 .picker .who i { color: var(--bone); }
 .picker .stones { flex-wrap: wrap; gap: 5px; cursor: default; }
 .picker .clear { font-size: 12px; color: #f0c36a; margin-left: 6px; align-self: center; cursor: pointer; text-decoration: underline; }
+.picker .reads { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.picker .read { padding: 4px 6px; border-radius: 3px; margin: 2px 0; cursor: pointer; }
+.picker .read.cur { background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px var(--gilt-c); }
+.group .gh.mosaic { color: #f0c36a; }
+.inlay.slantish { font-style: italic; }
 .crack { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
 .crack path { fill: none; stroke-linecap: round; }
 .crack .dark { stroke: rgba(0,0,0,.9); stroke-width: 1.2; }
@@ -209,7 +214,7 @@ textarea.cut { min-height: 9.5em; }
 <div id="root"></div>
 <script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));</script>
 <script type="text/babel" data-presets="react">
-/* ghost codex · rhyme instrument · v2.1 tome */
+/* ghost codex · rhyme instrument · v2.2 tome */
 /* ---------- vowel classes, v1 rule G2P (OOV fallback), curated lexicon, watch lists ---------- */
 const VOWEL_COLORS = {
   AY:"#C98A2D", IY:"#5B87A8", EY:"#8FA65B", EH:"#A0703F", AE:"#B04A3A",
@@ -462,15 +467,28 @@ const E2 = (() => {
   let DICT = null, COMMON = new Map(), INDEX = null, status = "idle", error = "";
   const CURATED = new Set(LEXICON);
   let OWN = new Set();                       // the tier you write in: bank + every shelved draft
-  function setOwn(words) { OWN = new Set(words.map(clean).filter(w => w.length > 1)); }
+  function setOwn(words) { OWN = new Set(words.map(clean).filter(w => w.length > 1)); POOL = null; }
   const RED = new Set(["AH","IH","EH","AE","AA","UH"]);
   const clean = raw => raw.toLowerCase().replace(/[^a-z']/g, "");
   function parseCompact(str) {
+    const [vs, coda] = str.split("|")[0].split("-");
+    const sylls = vs.split(".").map(t => ({ v: t.replace(/\d/, ""), s: +t.slice(-1), c: "" }));
+    sylls[sylls.length-1].c = coda || "";
+    sylls.forEach(s => { s.reduced = s.v === "AH" && s.s === 0; });
+    return sylls;
+  }
+  function parseOne(str) {
     const [vs, coda] = str.split("-");
     const sylls = vs.split(".").map(t => ({ v: t.replace(/\d/, ""), s: +t.slice(-1), c: "" }));
     sylls[sylls.length-1].c = coda || "";
     sylls.forEach(s => { s.reduced = s.v === "AH" && s.s === 0; });
     return sylls;
+  }
+  /* every read the dictionary carries for a word, primary first; [] if unknown */
+  function variants(raw) {
+    const w = clean(raw);
+    if (!DICT || !Object.hasOwn(DICT, w)) return [];
+    return DICT[w].split("|").map(parseOne);
   }
   function pronounce(raw) {
     const w = clean(raw);
@@ -492,7 +510,11 @@ const E2 = (() => {
       if (typeof ov === "string") { sylls[sylls.length-1].v = ov; sylls[sylls.length-1].reduced = false; }
       else {
         const n = Math.min(ov.vowels.length, sylls.length);
-        for (let i = 0; i < n; i++) { sylls[sylls.length-n+i].v = ov.vowels[i]; sylls[sylls.length-n+i].reduced = false; }
+        for (let i = 0; i < n; i++) {
+          const t = sylls[sylls.length-n+i];
+          t.v = ov.vowels[i]; t.reduced = false;
+          if (ov.stress && ov.stress[i] != null) t.s = ov.stress[i];
+        }
         if (ov.coda != null) sylls[sylls.length-1].c = ov.coda;
       }
       source = "override";
@@ -518,6 +540,27 @@ const E2 = (() => {
       coda: last ? last.c : "", reduced: last ? !!last.reduced : false,
       overridden: source === "override", source };
   }
+  function tailOf(sylls, depth, anchor) {
+    let tail;
+    if (anchor === "stress") { let k = sylls.length - 1; while (k > 0 && !(sylls[k].s > 0)) k--; tail = sylls.slice(Math.min(k, sylls.length - depth)); }
+    else tail = sylls.slice(-depth);
+    const last = tail[tail.length-1];
+    return { vowels: tail.map(s => s.v), stress: tail.map(s => s.s), coda: last ? last.c : "", reduced: last ? !!last.reduced : false };
+  }
+  function compare(sa, sb, same) {
+    if (!sa.vowels.length || !sb.vowels.length) return "none";
+    const n = Math.min(sa.vowels.length, sb.vowels.length);
+    const la = sa.vowels.slice(-n), lb = sb.vowels.slice(-n);
+    const exact = la.every((v, i) => v === lb[i]) && sa.vowels.length === sb.vowels.length;
+    if (!exact) {
+      const lastStrict = la[n-1] === lb[n-1];
+      if (lastStrict && n > 1 && la.every((v, i) => v === lb[i] || (RED.has(v) && RED.has(lb[i])))) return "loose";
+      if (!lastStrict && (sa.reduced || sb.reduced) && RED.has(la[n-1]) && RED.has(lb[n-1])) return "loose";
+      return lastStrict ? "shallow" : "none";
+    }
+    if (same) return "identical";
+    return sa.coda === sb.coda ? "perfect" : "slant";
+  }
   function classify(a, b, depth = 1, anchor = "count") {
     const sa = skeleton(a, depth, anchor), sb = skeleton(b, depth, anchor);
     if (!sa.vowels.length || !sb.vowels.length) return { kind: "none", sa, sb };
@@ -539,33 +582,80 @@ const E2 = (() => {
     const push = (key, w) => { const l = INDEX.get(key); if (l) l.push(w); else INDEX.set(key, [w]); };
     for (const w of Object.keys(DICT)) {
       if (w.length < 2 || w.includes("'")) continue;
-      const s = parseCompact(DICT[w]);
-      for (let d = 1; d <= Math.min(3, s.length); d++) push(d + ":" + s.slice(-d).map(x => x.v).join("|"), w);
-      let k = s.length - 1; while (k > 0 && !(s[k].s > 0)) k--;
-      push("S:" + s.slice(k).map(x => x.v).join("|"), w);
+      for (const s of DICT[w].split("|").map(parseOne)) {
+        for (let d = 1; d <= Math.min(3, s.length); d++) push(d + ":" + s.slice(-d).map(x => x.v).join("|"), w);
+        let k = s.length - 1; while (k > 0 && !(s[k].s > 0)) k--;
+        push("S:" + s.slice(k).map(x => x.v).join("|"), w);
+      }
     }
   }
   function lookup(query, depth = 1, extra = [], anchor = "stress") {
     const sq = skeleton(query, depth, anchor);
-    if (!sq.vowels.length) return { skeleton: sq, perfect: [], slant: [], loose: [] };
+    if (!sq.vowels.length) return { skeleton: sq, reads: [], perfect: [], slant: [], loose: [] };
+    const q = clean(query);
+    /* a single word with alternate dictionary reads searches on all of them; a phrase or an overridden word searches on its one read */
+    const single = !query.trim().includes(" ") && !Object.hasOwn(OVERRIDES, q);
+    const qreads = (single && variants(q).length > 1 ? variants(q) : [pronounce(query.trim().split(/\s+/).pop()).sylls]).map(r => tailOf(r, depth, anchor)).filter(t => t.vowels.length);
+    const sqs = single && variants(q).length > 1 ? qreads : [sq];
     let cand;
     if (DICT) {
       if (!INDEX) buildIndex();
-      const key = (anchor === "stress" ? "S:" : depth + ":") + sq.vowels.join("|");
-      cand = new Set([...(INDEX.get(key) || []), ...extra.map(clean), ...OWN]);
+      cand = new Set([...extra.map(clean), ...OWN]);
+      for (const t of sqs) for (const w of INDEX.get((anchor === "stress" ? "S:" : depth + ":") + t.vowels.join("|")) || []) cand.add(w);
     } else cand = new Set([...LEXICON, ...extra.map(clean), ...OWN]);
-    const q = clean(query);
     const perfect = [], slant = [], loose = [];
+    const ORDER = { perfect: 3, slant: 2, loose: 1 };
     for (const w of cand) {
       if (w === q) continue;
-      const r = classify(query, w, sq.vowels.length, anchor);
+      let best = "none";
+      const reads = Object.hasOwn(OVERRIDES, w) ? [pronounce(w).sylls] : (variants(w).length ? variants(w) : [pronounce(w).sylls]);
+      for (const t of sqs) for (const r of reads) { const k = compare(t, tailOf(r, t.vowels.length, anchor), false); if ((ORDER[k] || 0) > (ORDER[best] || 0)) best = k; }
       const item = { word: w, tier: OWN.has(w) ? 0 : CURATED.has(w) ? 1 : COMMON.has(w) ? 2 : 3, rank: COMMON.get(w) ?? 1e9 };
-      if (r.kind === "perfect") perfect.push(item);
-      else if (r.kind === "slant") slant.push(item);
-      else if (r.kind === "loose") loose.push(item);
+      if (best === "perfect") perfect.push(item);
+      else if (best === "slant") slant.push(item);
+      else if (best === "loose") loose.push(item);
     }
     const rank = (a, b) => a.tier - b.tier || a.rank - b.rank || a.word.localeCompare(b.word);
-    return { skeleton: sq, perfect: perfect.sort(rank), slant: slant.sort(rank), loose: loose.sort(rank) };
+    return { skeleton: sq, reads: sqs.length > 1 ? sqs : [], perfect: perfect.sort(rank), slant: slant.sort(rank), loose: loose.sort(rank) };
+  }
+  /* mosaic: two-word tails whose joined skeleton matches a multi-syllable query.
+   * pool = your words + curated + the top of the frequency list, so the pairs are ones you'd write. */
+  let POOL = null;
+  function pool() {
+    if (POOL) return POOL;
+    const words = new Set([...OWN, ...CURATED]);
+    for (const [w, r] of COMMON) if (r >= 160 && r < 6000 && w.length > 2) words.add(w);   /* skip the function-word head of the list */
+    const byFull = new Map(), byTail = new Map();
+    for (const w of words) {
+      const reads = variants(w).length ? variants(w) : [pronounce(w).sylls];
+      for (const s of reads) {
+        if (!s.length || s.length > 3) continue;
+        const full = s.map(x => x.v).join("|");
+        if (!byFull.has(full)) byFull.set(full, []); byFull.get(full).push({ w, s });
+        for (let d = 1; d <= s.length; d++) { const k = d + ":" + s.slice(-d).map(x => x.v).join("|"); if (!byTail.has(k)) byTail.set(k, []); byTail.get(k).push({ w, s }); }
+      }
+    }
+    return POOL = { byFull, byTail };
+  }
+  function mosaic(query, depth = 2, limit = 40) {
+    const sq = skeleton(query, depth, "count");
+    const n = sq.vowels.length; if (n < 2) return [];
+    const { byFull, byTail } = pool();
+    const q = clean(query), out = [], seen = new Set();
+    const used = new Set(query.trim().split(/\s+/).map(clean));
+    const tierOf = w => OWN.has(w) ? 0 : CURATED.has(w) ? 1 : 2;
+    for (let k = 1; k < n; k++) {
+      const heads = byTail.get(k + ":" + sq.vowels.slice(0, k).join("|")) || [];
+      const tails = byFull.get(sq.vowels.slice(k).join("|")) || [];
+      for (const h of heads) for (const t of tails) {
+        if (h.w === t.w || used.has(h.w) || used.has(t.w)) continue;
+        const key = h.w + " " + t.w; if (seen.has(key)) continue; seen.add(key);
+        const kind = compare(sq, tailOf([...h.s.slice(-k), ...t.s], n, "count"), false);
+        if (kind === "perfect" || kind === "slant") out.push({ phrase: key, kind, tier: tierOf(h.w) + tierOf(t.w), rank: (COMMON.get(h.w) ?? 9e4) + (COMMON.get(t.w) ?? 9e4) });
+      }
+    }
+    out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "perfect" ? -1 : 1) || a.tier - b.tier || a.rank - b.rank);
+    return out.slice(0, limit);
   }
   function graph(bars, { window = 8 } = {}) {
     const filled = bars.filter(Boolean);
@@ -642,15 +732,15 @@ const E2 = (() => {
     try {
       const [d, f] = await Promise.all([
         fetch("./cmu_skel.json").then(r => { if (!r.ok) throw new Error("cmu_skel.json " + r.status); return r.json(); }),
-        fetch("./google10k.txt").then(r => r.ok ? r.text() : "").catch(() => ""),
+        fetch("./subtlex_rank.txt").then(r => r.ok ? r.text() : fetch("./google10k.txt").then(r2 => r2.ok ? r2.text() : "")).catch(() => ""),
       ]);
-      DICT = d; INDEX = null;
+      DICT = d; INDEX = null; POOL = null;
       COMMON = new Map(f.split("\n").filter(Boolean).map((w, i) => [w.trim(), i]));
       status = "ready";
     } catch (e) { status = "error"; error = String(e.message || e); }
     onChange && onChange(status);
   }
-  return { pronounce, skeleton, classify, lookup, reading, load, setOwn,
+  return { pronounce, variants, skeleton, classify, lookup, mosaic, reading, load, setOwn,
     ready: () => status === "ready", status: () => status, error: () => error,
     size: () => DICT ? Object.keys(DICT).length : LEXICON.length };
 })();
@@ -776,13 +866,35 @@ function Skeleton({ sk }) {
     {sk.coda ? <span>+{sk.coda.toLowerCase()}</span> : null}</span>;
 }
 function Picker({ word, overrides, setOverride, onClose }) {
-  const cur = overrides[word];
+  const cur = E2.pronounce(word).sylls;
+  const [sel, setSel] = useState(Math.max(0, cur.length - 1));
+  const reads = E2.variants(word);
+  const has = !!overrides[word];
+  const same = (r) => r.length === cur.length && r.every((x, i) => x.v === cur[i].v && x.s === cur[i].s);
+  const commit = (sylls) => setOverride(word, { vowels: sylls.map(x => x.v), stress: sylls.map(x => x.s), coda: sylls[sylls.length - 1] ? sylls[sylls.length - 1].c : "" });
+  const cutVowel = v => { const n = cur.map(x => ({ ...x })); n[sel].v = v; commit(n); };
+  const cutStress = () => { const n = cur.map(x => ({ ...x })); n[sel].s = n[sel].s > 0 ? 0 : 1; commit(n); };
   return (
     <div className="picker">
-      <div className="who">the vowel your mouth uses on <i>{word}</i></div>
+      {reads.length > 1 && (
+        <div className="reads">
+          <div className="who">the dictionary carries {reads.length} reads of <i>{word}</i> — tap one</div>
+          {reads.map((r, i) => (
+            <div key={i} className={"stones read" + (same(r) ? " cur" : "")} onClick={() => { commit(r); onClose(); }}>
+              {r.map((x, k) => <Stone key={k} v={x.v} s={x.s} />)}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="who">cut <i>{word}</i> by syllable — pick a stone, then the vowel your mouth uses</div>
+      <div className="stones read" style={{ marginBottom: 8 }}>
+        {cur.map((x, i) => <Stone key={i} v={x.v} s={x.s} chosen={i === sel} onClick={() => setSel(i)} />)}
+        <span className="clear" onClick={cutStress}>{cur[sel] && cur[sel].s > 0 ? "stressed" : "unstressed"}</span>
+      </div>
       <div className="stones">
-        {Object.keys(VOWEL_NAMES).map(v => <Stone key={v} v={v} chosen={cur === v} onClick={() => { setOverride(word, v); onClose(); }} />)}
-        {cur && <span className="clear" onClick={() => { setOverride(word, null); onClose(); }}>clear</span>}
+        {Object.keys(VOWEL_NAMES).map(v => <Stone key={v} v={v} chosen={cur[sel] && cur[sel].v === v} onClick={() => { cutVowel(v); }} />)}
+        {has && <span className="clear" onClick={() => { setOverride(word, null); onClose(); }}>clear all cuts</span>}
+        <span className="clear" onClick={onClose}>done</span>
       </div>
     </div>
   );
@@ -919,6 +1031,7 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
 function Lookup({ bank, setBank, eng }) {
   const [q, setQ] = useState(""); const [depth, setDepth] = useState(1);
   const r = useMemo(() => q.trim() ? E2.lookup(q, depth, bank) : null, [q, depth, bank, eng]);
+  const mos = useMemo(() => q.trim() && depth >= 2 && E2.ready() ? E2.mosaic(q, depth, 40) : [], [q, depth, eng, bank]);
   const banked = useMemo(() => new Set(bank.map(clean)), [bank]);
   const toggle = w => setBank(banked.has(w) ? bank.filter(b => clean(b) !== w) : [...bank, w]);
   const groups = r ? [["perfect", r.perfect], ["slant — the melodic lane", r.slant], ["reduced — rap-legal", r.loose]] : [];
@@ -929,6 +1042,7 @@ function Lookup({ bank, setBank, eng }) {
       {r && (
         <div>
           <Skeleton sk={r.skeleton} />
+          {r.reads.length > 1 && <div className="note" style={{ marginTop: 4 }}>searched on {r.reads.length} dictionary reads — cut the word in bank to pin one</div>}
           <div className="note" style={{ marginTop: 6 }}>anchored on the stressed syllable · {E2.ready() ? E2.size().toLocaleString() + " words" : "curated list only — dictionary not loaded"} · <span className="k0">yours</span> · <span className="k1">curated</span> · common · <span className="k3">rest</span> · tap a word to bank it</div>
           {groups.map(([label, list]) => list.length > 0 && (
             <div className="group" key={label}>
@@ -938,6 +1052,12 @@ function Lookup({ bank, setBank, eng }) {
               </div>
             </div>
           ))}
+          {mos.length > 0 && (
+            <div className="group">
+              <div className="gh mosaic">mosaic — two-word tails · {mos.length}</div>
+              <div className="inlays">{mos.map(m => <span key={m.phrase} className={"inlay t" + Math.min(3, m.tier) + (m.kind === "slant" ? " slantish" : "")}>{m.phrase}</span>)}</div>
+            </div>
+          )}
           {r.perfect.length + r.slant.length + r.loose.length === 0 && <div className="empty">nothing at this depth. the anchor is the stressed syllable — try a shallower depth, or bank the word and cut its vowel by hand.</div>}
         </div>
       )}
