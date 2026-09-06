@@ -272,6 +272,44 @@ const E2 = (() => {
     });
     return { v: 2, pop, limit, bars, runs, edges, flagged: [...flagged], maxRun: runs.reduce((m, r) => Math.max(m, r.len), 0), terminal };
   }
+  /* ---------- meter: score written bars against the template library ----------
+   * Diagnostic only — this reads what's there and ranks how it sits, it does not prescribe.
+   * Scores the METRICAL pattern (function words demoted), never the lexical one: a line's
+   * meter is about which syllables take a beat when spoken, not how each word reads alone.
+   *
+   * Two components, reported separately because they fail differently and the difference is
+   * the useful part: `length` is how close the bar's syllable count sits to the template's,
+   * `stress` is how often an accent lands where the template puts one. A bar can be the right
+   * length with the accents in the wrong places, or accented right but four syllables short. */
+  function fitTemplate(pattern, tpl) {
+    const n = Math.min(pattern.length, tpl.stress.length);
+    let agree = 0;
+    for (let i = 0; i < n; i++) if ((pattern[i] > 0) === (tpl.stress[i] > 0)) agree++;
+    const stress = n ? agree / n : 0;
+    const length = Math.max(0, 1 - Math.abs(pattern.length - tpl.syllables) / tpl.syllables);
+    return { stress, length, score: stress * length };
+  }
+  function metrical(bar) { return bar.field.flatMap(w => w.sylls.map(s => s.m)); }
+  function meter(read) {
+    const filled = (read.bars || []).filter(Boolean);
+    const rows = filled.map(b => {
+      const pattern = metrical(b);
+      const all = TEMPLATES.map(t => ({ name: t.name, ...fitTemplate(pattern, t) })).sort((x, y) => y.score - x.score);
+      return { i: b.i, text: b.text, syllables: pattern.length, pattern, all, best: all[0] };
+    });
+    const ranked = TEMPLATES.map(t => {
+      const scores = rows.map(r => r.all.find(x => x.name === t.name).score);
+      return { name: t.name, syllables: t.syllables, mean: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0 };
+    }).sort((a, b) => b.mean - a.mean);
+    const best = ranked[0] || null;
+    /* weakest fits under the winning template — ranked, not thresholded, so no invented cutoff
+     * decides what counts as "wrong"; the reader sees the spread and judges. */
+    const weakest = best
+      ? rows.map(r => ({ i: r.i, text: r.text, syllables: r.syllables, ...r.all.find(x => x.name === best.name) }))
+          .sort((a, b) => a.score - b.score)
+      : [];
+    return { rows, ranked, best, weakest, bars: rows.length };
+  }
   async function load(onChange) {
     if (status === "ready" || status === "loading") return;
     status = "loading"; error = ""; onChange && onChange(status);
@@ -286,7 +324,7 @@ const E2 = (() => {
     } catch (e) { status = "error"; error = String(e.message || e); }
     onChange && onChange(status);
   }
-  return { pronounce, variants, skeleton, classify, lookup, mosaic, reading, load, setOwn,
+  return { pronounce, variants, skeleton, classify, lookup, mosaic, reading, meter, load, setOwn,
     ready: () => status === "ready", status: () => status, error: () => error,
     size: () => DICT ? Object.keys(DICT).length : LEXICON.length };
 })();

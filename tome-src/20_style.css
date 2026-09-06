@@ -206,3 +206,17 @@ textarea.cut { min-height: 9.5em; }
 .picklist .pl { padding: 7px 10px; font-size: 14px; color: var(--bone-lo); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid rgba(255,255,255,.04); }
 .picklist .pl.on { color: var(--gilt-a); background: rgba(255,255,255,.04); }
 .preview { margin-top: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.6); border-radius: 4px; overflow: hidden; }
+
+/* meter panel: template fit readout */
+.fit { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13.5px; }
+.fit .nm { flex: 0 0 92px; color: var(--bone); }
+.fit .syl { flex: 0 0 42px; font-size: 11.5px; color: var(--bone-lo); }
+.fit .track { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.5); }
+.fit .fill { display: block; height: 100%; background: var(--vein-hi); border-radius: 4px; }
+.fit.top .nm { color: var(--gilt-a); }
+.fit.top .fill { background: var(--gilt-a); }
+.fit .pct { flex: 0 0 34px; text-align: right; color: var(--bone-lo); font-variant-numeric: tabular-nums; }
+.weak { display: flex; gap: 9px; align-items: baseline; padding: 6px 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.weak .pct { flex: 0 0 34px; color: var(--bone-lo); font-variant-numeric: tabular-nums; }
+.weak .ln { flex: 1; color: var(--bone-lo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weak .why { flex: 0 0 auto; font-size: 11px; color: var(--bone-lo); opacity: .8; }

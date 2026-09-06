@@ -102,6 +102,48 @@ test("FUNCTION_WORDS deliberately excludes the ambiguous cases", () => {
   }
 });
 
+test("meter(): scores the metrical pattern, and a straight line reads as straight-8", () => {
+  const r = E.reading("cold rain fell on empty streets", { pop: "rap" });
+  const m = E.meter(r);
+  assert.equal(m.best.name, "straight-8");
+  const ranked = m.rows[0].all;
+  assert.ok(ranked[0].score > ranked[1].score + 0.2, "the winner should separate clearly, not tie");
+});
+
+test("meter(): length fit and stress fit are reported apart, because they fail differently", () => {
+  const r = E.reading("cold rain fell on empty streets and colder rain fell after", { pop: "rap" });
+  const row = E.meter(r).rows[0];
+  const straight8 = row.all.find(t => t.name === "straight-8");
+  assert.ok(straight8.length < 1, "a 12-syllable bar is not the length of a straight-8");
+  assert.ok(straight8.stress > 0, "but its accents still partly agree — the two must not collapse into one number");
+  assert.equal(Math.round(straight8.score * 1000) / 1000, Math.round(straight8.stress * straight8.length * 1000) / 1000);
+});
+
+test("meter(): scores the demoted pattern, not the lexical one", () => {
+  // "the way you move..." is 9/12 lexically stressed but 5/12 metrically. If meter() were
+  // reading `s`, a near-uniform pattern would score very differently.
+  const r = E.reading("the way you move from the block to the booth was love", { pop: "rap" });
+  const row = E.meter(r).rows[0];
+  assert.deepEqual(row.pattern, [0,1,0,1,0,0,1,0,0,1,0,1]);
+  assert.equal(row.all.find(t => t.name === "triplet-12").stress, 0.75);
+});
+
+test("meter(): empty draft doesn't throw or invent a winner", () => {
+  const m = E.meter(E.reading("", { pop: "rap" }));
+  assert.equal(m.bars, 0);
+  assert.deepEqual(m.weakest, []);
+  assert.equal(m.ranked.every(t => t.mean === 0), true);
+});
+
+test("templates are named by shape only — no artist or region names", () => {
+  const { TEMPLATES } = require("../rule_g2p_v1.js");
+  assert.ok(TEMPLATES.length >= 4);
+  for (const t of TEMPLATES) {
+    assert.equal(t.stress.length, t.syllables, `${t.name}: stress array must match its syllable count`);
+    assert.match(t.name, /^[a-z]+(-[a-z]+)*-\d+$/, `${t.name} should read as shape-count`);
+  }
+});
+
 test("cliche detection has been removed: reading() bars never carry a .cliche field", () => {
   const r = E.reading("she meant to become who she wanted\nyou turn to stoneware every night", { pop: "rap" });
   for (const b of r.bars) {

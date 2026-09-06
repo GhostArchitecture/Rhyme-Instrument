@@ -199,11 +199,64 @@ function SharePanel({ reading, mineral, onClose }) {
     </div>
   );
 }
+function MeterPanel({ reading, shelf, pop, onClose }) {
+  const [scope, setScope] = useState("draft");
+  const m = useMemo(() => {
+    if (scope === "draft") return E2.meter(reading);
+    /* shelf scope aggregates every draft's bars into one ranking; per-bar callouts are dropped
+     * because bar indices only mean something within their own draft. */
+    return E2.meter({ bars: shelf.flatMap(d => E2.reading(d.text, { pop }).bars) });
+  }, [reading, scope, shelf, pop]);
+  const pct = n => Math.round(n * 100);
+  return (
+    <div className="share">
+      <div className="row" style={{ marginTop: 0 }}>
+        <Cast on={scope === "draft"} onClick={() => setScope("draft")}>this draft</Cast>
+        <Cast on={scope === "shelf"} patina onClick={() => setScope("shelf")}>whole shelf · {shelf.length}</Cast>
+        <Cast onClick={onClose} style={{ flex: .6 }}>close</Cast>
+      </div>
+      {!m.bars ? <div className="empty">nothing written yet to measure.</div> : (
+        <div>
+          <div className="group">
+            <div className="gh">shape · {m.bars} bar{m.bars === 1 ? "" : "s"} measured</div>
+            {m.ranked.map((t, k) => (
+              <div key={t.name} className={"fit" + (k === 0 ? " top" : "")}>
+                <span className="nm">{t.name}</span>
+                <span className="syl">{t.syllables} syl</span>
+                <span className="track"><span className="fill" style={{ width: pct(t.mean) + "%" }} /></span>
+                <span className="pct">{pct(t.mean)}%</span>
+              </div>
+            ))}
+          </div>
+          {scope === "draft" && m.weakest.length > 0 && (
+            <div className="group">
+              <div className="gh">sits furthest from {m.best.name}</div>
+              {m.weakest.slice(0, 4).map(w => (
+                <div key={w.i} className="weak">
+                  <span className="pct">{pct(w.score)}%</span>
+                  <span className="ln">{w.text}</span>
+                  <span className="why">{w.syllables} syl{pct(w.length) < 100 ? " · length" : ""}{pct(w.stress) < 60 ? " · accents" : ""}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="note">
+            reading what's written, not prescribing what to write. fit is two things kept apart: how close the
+            syllable count sits to the shape, and how often an accent lands where the shape puts one — a bar can
+            be the right length with the beats in the wrong places. measured on the spoken line, with function
+            words unstressed, not on each word read alone.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral }) {
   const [pick, setPick] = useState(null);
   const [editing, setEditing] = useState(null);           // line index being cut
   const [quarry, setQuarry] = useState(false);
   const [share, setShare] = useState(false);
+  const [meterOpen, setMeterOpen] = useState(false);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
   const limit = reading.limit;
@@ -219,13 +272,15 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   return (
     <div>
       <Shelf {...shelfProps} />
-      <div className="row" style={{ marginTop: 0 }}>
+      <div className="row wrap" style={{ marginTop: 0 }}>
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
         <Cast on={pop === "melodic"} onClick={() => setPop("melodic")}>melodic · drone past 6</Cast>
         <Cast on={quarry} patina onClick={() => setQuarry(!quarry)}>quarry</Cast>
+        <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)} style={{ flex: .8 }}>meter</Cast>
         <Cast on={share} patina onClick={() => setShare(!share)} style={{ flex: .8 }}>share</Cast>
       </div>
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}
+      {meterOpen && <MeterPanel reading={reading} shelf={shelfProps.shelf} pop={pop} onClose={() => setMeterOpen(false)} />}
       {share && reading.bars.some(Boolean) && <SharePanel reading={reading} mineral={mineral} onClose={() => setShare(false)} />}
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}

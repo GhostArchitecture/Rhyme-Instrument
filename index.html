@@ -224,6 +224,20 @@ textarea.cut { min-height: 9.5em; }
 .picklist .pl.on { color: var(--gilt-a); background: rgba(255,255,255,.04); }
 .preview { margin-top: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.6); border-radius: 4px; overflow: hidden; }
 
+/* meter panel: template fit readout */
+.fit { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13.5px; }
+.fit .nm { flex: 0 0 92px; color: var(--bone); }
+.fit .syl { flex: 0 0 42px; font-size: 11.5px; color: var(--bone-lo); }
+.fit .track { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.5); }
+.fit .fill { display: block; height: 100%; background: var(--vein-hi); border-radius: 4px; }
+.fit.top .nm { color: var(--gilt-a); }
+.fit.top .fill { background: var(--gilt-a); }
+.fit .pct { flex: 0 0 34px; text-align: right; color: var(--bone-lo); font-variant-numeric: tabular-nums; }
+.weak { display: flex; gap: 9px; align-items: baseline; padding: 6px 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.weak .pct { flex: 0 0 34px; color: var(--bone-lo); font-variant-numeric: tabular-nums; }
+.weak .ln { flex: 1; color: var(--bone-lo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weak .why { flex: 0 0 auto; font-size: 11px; color: var(--bone-lo); opacity: .8; }
+
 </style>
 </head>
 <body>
@@ -465,6 +479,20 @@ const LEXICON = [...new Set(
 )];
 const FILLERS = new Set(["you","too","to","that","it","them","me","a","the","at",
   "of","for","and","so","on","in","up","do"]);
+
+/* ---------- meter templates ----------
+ * Named by shape only — never by artist or region. A template is a syllable count and the
+ * stress pattern that count implies: 1 takes a beat, 2 a weaker accent, 0 sits between.
+ * These four are a seed set and the arrays are a judgement call, not a measurement — the
+ * obvious reading of each shape, meant to be argued with once real drafts are scored against
+ * them. Scoring treats 1 and 2 alike (a syllable either takes an accent or it doesn't); the
+ * distinction is carried for expressiveness and future weighting. */
+const TEMPLATES = [
+  { name: "straight-8",  syllables: 8,  stress: [1,0,1,0,1,0,1,0] },
+  { name: "broken-8",    syllables: 8,  stress: [1,0,0,1,0,1,0,0] },
+  { name: "triplet-12",  syllables: 12, stress: [1,0,0,1,0,0,1,0,0,1,0,0] },
+  { name: "boom-bap-16", syllables: 16, stress: [1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0] },
+];
 
 /* ---------- function words, for metrical (not lexical) stress ----------
  * The dictionary gives citation stress — each word said alone, where "you" and "was"
@@ -759,6 +787,44 @@ const E2 = (() => {
     });
     return { v: 2, pop, limit, bars, runs, edges, flagged: [...flagged], maxRun: runs.reduce((m, r) => Math.max(m, r.len), 0), terminal };
   }
+  /* ---------- meter: score written bars against the template library ----------
+   * Diagnostic only — this reads what's there and ranks how it sits, it does not prescribe.
+   * Scores the METRICAL pattern (function words demoted), never the lexical one: a line's
+   * meter is about which syllables take a beat when spoken, not how each word reads alone.
+   *
+   * Two components, reported separately because they fail differently and the difference is
+   * the useful part: `length` is how close the bar's syllable count sits to the template's,
+   * `stress` is how often an accent lands where the template puts one. A bar can be the right
+   * length with the accents in the wrong places, or accented right but four syllables short. */
+  function fitTemplate(pattern, tpl) {
+    const n = Math.min(pattern.length, tpl.stress.length);
+    let agree = 0;
+    for (let i = 0; i < n; i++) if ((pattern[i] > 0) === (tpl.stress[i] > 0)) agree++;
+    const stress = n ? agree / n : 0;
+    const length = Math.max(0, 1 - Math.abs(pattern.length - tpl.syllables) / tpl.syllables);
+    return { stress, length, score: stress * length };
+  }
+  function metrical(bar) { return bar.field.flatMap(w => w.sylls.map(s => s.m)); }
+  function meter(read) {
+    const filled = (read.bars || []).filter(Boolean);
+    const rows = filled.map(b => {
+      const pattern = metrical(b);
+      const all = TEMPLATES.map(t => ({ name: t.name, ...fitTemplate(pattern, t) })).sort((x, y) => y.score - x.score);
+      return { i: b.i, text: b.text, syllables: pattern.length, pattern, all, best: all[0] };
+    });
+    const ranked = TEMPLATES.map(t => {
+      const scores = rows.map(r => r.all.find(x => x.name === t.name).score);
+      return { name: t.name, syllables: t.syllables, mean: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0 };
+    }).sort((a, b) => b.mean - a.mean);
+    const best = ranked[0] || null;
+    /* weakest fits under the winning template — ranked, not thresholded, so no invented cutoff
+     * decides what counts as "wrong"; the reader sees the spread and judges. */
+    const weakest = best
+      ? rows.map(r => ({ i: r.i, text: r.text, syllables: r.syllables, ...r.all.find(x => x.name === best.name) }))
+          .sort((a, b) => a.score - b.score)
+      : [];
+    return { rows, ranked, best, weakest, bars: rows.length };
+  }
   async function load(onChange) {
     if (status === "ready" || status === "loading") return;
     status = "loading"; error = ""; onChange && onChange(status);
@@ -773,7 +839,7 @@ const E2 = (() => {
     } catch (e) { status = "error"; error = String(e.message || e); }
     onChange && onChange(status);
   }
-  return { pronounce, variants, skeleton, classify, lookup, mosaic, reading, load, setOwn,
+  return { pronounce, variants, skeleton, classify, lookup, mosaic, reading, meter, load, setOwn,
     ready: () => status === "ready", status: () => status, error: () => error,
     size: () => DICT ? Object.keys(DICT).length : LEXICON.length };
 })();
@@ -1290,11 +1356,64 @@ function SharePanel({ reading, mineral, onClose }) {
     </div>
   );
 }
+function MeterPanel({ reading, shelf, pop, onClose }) {
+  const [scope, setScope] = useState("draft");
+  const m = useMemo(() => {
+    if (scope === "draft") return E2.meter(reading);
+    /* shelf scope aggregates every draft's bars into one ranking; per-bar callouts are dropped
+     * because bar indices only mean something within their own draft. */
+    return E2.meter({ bars: shelf.flatMap(d => E2.reading(d.text, { pop }).bars) });
+  }, [reading, scope, shelf, pop]);
+  const pct = n => Math.round(n * 100);
+  return (
+    <div className="share">
+      <div className="row" style={{ marginTop: 0 }}>
+        <Cast on={scope === "draft"} onClick={() => setScope("draft")}>this draft</Cast>
+        <Cast on={scope === "shelf"} patina onClick={() => setScope("shelf")}>whole shelf · {shelf.length}</Cast>
+        <Cast onClick={onClose} style={{ flex: .6 }}>close</Cast>
+      </div>
+      {!m.bars ? <div className="empty">nothing written yet to measure.</div> : (
+        <div>
+          <div className="group">
+            <div className="gh">shape · {m.bars} bar{m.bars === 1 ? "" : "s"} measured</div>
+            {m.ranked.map((t, k) => (
+              <div key={t.name} className={"fit" + (k === 0 ? " top" : "")}>
+                <span className="nm">{t.name}</span>
+                <span className="syl">{t.syllables} syl</span>
+                <span className="track"><span className="fill" style={{ width: pct(t.mean) + "%" }} /></span>
+                <span className="pct">{pct(t.mean)}%</span>
+              </div>
+            ))}
+          </div>
+          {scope === "draft" && m.weakest.length > 0 && (
+            <div className="group">
+              <div className="gh">sits furthest from {m.best.name}</div>
+              {m.weakest.slice(0, 4).map(w => (
+                <div key={w.i} className="weak">
+                  <span className="pct">{pct(w.score)}%</span>
+                  <span className="ln">{w.text}</span>
+                  <span className="why">{w.syllables} syl{pct(w.length) < 100 ? " · length" : ""}{pct(w.stress) < 60 ? " · accents" : ""}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="note">
+            reading what's written, not prescribing what to write. fit is two things kept apart: how close the
+            syllable count sits to the shape, and how often an accent lands where the shape puts one — a bar can
+            be the right length with the beats in the wrong places. measured on the spoken line, with function
+            words unstressed, not on each word read alone.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral }) {
   const [pick, setPick] = useState(null);
   const [editing, setEditing] = useState(null);           // line index being cut
   const [quarry, setQuarry] = useState(false);
   const [share, setShare] = useState(false);
+  const [meterOpen, setMeterOpen] = useState(false);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
   const limit = reading.limit;
@@ -1310,13 +1429,15 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   return (
     <div>
       <Shelf {...shelfProps} />
-      <div className="row" style={{ marginTop: 0 }}>
+      <div className="row wrap" style={{ marginTop: 0 }}>
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
         <Cast on={pop === "melodic"} onClick={() => setPop("melodic")}>melodic · drone past 6</Cast>
         <Cast on={quarry} patina onClick={() => setQuarry(!quarry)}>quarry</Cast>
+        <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)} style={{ flex: .8 }}>meter</Cast>
         <Cast on={share} patina onClick={() => setShare(!share)} style={{ flex: .8 }}>share</Cast>
       </div>
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}
+      {meterOpen && <MeterPanel reading={reading} shelf={shelfProps.shelf} pop={pop} onClose={() => setMeterOpen(false)} />}
       {share && reading.bars.some(Boolean) && <SharePanel reading={reading} mineral={mineral} onClose={() => setShare(false)} />}
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}

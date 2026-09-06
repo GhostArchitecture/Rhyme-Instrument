@@ -235,6 +235,20 @@ const LEXICON = [...new Set(
 const FILLERS = new Set(["you","too","to","that","it","them","me","a","the","at",
   "of","for","and","so","on","in","up","do"]);
 
+/* ---------- meter templates ----------
+ * Named by shape only — never by artist or region. A template is a syllable count and the
+ * stress pattern that count implies: 1 takes a beat, 2 a weaker accent, 0 sits between.
+ * These four are a seed set and the arrays are a judgement call, not a measurement — the
+ * obvious reading of each shape, meant to be argued with once real drafts are scored against
+ * them. Scoring treats 1 and 2 alike (a syllable either takes an accent or it doesn't); the
+ * distinction is carried for expressiveness and future weighting. */
+const TEMPLATES = [
+  { name: "straight-8",  syllables: 8,  stress: [1,0,1,0,1,0,1,0] },
+  { name: "broken-8",    syllables: 8,  stress: [1,0,0,1,0,1,0,0] },
+  { name: "triplet-12",  syllables: 12, stress: [1,0,0,1,0,0,1,0,0,1,0,0] },
+  { name: "boom-bap-16", syllables: 16, stress: [1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0] },
+];
+
 /* ---------- function words, for metrical (not lexical) stress ----------
  * The dictionary gives citation stress — each word said alone, where "you" and "was"
  * are stressed. Meter is a property of the line, where those reduce. reading() uses this
@@ -254,4 +268,4 @@ const FUNCTION_WORDS = new Set([
   "and","or","but","as","than","that","if","so",
 ]);
 
-module.exports = { g2p, EXCEPTIONS, LETTERS, LEXICON, FILLERS, FUNCTION_WORDS, VOWEL_NAMES, VOWEL_COLORS };
+module.exports = { g2p, EXCEPTIONS, LETTERS, LEXICON, FILLERS, FUNCTION_WORDS, TEMPLATES, VOWEL_NAMES, VOWEL_COLORS };
