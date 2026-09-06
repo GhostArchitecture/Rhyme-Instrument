@@ -15,9 +15,9 @@ const VOWEL_NAMES = {
 
 /* ---------- G2P: rule-based vowel-skeleton extraction ---------- */
 const EXCEPTIONS = {
-  me:["IY-"], we:["IY-"], he:["IY-"], she:["IY-"], be:["IY-"], the:["AH-"],
+  me:["IY-"], we:["IY-"], he:["IY-"], she:["IY-"], be:["IY-"], the:["AH0-"],
   here:["IY-R"], near:["IY-R"], dear:["IY-R"], fear:["IY-R"], year:["IY-R"],
-  clear:["IY-R"], hear:["IY-R"], appear:["IY-R"], disappear:["IH-S","AH-P","IY-R"],
+  clear:["IY-R"], hear:["IY-R"], appear:["IY-R"], disappear:["IH2-S","AH0-P","IY1-R"],
   tear:["AIR-"], stare:["AIR-"], care:["AIR-"], share:["AIR-"], scare:["AIR-"],
   dare:["AIR-"], rare:["AIR-"], bare:["AIR-"], bear:["AIR-"], wear:["AIR-"],
   swear:["AIR-"], pair:["AIR-"], hair:["AIR-"], fair:["AIR-"], chair:["AIR-"],
@@ -29,7 +29,7 @@ const EXCEPTIONS = {
   hole:["OW-L"], holes:["OW-LZ"], whole:["OW-L"], cold:["OW-LD"], alone:["OW-N"],
   view:["UW-"], views:["UW-Z"], jewel:["UW-L"], jewels:["UW-LZ"], fuel:["UW-L"],
   /* CMUdict lists these initialism/slang readings after a longer letter-spelled variant; pronounce() takes the first, so pin the one people actually say */
-  asap:["EY-","AE-P"], abs:["AE-BZ"], tac:["AE-K"],
+  asap:["EY1-","AE2-P"], abs:["AE-BZ"], tac:["AE-K"],
   one:["AH-N"], once:["AH-NS"], two:["UW-"], through:["UW-"], though:["OW-"],
   thought:["AO-T"], enough:["AH-F"], love:["AH-V"], move:["UW-V"],
   come:["AH-M"], some:["AH-M"], done:["AH-N"], none:["AH-N"], gone:["AO-N"],
@@ -37,20 +37,20 @@ const EXCEPTIONS = {
   could:["UH-D"], would:["UH-D"], should:["UH-D"], put:["UH-T"],
   eye:["AY-"], eyes:["AY-Z"], buy:["AY-"], guy:["AY-"], dry:["AY-"],
   says:["EH-Z"], said:["EH-D"], again:["EH-N"], against:["EH-NST"],
-  been:["IH-N"], being:["IY-","IH-NG"], friend:["EH-ND"], friends:["EH-NDZ"],
+  been:["IH-N"], being:["IY1-","IH0-NG"], friend:["EH-ND"], friends:["EH-NDZ"],
   heart:["AR-T"], hearts:["AR-TS"], great:["EY-T"], break:["EY-K"],
   steak:["EY-K"], dead:["EH-D"], head:["EH-D"], bread:["EH-D"], read:["EH-D"],
-  ready:["EH-D","IY-"], heavy:["EH-V","IY-"], meant:["EH-NT"],
+  ready:["EH1-D","IY0-"], heavy:["EH1-V","IY0-"], meant:["EH-NT"],
   learn:["ER-N"], earn:["ER-N"], heard:["ER-D"], word:["ER-D"],
   world:["ER-LD"], work:["ER-K"], worse:["ER-S"], worth:["ER-TH"],
   door:["OR-"], floor:["OR-"], more:["OR-"], four:["OR-"], your:["OR-"],
-  pour:["OR-"], sure:["OR-"], water:["AO-T","ER-"], want:["AO-NT"],
+  pour:["OR-"], sure:["OR-"], water:["AO1-T","ER0-"], want:["AO-NT"],
   war:["OR-"], warm:["OR-M"], talk:["AO-K"], walk:["AO-K"], chalk:["AO-K"],
   all:["AO-L"], call:["AO-L"], fall:["AO-L"], small:["AO-L"], ball:["AO-L"],
-  always:["AO-L","EY-Z"], also:["AO-L","OW-"], almost:["AO-L","OW-ST"],
+  always:["AO1-L","EY2-Z"], also:["AO1-L","OW0-"], almost:["AO1-L","OW2-ST"],
   do:["UW-"], to:["UW-"], who:["UW-"], you:["UW-"], shoe:["UW-"],
   lose:["UW-Z"], choose:["UW-Z"], juice:["UW-S"], truth:["UW-TH"],
-  give:["IH-V"], live:["IH-V"], gives:["IH-VZ"], liver:["IH-V","ER-"],
+  give:["IH-V"], live:["IH-V"], gives:["IH-VZ"], liver:["IH1-V","ER0-"],
   have:["AE-V"], gave:["EY-V"], made:["EY-D"], make:["EY-K"],
   they:["EY-"], grey:["EY-"], hey:["EY-"], weight:["EY-T"], eight:["EY-T"],
   height:["AY-T"], light:["AY-T"], night:["AY-T"], right:["AY-T"],
@@ -60,11 +60,11 @@ const EXCEPTIONS = {
   behind:["AY-ND"], wild:["AY-LD"], child:["AY-LD"],
   cool:["UW-L"], pool:["UW-L"], fool:["UW-L"], school:["UW-L"], rule:["UW-L"],
   rules:["UW-LZ"], tool:["UW-L"], jewel:["UW-L"],
-  money:["AH-N","IY-"], honey:["AH-N","IY-"], monday:["AH-N","EY-"],
-  nothing:["AH-TH","IH-NG"], something:["AH-M","IH-NG"], brother:["AH-TH","ER-"],
-  mother:["AH-TH","ER-"], other:["AH-TH","ER-"], another:["AH-TH","ER-"],
-  cover:["AH-V","ER-"], above:["AH-V"], oven:["AH-V","AH-N"],
-  people:["IY-P","AH-L"], police:["OW-L","IY-S"],
+  money:["AH1-N","IY0-"], honey:["AH1-N","IY0-"], monday:["AH1-N","EY0-"],
+  nothing:["AH1-TH","IH0-NG"], something:["AH1-M","IH0-NG"], brother:["AH1-TH","ER0-"],
+  mother:["AH1-TH","ER0-"], other:["AH1-TH","ER0-"], another:["AH1-TH","ER0-"],
+  cover:["AH1-V","ER0-"], above:["AH-V"], oven:["AH1-V","AH0-N"],
+  people:["IY1-P","AH0-L"], police:["OW1-L","IY0-S"],
   phone:["OW-N"], home:["OW-M"], zone:["OW-N"], throne:["OW-N"],
   alone:["OW-N"], bone:["OW-N"], stone:["OW-N"], known:["OW-N"],
   grown:["OW-N"], shown:["OW-N"], own:["OW-N"],
@@ -119,7 +119,8 @@ function g2p(raw) {
   const w = raw.toLowerCase().replace(/[^a-z']/g, "");
   if (!w) return [];
   if (EXCEPTIONS[w]) return EXCEPTIONS[w].map(s => {
-    const [v, c] = s.split("-"); return { v, c: c || "" };
+    const [raw, c] = s.split("-");
+    return { v: raw.replace(/\d$/, ""), c: c || "" };   // strip the stress tag; g2p's callers only want the vowel class
   });
   let s = w.replace(/'/g, "");
   let suffix = "";

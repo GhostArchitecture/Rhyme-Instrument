@@ -38,6 +38,27 @@ test("slang/initialism syllable counts use the reading people actually say, not 
   assert.equal(E.pronounce("url").sylls.length, 3, "url's 3-syllable reading is correct as-is — do not shorten it");
 });
 
+test("EXCEPTIONS entries carry real per-syllable stress, not a blanket primary", () => {
+  const water = E.pronounce("water").sylls.map(s => s.s);
+  assert.deepEqual(water, [1, 0], "water is WA-ter — trochee, not two primaries");
+  assert.deepEqual(E.pronounce("disappear").sylls.map(s => s.s), [2, 0, 1]);
+  assert.deepEqual(E.pronounce("the").sylls.map(s => s.s), [0], "the is unstressed — the one monosyllable where the table contradicted CMUdict");
+});
+
+test("untagged EXCEPTIONS entries still default to primary stress (backward compatible)", () => {
+  // "ghost" has no stress digit in the table; it must keep reading as stressed.
+  assert.deepEqual(E.pronounce("ghost").sylls.map(s => s.s), [1]);
+  assert.equal(E.pronounce("ghost").sylls[0].v, "OW", "the vowel class must not absorb a stress digit");
+});
+
+test("stress-anchoring now reaches back past the unstressed tail of a multi-syllable exception", () => {
+  // Before real stress values, every exception syllable read as primary, so the anchor
+  // stopped at the last syllable and "stress" collapsed into "count".
+  assert.deepEqual(E.skeleton("water", 1, "count").vowels, ["ER"]);
+  assert.deepEqual(E.skeleton("water", 1, "stress").vowels, ["AO", "ER"]);
+  assert.deepEqual(E.skeleton("people", 1, "stress").vowels, ["IY", "AH"]);
+});
+
 test("cliche detection has been removed: reading() bars never carry a .cliche field", () => {
   const r = E.reading("she meant to become who she wanted\nyou turn to stoneware every night", { pop: "rap" });
   for (const b of r.bars) {

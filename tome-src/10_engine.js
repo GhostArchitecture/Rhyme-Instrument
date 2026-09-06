@@ -40,7 +40,11 @@ const E2 = (() => {
       sylls = caps.toLowerCase().split("").map(ch => { const [v, c] = LETTERS[ch] || ["AH",""]; return { v, c, s: 1 }; });
       source = "initialism";
     } else if (Object.hasOwn(EXCEPTIONS, w)) {
-      sylls = EXCEPTIONS[w].map(t => { const [v, c] = t.split("-"); return { v, c: c || "", s: 1 }; });
+      /* a trailing digit on the vowel carries CMUdict-style stress (AH0, EY2); no digit means primary, so untagged entries keep their old reading */
+      sylls = EXCEPTIONS[w].map(t => {
+        const [raw, c] = t.split("-"), tagged = /\d$/.test(raw);
+        return { v: tagged ? raw.slice(0, -1) : raw, c: c || "", s: tagged ? +raw.slice(-1) : 1 };
+      });
       source = "exception";
     } else if (DICT && Object.hasOwn(DICT, w)) { sylls = parseCompact(DICT[w]); source = "cmu"; }
     else { sylls = g2p(raw).map(s => ({ ...s, s: s.reduced ? 0 : 1 })); source = "rule"; }
