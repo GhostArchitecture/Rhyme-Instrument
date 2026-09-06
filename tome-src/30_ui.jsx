@@ -60,7 +60,7 @@ function BarCut({ value, onChange, onReturn, onBackspaceEmpty, onDone }) {
     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); onReturn(); } else if (e.key === "Backspace" && !value) { e.preventDefault(); onBackspaceEmpty(); } else if (e.key === "Escape") onDone(); }}
     onBlur={onDone} />;
 }
-function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edit }) {
+function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edit, pace }) {
   const run = reading.runs.find(r => r.bars.includes(bar.i));
   const flagged = reading.flagged.includes(bar.i);
   const heat = flagged && run ? Math.min(1, (run.bars.indexOf(bar.i) - reading.limit + 1) / Math.max(1, run.len - reading.limit)) : 0;
@@ -93,7 +93,9 @@ function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edi
       )}
       <div className="foot">
         <span>ends on {NAMES[bar.end.v] || "—"}{bar.end.coda ? " +" + bar.end.coda.toLowerCase() : ""}</span>
-        <span>{bar.syllables} syl{bar.drift ? <span className="warn"> · meter {bar.drift > 0 ? "+" : ""}{bar.drift}</span> : null}{bar.filler ? <span className="bad"> · filler landing</span> : null}
+        <span>{bar.syllables} syl{bar.drift ? <span className="warn"> · {bar.drift > 0 ? "+" : ""}{bar.drift} vs neighbors</span> : null}
+          {pace ? <span> · {pace.rate.toFixed(1)}/sec{pace.room === "over" ? <span className="warn"> · {pace.slotDelta} over grid</span> : null}</span> : null}
+          {bar.filler ? <span className="bad"> · filler landing</span> : null}
           {flagged && run ? <span className="warn"> · drone {run.len} on {NAMES[run.v]}</span> : null}</span>
       </div>
       {bar.scheme && <span className="scheme">{bar.scheme}</span>}
@@ -251,14 +253,61 @@ function MeterPanel({ reading, shelf, pop, onClose }) {
     </div>
   );
 }
-function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral }) {
+function TempoPanel({ tempo, setTempo, pacing, onClose }) {
+  const t = tempo || { bpm: 90, timeSig: "4/4", feel: "straight" };
+  const set = patch => setTempo({ ...t, ...patch });
+  const g = pacing ? pacing.grid : null;
+  const rates = pacing ? pacing.bars.map(b => b.rate) : [];
+  const peak = rates.length ? Math.max(...rates) : 0;
+  return (
+    <div className="share">
+      <div className="row" style={{ marginTop: 0 }}>
+        <Cast onClick={() => set({ bpm: Math.max(40, t.bpm - 5) })}>−5</Cast>
+        <Cast on patina style={{ flex: 1.4 }}>{t.bpm} bpm</Cast>
+        <Cast onClick={() => set({ bpm: Math.min(220, t.bpm + 5) })}>+5</Cast>
+        <Cast onClick={onClose} style={{ flex: .6 }}>close</Cast>
+      </div>
+      <div className="row wrap">
+        {["4/4", "3/4", "6/8"].map(x => <Cast key={x} on={t.timeSig === x} onClick={() => set({ timeSig: x })}>{x}</Cast>)}
+        {["straight", "swing", "triplet"].map(x => <Cast key={x} on={t.feel === x} patina onClick={() => set({ feel: x })}>{x}</Cast>)}
+      </div>
+      {tempo && g && (
+        <div>
+          <div className="group">
+            <div className="gh">{g.slotsPerBar} slots · {g.beats} beats × {g.subdivision} · bar runs {((g.beatMs * g.beats) / 1000).toFixed(2)}s</div>
+            {pacing.bars.map(b => (
+              <div key={b.i} className="fit">
+                <span className="nm" style={{ flex: "0 0 58px" }}>{b.rate.toFixed(1)}/sec</span>
+                <span className="syl" style={{ flex: "0 0 52px" }}>{b.syllables} syl</span>
+                <span className="track"><span className="fill" style={{ width: (peak ? (b.rate / peak) * 100 : 0) + "%" }} /></span>
+                <span className="pct" style={{ flex: "0 0 66px" }}>{b.room === "over" ? b.slotDelta + " over" : b.room === "under" ? -b.slotDelta + " under" : "exact"}</span>
+              </div>
+            ))}
+          </div>
+          <div className="note">
+            arithmetic, not a measurement. this is how many syllables a second each bar needs to fit the
+            grid at this tempo — check it against your own mouth. <b>over grid</b> means the line wants finer
+            subdivision than the feel you set, not that it's wrong. where the syllables actually land inside
+            a beat is yours; nothing here claims to know it.
+          </div>
+        </div>
+      )}
+      {!tempo && <div className="note">no tempo set for this draft yet — pick a bpm and the bars will read against it.</div>}
+      <div className="row"><Cast patina on={!!tempo} onClick={() => setTempo(tempo ? null : t)}>{tempo ? "clear tempo" : "set " + t.bpm + " bpm"}</Cast></div>
+    </div>
+  );
+}
+function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral, tempo, setTempo }) {
   const [pick, setPick] = useState(null);
   const [editing, setEditing] = useState(null);           // line index being cut
   const [quarry, setQuarry] = useState(false);
   const [share, setShare] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
+  const [tempoOpen, setTempoOpen] = useState(false);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
+  const pacing = useMemo(() => tempo ? E2.tempo(reading, tempo) : null, [reading, tempo]);
+  const paceBy = useMemo(() => new Map((pacing ? pacing.bars : []).map(b => [b.i, b])), [pacing]);
   const limit = reading.limit;
   const lines = draft.split("\n");
   const edit = {
@@ -272,21 +321,25 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   return (
     <div>
       <Shelf {...shelfProps} />
-      <div className="row wrap" style={{ marginTop: 0 }}>
+      <div className="row" style={{ marginTop: 0 }}>
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
         <Cast on={pop === "melodic"} onClick={() => setPop("melodic")}>melodic · drone past 6</Cast>
+      </div>
+      <div className="row">
         <Cast on={quarry} patina onClick={() => setQuarry(!quarry)}>quarry</Cast>
-        <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)} style={{ flex: .8 }}>meter</Cast>
-        <Cast on={share} patina onClick={() => setShare(!share)} style={{ flex: .8 }}>share</Cast>
+        <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)}>meter</Cast>
+        <Cast on={tempoOpen} patina onClick={() => setTempoOpen(!tempoOpen)}>{tempo ? tempo.bpm + " bpm" : "tempo"}</Cast>
+        <Cast on={share} patina onClick={() => setShare(!share)}>share</Cast>
       </div>
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}
+      {tempoOpen && <TempoPanel tempo={tempo} setTempo={setTempo} pacing={pacing} onClose={() => setTempoOpen(false)} />}
       {meterOpen && <MeterPanel reading={reading} shelf={shelfProps.shelf} pop={pop} onClose={() => setMeterOpen(false)} />}
       {share && reading.bars.some(Boolean) && <SharePanel reading={reading} mineral={mineral} onClose={() => setShare(false)} />}
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
         <div className="bars" ref={host}>
           {lines.map((ln, i) => reading.bars[i]
-            ? <Bar key={i} bar={reading.bars[i]} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} />
+            ? <Bar key={i} bar={reading.bars[i]} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} pace={paceBy.get(i)} />
             : (editing === i
               ? <div key={i} className="bar" data-bar={i}><BarCut value={ln} onChange={v => edit.change(i, v)} onReturn={() => edit.next(i)} onBackspaceEmpty={() => edit.remove(i)} onDone={() => edit.done(i)} /></div>
               : (lines.length > 1 || ln ? <div key={i} className="break" onClick={() => edit.start(i)}><span>break</span></div> : null)))}
@@ -482,6 +535,10 @@ function Tome() {
   const shelfTimer = useRef(null);
   const setShelf = (v, now) => { setShelf_(v); clearTimeout(shelfTimer.current); if (now) STORE.set("shelf", v); else shelfTimer.current = setTimeout(() => STORE.set("shelf", v), 700); };
   const setDraft = v => setShelf(shelf.map(d => d.id === current ? { ...d, text: v, updated: Date.now() } : d));
+  /* tempo lives on the draft, not globally — different songs, different tempos. Riding the shelf
+   * entry means backup/restore carries it with no extra handling. */
+  const tempo = (shelf.find(d => d.id === current) || {}).tempo || null;
+  const setTempo = v => setShelf(shelf.map(d => d.id === current ? { ...d, tempo: v || undefined, updated: Date.now() } : d), true);
   const setCurrent = id => { setCurrent_(id); STORE.set("current", id); };
   const newDraft = () => { const d = { id: "d" + Date.now(), name: "draft " + (shelf.length + 1), text: "", updated: Date.now() }; setShelf([...shelf, d], true); setCurrent(d.id); };
   const renameDraft = (id, name) => setShelf(shelf.map(d => d.id === id ? { ...d, name } : d), true);
@@ -528,7 +585,7 @@ function Tome() {
     tune: `${prefs.mineral} · ${prefs.density}`,
   };
   const face = id => ({
-    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} mineral={prefs.mineral} />,
+    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} mineral={prefs.mineral} tempo={tempo} setTempo={setTempo} />,
     lookup: <Lookup bank={bank} setBank={setBank} eng={eng} />,
     check: <Check eng={eng} />,
     bank: <Bank bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride} eng={eng} />,
