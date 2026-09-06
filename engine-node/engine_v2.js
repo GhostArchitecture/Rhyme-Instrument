@@ -1,6 +1,6 @@
 /* engine_v2.js — node scaffold around the shared browser core (engine_core.js). Single source; the tome ships the same block. */
 const fs = require("fs"), path = require("path");
-const { g2p, EXCEPTIONS, LETTERS, LEXICON, FILLERS, VOWEL_NAMES } = require("./rule_g2p_v1.js");
+const { g2p, EXCEPTIONS, LETTERS, LEXICON, FILLERS, FUNCTION_WORDS, VOWEL_NAMES } = require("./rule_g2p_v1.js");
 const REPO_ROOT = path.join(__dirname, "..");
 global.fetch = (url) => {
   const f = path.join(REPO_ROOT, url.replace("./", ""));

@@ -229,7 +229,13 @@ const E2 = (() => {
       const text = ln.trim();
       if (!text) return null;
       const words = text.split(/\s+/);
-      const field = words.map(w => { const p = pronounce(w); return { word: w, source: p.source, sylls: p.sylls.map(s => ({ v: s.v, s: s.s, c: s.c })) }; });
+      /* `s` is lexical stress, straight from the dictionary — rhyme and stress-anchoring read it.
+       * `m` is metrical stress: the same value, except a function word demotes to 0 the way it
+       * does in a spoken line. Meter scoring reads `m`; nothing that rhymes should touch it. */
+      const field = words.map(w => {
+        const p = pronounce(w), demoted = FUNCTION_WORDS.has(clean(w));
+        return { word: w, source: p.source, sylls: p.sylls.map(s => ({ v: s.v, s: s.s, c: s.c, m: demoted ? 0 : s.s })) };
+      });
       const last = words[words.length-1].replace(/[^a-zA-Z']/g, "");
       const end = skeleton(last, 1);
       return { i, text, field, syllables: field.reduce((n, w) => n + w.sylls.length, 0),

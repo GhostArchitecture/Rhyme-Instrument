@@ -59,6 +59,49 @@ test("stress-anchoring now reaches back past the unstressed tail of a multi-syll
   assert.deepEqual(E.skeleton("people", 1, "stress").vowels, ["IY", "AH"]);
 });
 
+test("metrical stress demotes function words into a separate field", () => {
+  const r = E.reading("the way you move from the block to the booth was love", { pop: "rap" });
+  const f = r.bars[0].field;
+  const metrical = f.flatMap(w => w.sylls.map(s => s.m));
+  assert.deepEqual(metrical, [0,1,0,1,0,0,1,0,0,1,0,1], "beats should land on way/move/block/booth/love");
+  assert.deepEqual(f.filter(w => w.sylls.some(s => s.m > 0)).map(w => w.word),
+    ["way", "move", "block", "booth", "love"]);
+});
+
+test("demotion never touches lexical stress — rhyme and anchoring depend on it", () => {
+  const r = E.reading("the way you move", { pop: "rap" });
+  const byWord = Object.fromEntries(r.bars[0].field.map(w => [w.word, w.sylls]));
+  assert.equal(byWord["you"][0].s, 1, "lexical stress stays as the dictionary has it");
+  assert.equal(byWord["you"][0].m, 0, "only the metrical field demotes");
+  // the invariant that matters: stress-anchoring must be unmoved by any of this
+  assert.deepEqual(E.skeleton("water", 1, "stress").vowels, ["AO", "ER"]);
+});
+
+test("every syllable of a multi-syllable function word demotes", () => {
+  const r = E.reading("being here", { pop: "rap" });
+  const being = r.bars[0].field[0];
+  assert.deepEqual(being.sylls.map(s => s.s), [1, 0], "lexical: BE-ing");
+  assert.deepEqual(being.sylls.map(s => s.m), [0, 0], "metrical: fully demoted");
+});
+
+test("content words keep their stress; a function word demotes even bar-final", () => {
+  const r = E.reading("chasing the light of", { pop: "rap" });
+  const f = r.bars[0].field;
+  assert.ok(f[0].sylls.some(s => s.m > 0), "chasing is a content word — keeps its beat");
+  assert.equal(f[3].sylls[0].m, 0, "a function word landing last still demotes — the tool already calls that a weak landing");
+});
+
+test("FUNCTION_WORDS deliberately excludes the ambiguous cases", () => {
+  const { FUNCTION_WORDS } = require("../rule_g2p_v1.js");
+  // These carry beats often enough in this register that guessing costs more than skipping.
+  for (const w of ["up", "out", "off", "this", "there", "some", "will", "could", "mine"]) {
+    assert.equal(FUNCTION_WORDS.has(w), false, `${w} should stay out of the demotion set without POS tagging`);
+  }
+  for (const w of ["the", "you", "was", "from", "of", "and"]) {
+    assert.equal(FUNCTION_WORDS.has(w), true);
+  }
+});
+
 test("cliche detection has been removed: reading() bars never carry a .cliche field", () => {
   const r = E.reading("she meant to become who she wanted\nyou turn to stoneware every night", { pop: "rap" });
   for (const b of r.bars) {

@@ -235,4 +235,23 @@ const LEXICON = [...new Set(
 const FILLERS = new Set(["you","too","to","that","it","them","me","a","the","at",
   "of","for","and","so","on","in","up","do"]);
 
-module.exports = { g2p, EXCEPTIONS, LETTERS, LEXICON, FILLERS, VOWEL_NAMES, VOWEL_COLORS };
+/* ---------- function words, for metrical (not lexical) stress ----------
+ * The dictionary gives citation stress — each word said alone, where "you" and "was"
+ * are stressed. Meter is a property of the line, where those reduce. reading() uses this
+ * set to demote them into a second stress field; the lexical `s` rhyme depends on is left alone.
+ *
+ * Deliberately conservative. Words whose function/content use is genuinely ambiguous without
+ * part-of-speech tagging are LEFT OUT rather than guessed at, because a wrong metrical read is
+ * worse than a missing one: particles (up, out, off, over, through), deictics (this, these,
+ * here, there), quantifiers (some, any, no), modals (will, would, can, could, should), and
+ * standalone possessives (mine, yours, hers, theirs) all carry beats often enough in this
+ * register to leave alone. Tune this set — it's the one knob metrical scoring turns on. */
+const FUNCTION_WORDS = new Set([
+  "a","an","the",
+  "of","to","in","at","on","by","for","with","from","into","onto","upon","about",
+  "i","me","my","you","your","he","him","his","she","her","it","its","we","us","our","they","them","their",
+  "am","is","are","was","were","be","been","being","do","does","did","have","has","had",
+  "and","or","but","as","than","that","if","so",
+]);
+
+module.exports = { g2p, EXCEPTIONS, LETTERS, LEXICON, FILLERS, FUNCTION_WORDS, VOWEL_NAMES, VOWEL_COLORS };
