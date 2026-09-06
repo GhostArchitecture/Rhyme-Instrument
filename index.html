@@ -2241,6 +2241,67 @@ const E2 = (() => {
       bars: rows.length
     };
   }
+  /* ---------- tempo grid ----------
+   * Arithmetic, not a model. BPM and time signature give a real slot count per bar; nothing
+   * here listens to anything or knows how a line is actually performed.
+   *
+   * `feel` changes how a beat subdivides: straight and swing both cut it in four (swing shifts
+   * where the offbeats sit in time, not how many there are), triplet cuts it in three. */
+  const SUBDIVISION = {
+    straight: 4,
+    swing: 4,
+    triplet: 3
+  };
+  function grid(bpm = 90, timeSig = "4/4", feel = "straight") {
+    const beats = Math.max(1, parseInt(String(timeSig).split("/")[0], 10) || 4);
+    const per = SUBDIVISION[feel] || 4;
+    const beatMs = 60000 / Math.max(1, bpm);
+    return {
+      bpm,
+      timeSig,
+      feel,
+      beats,
+      subdivision: per,
+      slotsPerBar: beats * per,
+      slotMs: beatMs / per,
+      beatMs
+    };
+  }
+  /* How a written bar sits against that grid.
+   *
+   * `room` is syllable count against available slots — under, exact, or over. Over doesn't mean
+   * wrong, it means the line needs finer subdivision than the feel you set.
+   *
+   * `rate` is the physical one and the most useful: syllables per second required to fit this
+   * bar at this tempo. That's checkable against a mouth.
+   *
+   * Accents are reported as a count and a per-beat density, NOT scored against the beat count.
+   * Rap routinely puts several accents in a beat; calling that crowded would flag every bar
+   * written. The draft's own spread is the reference — there is no target here to miss. */
+  function pace(bar, g) {
+    const sylls = bar.field.reduce((n, w) => n + w.sylls.length, 0);
+    const accents = bar.field.reduce((n, w) => n + w.sylls.filter(s => s.m > 0).length, 0);
+    const slotDelta = sylls - g.slotsPerBar;
+    const barSeconds = g.beatMs * g.beats / 1000;
+    return {
+      i: bar.i,
+      syllables: sylls,
+      accents,
+      slots: g.slotsPerBar,
+      beats: g.beats,
+      slotDelta,
+      room: slotDelta === 0 ? "exact" : slotDelta > 0 ? "over" : "under",
+      rate: sylls / barSeconds,
+      accentsPerBeat: accents / g.beats
+    };
+  }
+  function tempo(read, opts = {}) {
+    const g = grid(opts.bpm, opts.timeSig, opts.feel);
+    return {
+      grid: g,
+      bars: (read.bars || []).filter(Boolean).map(b => pace(b, g))
+    };
+  }
   async function load(onChange) {
     if (status === "ready" || status === "loading") return;
     status = "loading";
@@ -2271,6 +2332,8 @@ const E2 = (() => {
     mosaic,
     reading,
     meter,
+    grid,
+    tempo,
     load,
     setOwn,
     ready: () => status === "ready",
@@ -3187,7 +3250,8 @@ function Bar({
   pick,
   setPick,
   editing,
-  edit
+  edit,
+  pace
 }) {
   const run = reading.runs.find(r => r.bars.includes(bar.i));
   const flagged = reading.flagged.includes(bar.i);
@@ -3266,7 +3330,9 @@ function Bar({
     className: "foot"
   }, /*#__PURE__*/React.createElement("span", null, "ends on ", NAMES[bar.end.v] || "—", bar.end.coda ? " +" + bar.end.coda.toLowerCase() : ""), /*#__PURE__*/React.createElement("span", null, bar.syllables, " syl", bar.drift ? /*#__PURE__*/React.createElement("span", {
     className: "warn"
-  }, " \xB7 meter ", bar.drift > 0 ? "+" : "", bar.drift) : null, bar.filler ? /*#__PURE__*/React.createElement("span", {
+  }, " \xB7 ", bar.drift > 0 ? "+" : "", bar.drift, " vs neighbors") : null, pace ? /*#__PURE__*/React.createElement("span", null, " \xB7 ", pace.rate.toFixed(1), "/sec", pace.room === "over" ? /*#__PURE__*/React.createElement("span", {
+    className: "warn"
+  }, " \xB7 ", pace.slotDelta, " over grid") : null) : null, bar.filler ? /*#__PURE__*/React.createElement("span", {
     className: "bad"
   }, " \xB7 filler landing") : null, flagged && run ? /*#__PURE__*/React.createElement("span", {
     className: "warn"
@@ -3585,6 +3651,106 @@ function MeterPanel({
     className: "note"
   }, "reading what's written, not prescribing what to write. fit is two things kept apart: how close the syllable count sits to the shape, and how often an accent lands where the shape puts one \u2014 a bar can be the right length with the beats in the wrong places. measured on the spoken line, with function words unstressed, not on each word read alone.")));
 }
+function TempoPanel({
+  tempo,
+  setTempo,
+  pacing,
+  onClose
+}) {
+  const t = tempo || {
+    bpm: 90,
+    timeSig: "4/4",
+    feel: "straight"
+  };
+  const set = patch => setTempo({
+    ...t,
+    ...patch
+  });
+  const g = pacing ? pacing.grid : null;
+  const rates = pacing ? pacing.bars.map(b => b.rate) : [];
+  const peak = rates.length ? Math.max(...rates) : 0;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "share"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "row",
+    style: {
+      marginTop: 0
+    }
+  }, /*#__PURE__*/React.createElement(Cast, {
+    onClick: () => set({
+      bpm: Math.max(40, t.bpm - 5)
+    })
+  }, "\u22125"), /*#__PURE__*/React.createElement(Cast, {
+    on: true,
+    patina: true,
+    style: {
+      flex: 1.4
+    }
+  }, t.bpm, " bpm"), /*#__PURE__*/React.createElement(Cast, {
+    onClick: () => set({
+      bpm: Math.min(220, t.bpm + 5)
+    })
+  }, "+5"), /*#__PURE__*/React.createElement(Cast, {
+    onClick: onClose,
+    style: {
+      flex: .6
+    }
+  }, "close")), /*#__PURE__*/React.createElement("div", {
+    className: "row wrap"
+  }, ["4/4", "3/4", "6/8"].map(x => /*#__PURE__*/React.createElement(Cast, {
+    key: x,
+    on: t.timeSig === x,
+    onClick: () => set({
+      timeSig: x
+    })
+  }, x)), ["straight", "swing", "triplet"].map(x => /*#__PURE__*/React.createElement(Cast, {
+    key: x,
+    on: t.feel === x,
+    patina: true,
+    onClick: () => set({
+      feel: x
+    })
+  }, x))), tempo && g && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "group"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "gh"
+  }, g.slotsPerBar, " slots \xB7 ", g.beats, " beats \xD7 ", g.subdivision, " \xB7 bar runs ", (g.beatMs * g.beats / 1000).toFixed(2), "s"), pacing.bars.map(b => /*#__PURE__*/React.createElement("div", {
+    key: b.i,
+    className: "fit"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "nm",
+    style: {
+      flex: "0 0 58px"
+    }
+  }, b.rate.toFixed(1), "/sec"), /*#__PURE__*/React.createElement("span", {
+    className: "syl",
+    style: {
+      flex: "0 0 52px"
+    }
+  }, b.syllables, " syl"), /*#__PURE__*/React.createElement("span", {
+    className: "track"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "fill",
+    style: {
+      width: (peak ? b.rate / peak * 100 : 0) + "%"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "pct",
+    style: {
+      flex: "0 0 66px"
+    }
+  }, b.room === "over" ? b.slotDelta + " over" : b.room === "under" ? -b.slotDelta + " under" : "exact")))), /*#__PURE__*/React.createElement("div", {
+    className: "note"
+  }, "arithmetic, not a measurement. this is how many syllables a second each bar needs to fit the grid at this tempo \u2014 check it against your own mouth. ", /*#__PURE__*/React.createElement("b", null, "over grid"), " means the line wants finer subdivision than the feel you set, not that it's wrong. where the syllables actually land inside a beat is yours; nothing here claims to know it.")), !tempo && /*#__PURE__*/React.createElement("div", {
+    className: "note"
+  }, "no tempo set for this draft yet \u2014 pick a bpm and the bars will read against it."), /*#__PURE__*/React.createElement("div", {
+    className: "row"
+  }, /*#__PURE__*/React.createElement(Cast, {
+    patina: true,
+    on: !!tempo,
+    onClick: () => setTempo(tempo ? null : t)
+  }, tempo ? "clear tempo" : "set " + t.bpm + " bpm")));
+}
 function Draft({
   draft,
   setDraft,
@@ -3594,17 +3760,22 @@ function Draft({
   setPop,
   eng,
   shelfProps,
-  mineral
+  mineral,
+  tempo,
+  setTempo
 }) {
   const [pick, setPick] = useState(null);
   const [editing, setEditing] = useState(null); // line index being cut
   const [quarry, setQuarry] = useState(false);
   const [share, setShare] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
+  const [tempoOpen, setTempoOpen] = useState(false);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, {
     pop
   }), [draft, pop, overrides, eng]);
+  const pacing = useMemo(() => tempo ? E2.tempo(reading, tempo) : null, [reading, tempo]);
+  const paceBy = useMemo(() => new Map((pacing ? pacing.bars : []).map(b => [b.i, b])), [pacing]);
   const limit = reading.limit;
   const lines = draft.split("\n");
   const edit = {
@@ -3646,7 +3817,7 @@ function Draft({
     }
   };
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Shelf, shelfProps), /*#__PURE__*/React.createElement("div", {
-    className: "row wrap",
+    className: "row",
     style: {
       marginTop: 0
     }
@@ -3656,24 +3827,24 @@ function Draft({
   }, "rap \xB7 drone past 3"), /*#__PURE__*/React.createElement(Cast, {
     on: pop === "melodic",
     onClick: () => setPop("melodic")
-  }, "melodic \xB7 drone past 6"), /*#__PURE__*/React.createElement(Cast, {
+  }, "melodic \xB7 drone past 6")), /*#__PURE__*/React.createElement("div", {
+    className: "row"
+  }, /*#__PURE__*/React.createElement(Cast, {
     on: quarry,
     patina: true,
     onClick: () => setQuarry(!quarry)
   }, "quarry"), /*#__PURE__*/React.createElement(Cast, {
     on: meterOpen,
     patina: true,
-    onClick: () => setMeterOpen(!meterOpen),
-    style: {
-      flex: .8
-    }
+    onClick: () => setMeterOpen(!meterOpen)
   }, "meter"), /*#__PURE__*/React.createElement(Cast, {
+    on: tempoOpen,
+    patina: true,
+    onClick: () => setTempoOpen(!tempoOpen)
+  }, tempo ? tempo.bpm + " bpm" : "tempo"), /*#__PURE__*/React.createElement(Cast, {
     on: share,
     patina: true,
-    onClick: () => setShare(!share),
-    style: {
-      flex: .8
-    }
+    onClick: () => setShare(!share)
   }, "share")), quarry && /*#__PURE__*/React.createElement("textarea", {
     className: "cut",
     style: {
@@ -3684,6 +3855,11 @@ function Draft({
     placeholder: "paste or cut the whole draft here \u2014 one bar per line",
     rows: 9,
     spellCheck: false
+  }), tempoOpen && /*#__PURE__*/React.createElement(TempoPanel, {
+    tempo: tempo,
+    setTempo: setTempo,
+    pacing: pacing,
+    onClose: () => setTempoOpen(false)
   }), meterOpen && /*#__PURE__*/React.createElement(MeterPanel, {
     reading: reading,
     shelf: shelfProps.shelf,
@@ -3711,7 +3887,8 @@ function Draft({
     pick: pick,
     setPick: setPick,
     editing: editing === i,
-    edit: edit
+    edit: edit,
+    pace: paceBy.get(i)
   }) : editing === i ? /*#__PURE__*/React.createElement("div", {
     key: i,
     className: "bar",
@@ -4187,6 +4364,14 @@ function Tome() {
     text: v,
     updated: Date.now()
   } : d));
+  /* tempo lives on the draft, not globally — different songs, different tempos. Riding the shelf
+   * entry means backup/restore carries it with no extra handling. */
+  const tempo = (shelf.find(d => d.id === current) || {}).tempo || null;
+  const setTempo = v => setShelf(shelf.map(d => d.id === current ? {
+    ...d,
+    tempo: v || undefined,
+    updated: Date.now()
+  } : d), true);
   const setCurrent = id => {
     setCurrent_(id);
     STORE.set("current", id);
@@ -4309,7 +4494,9 @@ function Tome() {
       setPop: setPop,
       eng: eng,
       shelfProps: shelfProps,
-      mineral: prefs.mineral
+      mineral: prefs.mineral,
+      tempo: tempo,
+      setTempo: setTempo
     }),
     lookup: /*#__PURE__*/React.createElement(Lookup, {
       bank: bank,
@@ -4375,5 +4562,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260907011503 -->
+<!-- build-20260907153915 -->
 </html>

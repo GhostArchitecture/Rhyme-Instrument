@@ -310,6 +310,47 @@ const E2 = (() => {
       : [];
     return { rows, ranked, best, weakest, bars: rows.length };
   }
+  /* ---------- tempo grid ----------
+   * Arithmetic, not a model. BPM and time signature give a real slot count per bar; nothing
+   * here listens to anything or knows how a line is actually performed.
+   *
+   * `feel` changes how a beat subdivides: straight and swing both cut it in four (swing shifts
+   * where the offbeats sit in time, not how many there are), triplet cuts it in three. */
+  const SUBDIVISION = { straight: 4, swing: 4, triplet: 3 };
+  function grid(bpm = 90, timeSig = "4/4", feel = "straight") {
+    const beats = Math.max(1, parseInt(String(timeSig).split("/")[0], 10) || 4);
+    const per = SUBDIVISION[feel] || 4;
+    const beatMs = 60000 / Math.max(1, bpm);
+    return { bpm, timeSig, feel, beats, subdivision: per, slotsPerBar: beats * per, slotMs: beatMs / per, beatMs };
+  }
+  /* How a written bar sits against that grid.
+   *
+   * `room` is syllable count against available slots — under, exact, or over. Over doesn't mean
+   * wrong, it means the line needs finer subdivision than the feel you set.
+   *
+   * `rate` is the physical one and the most useful: syllables per second required to fit this
+   * bar at this tempo. That's checkable against a mouth.
+   *
+   * Accents are reported as a count and a per-beat density, NOT scored against the beat count.
+   * Rap routinely puts several accents in a beat; calling that crowded would flag every bar
+   * written. The draft's own spread is the reference — there is no target here to miss. */
+  function pace(bar, g) {
+    const sylls = bar.field.reduce((n, w) => n + w.sylls.length, 0);
+    const accents = bar.field.reduce((n, w) => n + w.sylls.filter(s => s.m > 0).length, 0);
+    const slotDelta = sylls - g.slotsPerBar;
+    const barSeconds = (g.beatMs * g.beats) / 1000;
+    return {
+      i: bar.i, syllables: sylls, accents,
+      slots: g.slotsPerBar, beats: g.beats, slotDelta,
+      room: slotDelta === 0 ? "exact" : slotDelta > 0 ? "over" : "under",
+      rate: sylls / barSeconds,
+      accentsPerBeat: accents / g.beats,
+    };
+  }
+  function tempo(read, opts = {}) {
+    const g = grid(opts.bpm, opts.timeSig, opts.feel);
+    return { grid: g, bars: (read.bars || []).filter(Boolean).map(b => pace(b, g)) };
+  }
   async function load(onChange) {
     if (status === "ready" || status === "loading") return;
     status = "loading"; error = ""; onChange && onChange(status);
@@ -324,7 +365,7 @@ const E2 = (() => {
     } catch (e) { status = "error"; error = String(e.message || e); }
     onChange && onChange(status);
   }
-  return { pronounce, variants, skeleton, classify, lookup, mosaic, reading, meter, load, setOwn,
+  return { pronounce, variants, skeleton, classify, lookup, mosaic, reading, meter, grid, tempo, load, setOwn,
     ready: () => status === "ready", status: () => status, error: () => error,
     size: () => DICT ? Object.keys(DICT).length : LEXICON.length };
 })();

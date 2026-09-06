@@ -144,6 +144,46 @@ test("templates are named by shape only — no artist or region names", () => {
   }
 });
 
+test("grid(): slot count is beats × subdivision, and feel changes how a beat divides", () => {
+  assert.equal(E.grid(90, "4/4", "straight").slotsPerBar, 16);
+  assert.equal(E.grid(90, "4/4", "triplet").slotsPerBar, 12);
+  assert.equal(E.grid(90, "3/4", "straight").slotsPerBar, 12);
+  assert.equal(E.grid(90, "4/4", "swing").slotsPerBar, 16, "swing shifts where offbeats sit, not how many there are");
+});
+
+test("grid(): slot duration tracks bpm", () => {
+  assert.equal(E.grid(60, "4/4", "straight").beatMs, 1000);
+  assert.equal(E.grid(120, "4/4", "straight").beatMs, 500);
+  assert.equal(E.grid(60, "4/4", "straight").slotMs, 250);
+  assert.ok(E.grid(140, "4/4").beatMs < E.grid(90, "4/4").beatMs);
+});
+
+test("grid(): junk input falls back rather than producing NaN", () => {
+  const g = E.grid(undefined, "nonsense", "unknown-feel");
+  assert.equal(g.beats, 4);
+  assert.equal(g.subdivision, 4);
+  assert.ok(Number.isFinite(g.slotMs) && g.slotMs > 0);
+});
+
+test("tempo(): required syllables-per-second scales with bpm", () => {
+  const read = E.reading("chasing every dollar till the morning comes around and back again tonight", { pop: "rap" });
+  const slow = E.tempo(read, { bpm: 72, timeSig: "4/4", feel: "straight" }).bars[0];
+  const fast = E.tempo(read, { bpm: 140, timeSig: "4/4", feel: "straight" }).bars[0];
+  assert.equal(slow.syllables, fast.syllables, "the words don't change, only the time available");
+  assert.ok(fast.rate > slow.rate * 1.8, "at nearly double the tempo the line needs nearly double the rate");
+  assert.equal(slow.room, "over", "19 syllables want finer than 16ths");
+});
+
+test("tempo(): accents are described, never scored against the beat count", () => {
+  // Rap routinely puts several accents in one beat. A bar carrying more accents than beats is
+  // ordinary, so nothing here may label it a problem.
+  const read = E.reading("the way you move from the block to the booth was love", { pop: "rap" });
+  const b = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "straight" }).bars[0];
+  assert.ok(b.accents > b.beats, "this bar genuinely carries more accents than beats");
+  assert.equal(Object.hasOwn(b, "feel"), false, "no verdict field on accent density");
+  assert.equal(b.accentsPerBeat, b.accents / b.beats);
+});
+
 test("cliche detection has been removed: reading() bars never carry a .cliche field", () => {
   const r = E.reading("she meant to become who she wanted\nyou turn to stoneware every night", { pop: "rap" });
   for (const b of r.bars) {
