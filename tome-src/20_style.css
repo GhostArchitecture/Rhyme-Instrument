@@ -1,5 +1,5 @@
-/* ==== OCCVM 1.0 SPINE — spliced from occvm/spine.css. do not edit. ==== */
-/* sha256:12ceed0322a5 */
+/* ==== OCCVM SPINE spine.css — spliced from occvm/spine.css. do not edit. ==== */
+/* sha256:9fd692623cd7 */
 /* OCCVM 1.0 — the spine. Authored in occvm/SPINE.md; this is its machine-readable half.
  *
  * Spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the spliced copy in a tool: the
@@ -35,6 +35,37 @@
   /* OCCVM-L7 — the serif carries section heads in both tools. The mono face is OS-supplied in both and
      is registered, not governed, until 1.3 closes D3. */
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+
+  /* OCCVM-L4 (1.2) — cast depth. A surface picks a depth; it never authors an offset.
+   *
+   * THE SIGN IS NEGATIVE AND THAT IS THE POINT. (--lx, --ly) points TOWARD the sun: ly = -cos(azimuth),
+   * so at noon the sun is due south and ly = +1, which is screen-down. A lit bevel therefore sits at
+   * +(lx, ly) — the face turned toward the light — and a cast falls at -(lx, ly), away from it.
+   *
+   * Every fixed offset this replaced had it backwards. BTC's tile cast `0 16px 36px` threw the shadow
+   * down-screen, which at noon is toward the sun; Rhyme's one derived drop-shadow used +(lx, ly) for the
+   * same reason. Both read plausible and both were inverted, which is exactly why "no fixed offset
+   * survives" is worth more than tidiness.
+   *
+   * Magnitudes are anchored so each depth reproduces at high sun the LENGTH of the offset it replaced
+   * (2px/5px, 3px/8px, 16px/36px against a noon rake of 5.6px) — the length is preserved, the direction
+   * is corrected. Alphas are fractions of --shade-a, so a cast fades with the light like everything else. */
+  --occvm-cast-1:
+    calc(var(--lx, 0) * var(--rake, 4px) * -.36) calc(var(--ly, 1) * var(--rake, 4px) * -.36)
+    calc(var(--rake, 4px) * .9) rgba(0, 0, 0, calc(var(--shade-a, .6) * .67));
+  --occvm-cast-2:
+    calc(var(--lx, 0) * var(--rake, 4px) * -.54) calc(var(--ly, 1) * var(--rake, 4px) * -.54)
+    calc(var(--rake, 4px) * 1.43) rgba(0, 0, 0, calc(var(--shade-a, .6) * .80));
+  --occvm-cast-3:
+    calc(var(--lx, 0) * var(--rake, 4px) * -2.87) calc(var(--ly, 1) * var(--rake, 4px) * -2.87)
+    calc(var(--rake, 4px) * 6.4) rgba(0, 0, 0, calc(var(--shade-a, .6) * .73));
+
+  /* OCCVM-L2 — a bevel is struck from the light, never from a fixed edge. A surface multiplies these by
+     its own depth in px: inset calc(var(--lit-x) * 1.2) ... */
+  --lit-x: calc(var(--lx, 0) * 1px);
+  --lit-y: calc(var(--ly, 1) * 1px);
+  --cut-x: calc(var(--lx, 0) * -1px);
+  --cut-y: calc(var(--ly, 1) * -1px);
 }
 
 /* ---- primitives (SPINE.md 3) ----------------------------------------------------------------------
@@ -45,11 +76,9 @@
  */
 
 /* OCCVM-L4 — cast shadow derives from the light vector. No fixed offset survives outside this rule. */
-.occvm-cast {
-  box-shadow:
-    calc(var(--lx, 0) * var(--rake, 4px)) calc(var(--ly, 1) * var(--rake, 4px))
-    calc(var(--rake, 4px) * 1.5) rgba(0, 0, 0, var(--shade-a, .6));
-}
+.occvm-cast { box-shadow: var(--occvm-cast-2); }
+.occvm-cast-1 { box-shadow: var(--occvm-cast-1); }
+.occvm-cast-3 { box-shadow: var(--occvm-cast-3); }
 
 /* OCCVM-L2 — a surface is cut, not rounded: radius <= 4px, bevel struck from the light. */
 .occvm-slab {
@@ -77,7 +106,7 @@
 .occvm-num {
   font-variant-numeric: tabular-nums lining-nums;
 }
-/* ==== END OCCVM SPINE ==== */
+/* ==== END OCCVM spine.css ==== */
 
 :root {
   --lx: 0; --ly: 1; --elev: .6; --amb: .7; --night: 0; --glow: .6; --sheen: .6;
@@ -193,7 +222,7 @@ textarea.cut { min-height: 9.5em; }
 .text .w { white-space: nowrap; }
 .text .w.override { color: transparent; text-shadow: none;
   background: linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), var(--gilt-c) 0%, var(--gilt-b) 35%, var(--gilt-a) 55%, var(--gilt-b) 75%, var(--gilt-c) 100%);
-  -webkit-background-clip: text; background-clip: text; filter: drop-shadow(var(--lxpx) var(--lypx) 0 rgba(0,0,0,.8)) drop-shadow(0 0 var(--nglow) rgba(255,215,120,.7)); }
+  -webkit-background-clip: text; background-clip: text; filter: drop-shadow(calc(var(--lxpx) * -1) calc(var(--lypx) * -1) 0 rgba(0,0,0,.8)) drop-shadow(0 0 var(--nglow) rgba(255,215,120,.7)); }
 .text .w.rule { color: #9b9284; font-style: italic; }
 .field { display: flex; flex-wrap: wrap; gap: 7px 5px; margin-top: 9px; align-items: flex-end; }
 .word { display: flex; flex-direction: column; gap: 3px; }
