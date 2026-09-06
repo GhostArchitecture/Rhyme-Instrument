@@ -21,6 +21,12 @@ jobs:
       - name: Run engine + storage test suite
         run: npm test
 
+      # OCCVM: the spine is generated content under a fence (2.0 migration process section 0b). The
+      # spliced block must match occvm/spine.css, or someone hand-edited inside the fence and the next
+      # splice will silently revert it.
+      - name: OCCVM spine is spliced and current
+        run: node occvm/tools/splice-spine.js --check
+
       - name: Regenerate from tome-src and check nothing drifted
         run: |
           node build.js
