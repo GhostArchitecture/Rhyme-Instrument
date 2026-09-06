@@ -335,14 +335,23 @@ function Bank({ bank, setBank, overrides, setOverride, eng }) {
 }
 
 /* ---- tune ---- */
-function Tune({ prefs, setPrefs, engStatus, migrated }) {
+function Tune({ prefs, setPrefs, engStatus, migrated, onExport, onImport }) {
   const [geo, setGeo] = useState("");
+  const [backupNote, setBackupNote] = useState("");
+  const fileRef = useRef(null);
   const locate = () => {
     if (!navigator.geolocation) { setGeo("no location on this device"); return; }
     setGeo("asking…");
     navigator.geolocation.getCurrentPosition(
       p => { setPrefs({ ...prefs, place: { lat: +p.coords.latitude.toFixed(4), lon: +p.coords.longitude.toFixed(4), name: "your location" } }); setGeo(""); },
       e => setGeo("no fix — " + (e.message || "declined")), { timeout: 8000, maximumAge: 600000 });
+  };
+  const restore = async e => {
+    const file = e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    setBackupNote("restoring…");
+    try { setBackupNote(await onImport(file)); }
+    catch (err) { setBackupNote("couldn't read that file — " + (err.message || "not a tome backup")); }
   };
   const place = prefs.place;
   return (
@@ -361,11 +370,19 @@ function Tune({ prefs, setPrefs, engStatus, migrated }) {
       <div className="row">{["comfy", "dense"].map(d => <Cast key={d} on={prefs.density === d} patina onClick={() => setPrefs({ ...prefs, density: d })}>{d}</Cast>)}</div>
       <div className="label">motion</div>
       <div className="row">{["on", "off"].map(m => <Cast key={m} on={prefs.motion === m} patina onClick={() => setPrefs({ ...prefs, motion: m })}>{m}</Cast>)}</div>
+      <div className="label">backup</div>
+      <div className="row">
+        <Cast on onClick={onExport}>download backup</Cast>
+        <Cast patina onClick={() => fileRef.current.click()}>restore from backup</Cast>
+        <input ref={fileRef} type="file" accept="application/json" style={{ display: "none" }} onChange={restore} />
+      </div>
+      {backupNote && <div className="note" style={{ marginTop: 6 }}>{backupNote}</div>}
       <div className="note">
         <b>engine 2.0</b> · {engStatus === "ready" ? `${E2.size().toLocaleString()} words, stress carried. your exception table outranks the dictionary; the v1 rules only speak for words neither knows.`
           : engStatus === "loading" ? "loading the dictionary (about 690 KB, once)…"
           : engStatus === "error" ? `dictionary didn't load (${E2.error()}). running on the curated list and the v1 rules until it does.` : "…"}
         <br /><b>light</b> · solar position for {place ? "your location" : SUN.DAYTON.name}, computed on the phone. the coordinates stay in this browser.
+        <br /><b>backup</b> · everything lives only in this browser. download a backup before switching phones, wiping storage, or moving to another device, then restore it there — new drafts and bank words merge in, nothing already on the other device gets overwritten.
         {migrated && <><br /><b>carried over</b> · your bank, draft, and vowel cuts from the metro build.</>}
       </div>
     </div>
@@ -416,6 +433,34 @@ function Tome() {
   const removeDraft = id => { const rest = shelf.filter(d => d.id !== id); setShelf(rest, true); if (current === id) setCurrent(rest[0].id); };
   const shelfProps = { shelf, current, setCurrent, newDraft, renameDraft, removeDraft };
   const setOverride = (word, v) => { const o = { ...overrides }; if (v) o[word] = v; else delete o[word]; OVERRIDES = o; setOverrides_(o); STORE.set("overrides", o); };
+  const exportBackup = () => {
+    const payload = { app: "rhyme-instrument", version: 1, exportedAt: new Date().toISOString(), bank, shelf, current, overrides, prefs, pop };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `rhyme-instrument-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  };
+  /* merge, not replace: a newer shelf entry (by `updated`) wins per-draft, bank words union, overrides fill gaps only. */
+  const importBackup = async file => {
+    const incoming = JSON.parse(await file.text());
+    if (!incoming || !Array.isArray(incoming.shelf)) throw new Error("not a tome backup file");
+    const seen = new Set(bank.map(clean));
+    const mergedBank = [...bank];
+    for (const w of incoming.bank || []) if (!seen.has(clean(w))) { mergedBank.push(w); seen.add(clean(w)); }
+    const byId = new Map(shelf.map(d => [d.id, d]));
+    let added = 0, updated = 0;
+    for (const d of incoming.shelf) {
+      const local = byId.get(d.id);
+      if (!local) { byId.set(d.id, d); added++; }
+      else if ((d.updated || 0) > (local.updated || 0)) { byId.set(d.id, d); updated++; }
+    }
+    setBank(mergedBank);
+    setShelf([...byId.values()], true);
+    const o = { ...(incoming.overrides || {}), ...overrides }; OVERRIDES = o; setOverrides_(o); STORE.set("overrides", o);
+    return `restored: ${added} new draft${added === 1 ? "" : "s"}, ${updated} updated, ${mergedBank.length - bank.length} new bank word${mergedBank.length - bank.length === 1 ? "" : "s"}`;
+  };
   const eng = engStatus;
   const bars = draft.split("\n").filter(l => l.trim()).length;
   const nOv = Object.keys(overrides).length;
@@ -432,7 +477,7 @@ function Tome() {
     lookup: <Lookup bank={bank} setBank={setBank} eng={eng} />,
     check: <Check eng={eng} />,
     bank: <Bank bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride} eng={eng} />,
-    tune: <Tune prefs={prefs} setPrefs={setPrefs} engStatus={engStatus} migrated={migrated} />,
+    tune: <Tune prefs={prefs} setPrefs={setPrefs} engStatus={engStatus} migrated={migrated} onExport={exportBackup} onImport={importBackup} />,
   }[id]);
   const idx = FACES.findIndex(f => f.id === open);
   return (
