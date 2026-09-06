@@ -1,0 +1,16 @@
+{
+  "name": "rhyme-instrument",
+  "private": true,
+  "description": "No-bundler, browser-only rhyme-writing tool. See tome-src/ for source, build.js to assemble, engine-node/ for the headless-testable engine.",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-react": "^7.29.7"
+  }
+}

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Run engine + storage test suite
+        run: npm test
+
+      - name: Regenerate from tome-src and check nothing drifted
+        run: |
+          node build.js
+          echo "-- dist/index.html vs deployed index.html (header comment excluded) --"
+          diff -I 'assembled by build.js' dist/index.html index.html
+          echo "-- engine-node/{engine_core,store_core,rule_g2p_v1}.js vs committed --"
+          git diff --exit-code -- engine-node/engine_core.js engine-node/store_core.js engine-node/rule_g2p_v1.js

@@ -230,7 +230,7 @@ textarea.cut { min-height: 9.5em; }
 <div id="root"></div>
 <script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));</script>
 <script type="text/babel" data-presets="react">
-/* ghost codex · rhyme instrument · v2.3 tome */
+/* ghost codex · rhyme instrument · tome — v2.3.1 tome — assembled by build.js, do not hand-edit */
 /* ---------- vowel classes, v1 rule G2P (OOV fallback), curated lexicon, watch lists ---------- */
 const VOWEL_COLORS = {
   AY:"#C98A2D", IY:"#5B87A8", EY:"#8FA65B", EH:"#A0703F", AE:"#B04A3A",
@@ -259,6 +259,8 @@ const EXCEPTIONS = {
   pull:["UH-L"], full:["UH-L"], bull:["UH-L"], push:["UH-SH"], bush:["UH-SH"],
   hole:["OW-L"], holes:["OW-LZ"], whole:["OW-L"], cold:["OW-LD"], alone:["OW-N"],
   view:["UW-"], views:["UW-Z"], jewel:["UW-L"], jewels:["UW-LZ"], fuel:["UW-L"],
+  /* CMUdict lists these initialism/slang readings after a longer letter-spelled variant; pronounce() takes the first, so pin the one people actually say */
+  asap:["EY-","AE-P"], abs:["AE-BZ"], tac:["AE-K"],
   one:["AH-N"], once:["AH-NS"], two:["UW-"], through:["UW-"], though:["OW-"],
   thought:["AO-T"], enough:["AH-F"], love:["AH-V"], move:["UW-V"],
   come:["AH-M"], some:["AH-M"], done:["AH-N"], none:["AH-N"], gone:["AO-N"],
@@ -460,19 +462,6 @@ hunnid hunnids
 const LEXICON = [...new Set(
   LEX_RAW.split(/\s+/).map(w => w.replace(/\d+$/, "")).filter(w => w.length > 1)
 )];
-/* ---------- stock-phrase watch ---------- */
-const CLICHES_MELODIC = [
-  "make me disappear","turn to stone","can't breathe","fall apart","fade away",
-  "cold inside","die alone","fall asleep forever","numb inside","tear me apart",
-  "hold me close","empty inside","broken inside","save me from myself",
-];
-const CLICHES = [
-  "pain go away","pain would go away","learn to love again","love again",
-  "end up insane","going insane","drive me crazy","lost in your eyes",
-  "heart on my sleeve","tears like rain","down on my knees","shoulder to cry on",
-  "piece of my heart","meant to be","take my breath away","light up my world",
-  "hole in my heart","fell from the sky","never let you go","can't live without",
-];
 const FILLERS = new Set(["you","too","to","that","it","them","me","a","the","at",
   "of","for","and","so","on","in","up","do"]);
 
@@ -699,7 +688,6 @@ const E2 = (() => {
   }
   function reading(draft, { pop = "rap" } = {}) {
     const limit = pop === "rap" ? 3 : 6;
-    const watch = pop === "rap" ? CLICHES : [...CLICHES, ...CLICHES_MELODIC];
     const bars = draft.split("\n").map((ln, i) => {
       const text = ln.trim();
       if (!text) return null;
@@ -707,10 +695,9 @@ const E2 = (() => {
       const field = words.map(w => { const p = pronounce(w); return { word: w, source: p.source, sylls: p.sylls.map(s => ({ v: s.v, s: s.s, c: s.c })) }; });
       const last = words[words.length-1].replace(/[^a-zA-Z']/g, "");
       const end = skeleton(last, 1);
-      const cliche = watch.find(c => text.toLowerCase().includes(c)) || null;
       return { i, text, field, syllables: field.reduce((n, w) => n + w.sylls.length, 0),
         end: { word: last, v: end.vowels[0] || null, coda: end.coda, source: end.source, overridden: end.overridden },
-        filler: FILLERS.has(last.toLowerCase()), cliche };
+        filler: FILLERS.has(last.toLowerCase()) };
     });
     const runs = []; let cur = null;
     bars.forEach(b => {
@@ -1168,7 +1155,6 @@ function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edi
       <div className="foot">
         <span>ends on {NAMES[bar.end.v] || "—"}{bar.end.coda ? " +" + bar.end.coda.toLowerCase() : ""}</span>
         <span>{bar.syllables} syl{bar.drift ? <span className="warn"> · meter {bar.drift > 0 ? "+" : ""}{bar.drift}</span> : null}{bar.filler ? <span className="bad"> · filler landing</span> : null}
-          {bar.cliche ? <span className="bad"> · stock: “{bar.cliche}”</span> : null}
           {flagged && run ? <span className="warn"> · drone {run.len} on {NAMES[run.v]}</span> : null}</span>
       </div>
       {bar.scheme && <span className="scheme">{bar.scheme}</span>}
