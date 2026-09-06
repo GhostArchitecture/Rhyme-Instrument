@@ -82,7 +82,7 @@ ${css}
 <div id="root"></div>
 <script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));</script>
 <script type="text/babel" data-presets="react">
-/* ghost codex · rhyme instrument · tome — v2.3.1 tome — assembled by build.js, do not hand-edit */
+/* ghost codex · rhyme instrument · tome — v2.4 — assembled by build.js, do not hand-edit */
 ${data}
 ${engine}
 ${card}
