@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    # claude/** included so work in progress is checked where it is done. Without it this workflow ran
+    # zero times across six OCCVM releases on a feature branch, which is a check that exists on paper.
+    branches: ["main", "claude/**"]
   pull_request:
 
 jobs:
@@ -21,10 +23,18 @@ jobs:
       - name: Run engine + storage test suite
         run: npm test
 
+      # OCCVM: the spine is generated content under a fence (2.0 migration process section 0b). The
+      # spliced block must match occvm/spine.css, or someone hand-edited inside the fence and the next
+      # splice will silently revert it.
+      - name: OCCVM spine is spliced and current
+        run: node occvm/tools/splice-spine.js --check
+
       - name: Regenerate from tome-src and check nothing drifted
         run: |
           node build.js
           echo "-- dist/index.html vs deployed index.html (header comment excluded) --"
           diff -I 'assembled by build.js' dist/index.html index.html
+          echo "-- dist/sw.js vs deployed sw.js (cache name tracks the build stamp) --"
+          diff dist/sw.js sw.js
           echo "-- engine-node/{engine_core,store_core,rule_g2p_v1}.js vs committed --"
           git diff --exit-code -- engine-node/engine_core.js engine-node/store_core.js engine-node/rule_g2p_v1.js

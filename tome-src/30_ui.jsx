@@ -4,9 +4,17 @@ const { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } = R
 const NAMES = { ...VOWEL_NAMES, AE: "a", IH: "ih", UH: "ŏŏ" };
 const clean = s => (s || "").toLowerCase().replace(/[^a-z']/g, "");
 
+/* OCCVM-L8 — a stone that can be picked is a real control; one that only displays a vowel is not and must
+   not enter the tab order. The 44px floor does not apply: a stone sits inline inside a word inside a line
+   of a poem, which is the flow-of-text exemption the law states. */
 function Stone({ v, s = 1, onClick, chosen }) {
-  return <span className={`stone s${s}${onClick ? " pickable" : ""}${chosen ? " chosen" : ""}`}
-    style={{ "--c": VOWEL_COLORS[v] || "#777" }} onClick={onClick}>{NAMES[v] || (v || "").toLowerCase()}</span>;
+  const cls = `stone s${s}${onClick ? " pickable occvm-act" : ""}${chosen ? " chosen" : ""}`;
+  const style = { "--c": VOWEL_COLORS[v] || "#777" };
+  const label = NAMES[v] || (v || "").toLowerCase();
+  if (!onClick) return <span className={cls} style={style}>{label}</span>;
+  return <button type="button" className={cls} style={style} onClick={onClick}
+    aria-pressed={chosen === undefined ? undefined : !!chosen}
+    aria-label={`vowel ${label}${s > 0 ? ", stressed" : ""}`}>{label}</button>;
 }
 function Mark({ v, s }) { return <span className={`mark p${s}`} style={{ "--c": VOWEL_COLORS[v] || "#777" }} />; }
 function Skeleton({ sk }) {
@@ -29,27 +37,33 @@ function Picker({ word, overrides, setOverride, onClose }) {
         <div className="reads">
           <div className="who">the dictionary carries {reads.length} reads of <i>{word}</i> — tap one</div>
           {reads.map((r, i) => (
-            <div key={i} className={"stones read" + (same(r) ? " cur" : "")} onClick={() => { commit(r); onClose(); }}>
+            <button type="button" key={i} className={"stones read occvm-act" + (same(r) ? " cur" : "")} onClick={() => { commit(r); onClose(); }}>
               {r.map((x, k) => <Stone key={k} v={x.v} s={x.s} />)}
-            </div>
+            </button>
           ))}
         </div>
       )}
       <div className="who">cut <i>{word}</i> by syllable — pick a stone, then the vowel your mouth uses</div>
       <div className="stones read" style={{ marginBottom: 8 }}>
         {cur.map((x, i) => <Stone key={i} v={x.v} s={x.s} chosen={i === sel} onClick={() => setSel(i)} />)}
-        <span className="clear" onClick={cutStress}>{cur[sel] && cur[sel].s > 0 ? "stressed" : "unstressed"}</span>
+        <button type="button" className="clear occvm-act" onClick={cutStress}>{cur[sel] && cur[sel].s > 0 ? "stressed" : "unstressed"}</button>
       </div>
       <div className="stones">
         {Object.keys(VOWEL_NAMES).map(v => <Stone key={v} v={v} chosen={cur[sel] && cur[sel].v === v} onClick={() => { cutVowel(v); }} />)}
-        {has && <span className="clear" onClick={() => { setOverride(word, null); onClose(); }}>clear all cuts</span>}
-        <span className="clear" onClick={onClose}>done</span>
+        {has && <button type="button" className="clear occvm-act" onClick={() => { setOverride(word, null); onClose(); }}>clear all cuts</button>}
+        <button type="button" className="clear occvm-act" onClick={onClose}>done</button>
       </div>
     </div>
   );
 }
-function Cast({ on, children, onClick, patina, style }) {
-  return <div className={`cast${on ? " on" : ""}${patina ? " patina" : ""}`} onClick={onClick} style={style}>{children}</div>;
+/* OCCVM-L8 — the patina control. 28 call sites reach the interaction floor through this one component.
+   aria-pressed is emitted only when the caller passes `on` AND has not marked the control `action`: five
+   sites write a bare `on` to mean "styled active", and a button that claims to be a pressed toggle
+   announces a state it does not have. */
+function Cast({ on, children, onClick, patina, style, label, action }) {
+  return <button type="button" className={`cast${on ? " on" : ""}${patina ? " patina" : ""} occvm-act`}
+    onClick={onClick} style={style} aria-label={label}
+    aria-pressed={action || on === undefined ? undefined : !!on}>{children}</button>;
 }
 
 /* ---- draft: the Rosetta face ---- */
@@ -60,7 +74,7 @@ function BarCut({ value, onChange, onReturn, onBackspaceEmpty, onDone }) {
     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); onReturn(); } else if (e.key === "Backspace" && !value) { e.preventDefault(); onBackspaceEmpty(); } else if (e.key === "Escape") onDone(); }}
     onBlur={onDone} />;
 }
-function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edit }) {
+function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edit, pace }) {
   const run = reading.runs.find(r => r.bars.includes(bar.i));
   const flagged = reading.flagged.includes(bar.i);
   const heat = flagged && run ? Math.min(1, (run.bars.indexOf(bar.i) - reading.limit + 1) / Math.max(1, run.len - reading.limit)) : 0;
@@ -68,18 +82,18 @@ function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edi
     <div className="bar" data-bar={bar.i} data-heat={flagged ? "" : undefined}
       style={{ "--bthick": (5 + bar.syllables * 1.1).toFixed(0) + "px", "--heat": heat.toFixed(2) }}>
       {editing ? <BarCut value={bar.text} onChange={v => edit.change(bar.i, v)} onReturn={() => edit.next(bar.i)} onBackspaceEmpty={() => edit.remove(bar.i)} onDone={() => edit.done(bar.i)} />
-      : <p className="text" style={{ margin: 0 }} onClick={() => edit.start(bar.i)}>
+      : <button type="button" className="text occvm-act" style={{ margin: 0 }} onClick={() => edit.start(bar.i)} aria-label={`edit bar ${bar.i + 1}`}>
         {bar.field.map((w, i) => <React.Fragment key={i}><span className={"w " + w.source}>{w.word}</span>{i < bar.field.length - 1 ? " " : ""}</React.Fragment>)}
-      </p>}
+      </button>}
       <div className="field">
         {bar.field.map((w, i) => {
           const key = clean(w.word);
           const open = pick && pick.bar === bar.i && pick.word === key && pick.idx === i;
           return (
             <div key={i} className={"word" + (open ? " pick" : "")} data-word={key}>
-              <div className="stones" onClick={() => setPick(open ? null : { bar: bar.i, word: key, idx: i })}>
+              <button type="button" className="stones occvm-act" aria-expanded={!!open} aria-label={`syllables of ${key}`} onClick={() => setPick(open ? null : { bar: bar.i, word: key, idx: i })}>
                 {w.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}
-              </div>
+              </button>
               <div className="marks">{w.sylls.map((s, k) => <Mark key={k} v={s.v} s={s.s} />)}</div>
             </div>
           );
@@ -93,7 +107,9 @@ function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edi
       )}
       <div className="foot">
         <span>ends on {NAMES[bar.end.v] || "—"}{bar.end.coda ? " +" + bar.end.coda.toLowerCase() : ""}</span>
-        <span>{bar.syllables} syl{bar.drift ? <span className="warn"> · meter {bar.drift > 0 ? "+" : ""}{bar.drift}</span> : null}{bar.filler ? <span className="bad"> · filler landing</span> : null}
+        <span>{bar.syllables} syl{bar.drift ? <span className="warn"> · {bar.drift > 0 ? "+" : ""}{bar.drift} vs neighbors</span> : null}
+          {pace ? <span> · {pace.rate.toFixed(1)}/sec{pace.room === "over" ? <span className="warn"> · {pace.slotDelta} over grid</span> : null}</span> : null}
+          {bar.filler ? <span className="bad"> · filler landing</span> : null}
           {flagged && run ? <span className="warn"> · drone {run.len} on {NAMES[run.v]}</span> : null}</span>
       </div>
       {bar.scheme && <span className="scheme">{bar.scheme}</span>}
@@ -143,16 +159,23 @@ function Shelf({ shelf, current, setCurrent, newDraft, renameDraft, removeDraft 
   return (
     <div className="shelf">
       <div className="row" style={{ marginTop: 0 }}>
-        <Cast on onClick={() => setOpen(!open)} style={{ flex: 2, textAlign: "left" }}>{cur ? cur.name : "untitled"} <span className="dim">· {shelf.length} on the shelf</span></Cast>
+        <Cast on action onClick={() => setOpen(!open)} style={{ flex: 2, textAlign: "left" }}>{cur ? cur.name : "untitled"} <span className="dim">· {shelf.length} on the shelf</span></Cast>
         <Cast onClick={() => { const n = prompt("name this draft", cur ? cur.name : ""); if (n != null && n.trim()) renameDraft(current, n.trim()); }}>name</Cast>
-        <Cast patina on onClick={newDraft}>new</Cast>
+        <Cast patina on action onClick={newDraft}>new</Cast>
       </div>
       {open && (
         <div className="shelflist">
           {shelf.slice().sort((a, b) => b.updated - a.updated).map(d => (
             <div key={d.id} className={"bankrow" + (d.id === current ? " cur" : "")}>
-              <span className="wd" onClick={() => { setCurrent(d.id); setOpen(false); }}>{d.name}<span className="dim"> · {d.text.split("\n").filter(l => l.trim()).length} bars · {when(d.updated)}</span></span>
-              {shelf.length > 1 && <span className="rm" onClick={() => { if (confirm(`remove “${d.name}” from the shelf?`)) removeDraft(d.id); }}>remove</span>}
+              <button type="button" className="wd occvm-act" onClick={() => { setCurrent(d.id); setOpen(false); }}>{d.name}<span className="dim"> · {d.text.split("\n").filter(l => l.trim()).length} bars · {when(d.updated)}</span></button>
+              {shelf.length > 1 && <button type="button" className="rm occvm-act" onClick={e => {
+                if (!confirm(`remove “${d.name}” from the shelf?`)) return;
+                /* OCCVM-L11 — removing a draft is irreversible, so it cleaves rather than fades. The row
+                   is gone from the shelf only once the fracture has finished, so the two never overlap. */
+                const row = e.currentTarget.closest(".bankrow");
+                if (row && typeof OCCVM_FRACTURE !== "undefined") OCCVM_FRACTURE.cleave(row, () => removeDraft(d.id));
+                else removeDraft(d.id);
+              }}>remove</button>}
             </div>
           ))}
         </div>
@@ -182,17 +205,17 @@ function SharePanel({ reading, mineral, onClose }) {
         <Cast on={format === "story"} patina onClick={() => setFormat("story")}>9:16</Cast>
       </div>
       {scope === "one" ? (
-        <div className="picklist">{filled.map(b => <div key={b.i} className={"pl" + (b.i === one ? " on" : "")} onClick={() => setOne(b.i)}>{b.text}</div>)}</div>
+        <div className="picklist">{filled.map(b => <button type="button" key={b.i} className={"pl occvm-act" + (b.i === one ? " on" : "")} aria-pressed={b.i === one} onClick={() => setOne(b.i)}>{b.text}</button>)}</div>
       ) : (
         <div>
           <div className="label">start at</div>
-          <div className="picklist">{filled.map(b => <div key={b.i} className={"pl" + (b.i === start ? " on" : "")} onClick={() => setStart(b.i)}>{b.text}</div>)}</div>
+          <div className="picklist">{filled.map(b => <button type="button" key={b.i} className={"pl occvm-act" + (b.i === start ? " on" : "")} aria-pressed={b.i === start} onClick={() => setStart(b.i)}>{b.text}</button>)}</div>
           <div className="row">{[4, 5, 6, 7, 8].map(n => <Cast key={n} on={len === n} onClick={() => setLen(n)}>{n}</Cast>)}</div>
         </div>
       )}
       <div ref={holder} className="preview" />
       <div className="row">
-        <Cast patina on onClick={async () => { setStatus("…"); setStatus(await CARD.share(canvasRef.current, "rhyme-instrument-" + Date.now())); }}>share</Cast>
+        <Cast patina on action onClick={async () => { setStatus("…"); setStatus(await CARD.share(canvasRef.current, "rhyme-instrument-" + Date.now())); }}>share</Cast>
         <Cast onClick={onClose}>close</Cast>
       </div>
       {status && status !== "…" && <div className="note">{status}</div>}
@@ -251,14 +274,61 @@ function MeterPanel({ reading, shelf, pop, onClose }) {
     </div>
   );
 }
-function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral }) {
+function TempoPanel({ tempo, setTempo, pacing, onClose }) {
+  const t = tempo || { bpm: 90, timeSig: "4/4", feel: "straight" };
+  const set = patch => setTempo({ ...t, ...patch });
+  const g = pacing ? pacing.grid : null;
+  const rates = pacing ? pacing.bars.map(b => b.rate) : [];
+  const peak = rates.length ? Math.max(...rates) : 0;
+  return (
+    <div className="share">
+      <div className="row" style={{ marginTop: 0 }}>
+        <Cast onClick={() => set({ bpm: Math.max(40, t.bpm - 5) })}>−5</Cast>
+        <Cast on patina style={{ flex: 1.4 }}>{t.bpm} bpm</Cast>
+        <Cast onClick={() => set({ bpm: Math.min(220, t.bpm + 5) })}>+5</Cast>
+        <Cast onClick={onClose} style={{ flex: .6 }}>close</Cast>
+      </div>
+      <div className="row wrap">
+        {["4/4", "3/4", "6/8"].map(x => <Cast key={x} on={t.timeSig === x} onClick={() => set({ timeSig: x })}>{x}</Cast>)}
+        {["straight", "swing", "triplet"].map(x => <Cast key={x} on={t.feel === x} patina onClick={() => set({ feel: x })}>{x}</Cast>)}
+      </div>
+      {tempo && g && (
+        <div>
+          <div className="group">
+            <div className="gh">{g.slotsPerBar} slots · {g.beats} beats × {g.subdivision} · bar runs {((g.beatMs * g.beats) / 1000).toFixed(2)}s</div>
+            {pacing.bars.map(b => (
+              <div key={b.i} className="fit">
+                <span className="nm" style={{ flex: "0 0 58px" }}>{b.rate.toFixed(1)}/sec</span>
+                <span className="syl" style={{ flex: "0 0 52px" }}>{b.syllables} syl</span>
+                <span className="track"><span className="fill" style={{ width: (peak ? (b.rate / peak) * 100 : 0) + "%" }} /></span>
+                <span className="pct" style={{ flex: "0 0 66px" }}>{b.room === "over" ? b.slotDelta + " over" : b.room === "under" ? -b.slotDelta + " under" : "exact"}</span>
+              </div>
+            ))}
+          </div>
+          <div className="note">
+            arithmetic, not a measurement. this is how many syllables a second each bar needs to fit the
+            grid at this tempo — check it against your own mouth. <b>over grid</b> means the line wants finer
+            subdivision than the feel you set, not that it's wrong. where the syllables actually land inside
+            a beat is yours; nothing here claims to know it.
+          </div>
+        </div>
+      )}
+      {!tempo && <div className="note">no tempo set for this draft yet — pick a bpm and the bars will read against it.</div>}
+      <div className="row"><Cast patina on={!!tempo} onClick={() => setTempo(tempo ? null : t)}>{tempo ? "clear tempo" : "set " + t.bpm + " bpm"}</Cast></div>
+    </div>
+  );
+}
+function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral, tempo, setTempo }) {
   const [pick, setPick] = useState(null);
   const [editing, setEditing] = useState(null);           // line index being cut
   const [quarry, setQuarry] = useState(false);
   const [share, setShare] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
+  const [tempoOpen, setTempoOpen] = useState(false);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
+  const pacing = useMemo(() => tempo ? E2.tempo(reading, tempo) : null, [reading, tempo]);
+  const paceBy = useMemo(() => new Map((pacing ? pacing.bars : []).map(b => [b.i, b])), [pacing]);
   const limit = reading.limit;
   const lines = draft.split("\n");
   const edit = {
@@ -272,26 +342,30 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   return (
     <div>
       <Shelf {...shelfProps} />
-      <div className="row wrap" style={{ marginTop: 0 }}>
+      <div className="row" style={{ marginTop: 0 }}>
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
         <Cast on={pop === "melodic"} onClick={() => setPop("melodic")}>melodic · drone past 6</Cast>
+      </div>
+      <div className="row">
         <Cast on={quarry} patina onClick={() => setQuarry(!quarry)}>quarry</Cast>
-        <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)} style={{ flex: .8 }}>meter</Cast>
-        <Cast on={share} patina onClick={() => setShare(!share)} style={{ flex: .8 }}>share</Cast>
+        <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)}>meter</Cast>
+        <Cast on={tempoOpen} patina onClick={() => setTempoOpen(!tempoOpen)}>{tempo ? tempo.bpm + " bpm" : "tempo"}</Cast>
+        <Cast on={share} patina onClick={() => setShare(!share)}>share</Cast>
       </div>
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}
+      {tempoOpen && <TempoPanel tempo={tempo} setTempo={setTempo} pacing={pacing} onClose={() => setTempoOpen(false)} />}
       {meterOpen && <MeterPanel reading={reading} shelf={shelfProps.shelf} pop={pop} onClose={() => setMeterOpen(false)} />}
       {share && reading.bars.some(Boolean) && <SharePanel reading={reading} mineral={mineral} onClose={() => setShare(false)} />}
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
         <div className="bars" ref={host}>
           {lines.map((ln, i) => reading.bars[i]
-            ? <Bar key={i} bar={reading.bars[i]} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} />
+            ? <Bar key={i} bar={reading.bars[i]} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} pace={paceBy.get(i)} />
             : (editing === i
               ? <div key={i} className="bar" data-bar={i}><BarCut value={ln} onChange={v => edit.change(i, v)} onReturn={() => edit.next(i)} onBackspaceEmpty={() => edit.remove(i)} onDone={() => edit.done(i)} /></div>
-              : (lines.length > 1 || ln ? <div key={i} className="break" onClick={() => edit.start(i)}><span>break</span></div> : null)))}
+              : (lines.length > 1 || ln ? <button type="button" key={i} className="break occvm-act" onClick={() => edit.start(i)} aria-label="edit this break"><span>break</span></button> : null)))}
           {reading.bars.some(Boolean) && <Threads reading={reading} host={host} quiet={editing != null} />}
-          <div className="ghost" onClick={edit.append}>{reading.bars.some(Boolean) ? "+ bar" : "tap to cut the first bar"}</div>
+          <button type="button" className="ghost occvm-act" onClick={edit.append}>{reading.bars.some(Boolean) ? "+ bar" : "tap to cut the first bar"}</button>
         </div>
         {reading.terminal && <div className="terminal">terminal slot reads soft — filler or unpaired vowel on the last bar. the logged pattern: weakest material lands last. check it on purpose.</div>}
       </div>
@@ -320,7 +394,7 @@ function Lookup({ bank, setBank, eng }) {
             <div className="group" key={label}>
               <div className={"gh " + label.split(" ")[0]}>{label} · {list.length}</div>
               <div className="inlays">
-                {list.slice(0, 90).map(it => <span key={it.word} className={`inlay t${it.tier}${banked.has(it.word) ? " banked" : ""}`} onClick={() => toggle(it.word)}>{it.word}</span>)}
+                {list.slice(0, 90).map(it => <button type="button" key={it.word} className={`inlay occvm-act t${it.tier}${banked.has(it.word) ? " banked" : ""}`} aria-pressed={banked.has(it.word)} onClick={() => toggle(it.word)}>{it.word}</button>)}
               </div>
             </div>
           ))}
@@ -367,7 +441,7 @@ function Bank({ bank, setBank, overrides, setOverride, eng }) {
   return (
     <div>
       <input className="cut" value={add} onChange={e => setAdd(e.target.value)} onKeyDown={e => e.key === "Enter" && commit()} placeholder="add a word — names, slang, coinages" autoCapitalize="off" autoCorrect="off" />
-      <div className="row"><Cast on onClick={commit} patina>add</Cast></div>
+      <div className="row"><Cast on action onClick={commit} patina>add</Cast></div>
       <div className="note">every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears.</div>
       {bank.length === 0 && <div className="empty">nothing banked yet.</div>}
       {bank.map(w => {
@@ -377,9 +451,9 @@ function Bank({ bank, setBank, overrides, setOverride, eng }) {
             <div className="bankrow">
               <span className={"wd" + (overrides[key] ? " override" : "")}>{w}</span>
               <div className={"word" + (open ? " pick" : "")} style={{ flex: 1, alignItems: "flex-end" }}>
-                <div className="stones" onClick={() => setPick(open ? null : key)}>{p.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}</div>
+                <button type="button" className="stones occvm-act" aria-expanded={!!open} aria-label={`syllables of ${w}`} onClick={() => setPick(open ? null : key)}>{p.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}</button>
               </div>
-              <span className="rm" onClick={() => setBank(bank.filter(b => b !== w))}>remove</span>
+              <button type="button" className="rm occvm-act" onClick={() => setBank(bank.filter(b => b !== w))}>remove</button>
             </div>
             {open && <Picker word={key} overrides={overrides} setOverride={setOverride} onClose={() => setPick(null)} />}
           </div>
@@ -427,7 +501,7 @@ function Tune({ prefs, setPrefs, engStatus, migrated, onExport, onImport }) {
       <div className="row">{["on", "off"].map(m => <Cast key={m} on={prefs.motion === m} patina onClick={() => setPrefs({ ...prefs, motion: m })}>{m}</Cast>)}</div>
       <div className="label">backup</div>
       <div className="row">
-        <Cast on onClick={onExport}>download backup</Cast>
+        <Cast on action onClick={onExport}>download backup</Cast>
         <Cast patina onClick={() => fileRef.current.click()}>restore from backup</Cast>
         <input ref={fileRef} type="file" accept="application/json" style={{ display: "none" }} onChange={restore} />
       </div>
@@ -482,6 +556,10 @@ function Tome() {
   const shelfTimer = useRef(null);
   const setShelf = (v, now) => { setShelf_(v); clearTimeout(shelfTimer.current); if (now) STORE.set("shelf", v); else shelfTimer.current = setTimeout(() => STORE.set("shelf", v), 700); };
   const setDraft = v => setShelf(shelf.map(d => d.id === current ? { ...d, text: v, updated: Date.now() } : d));
+  /* tempo lives on the draft, not globally — different songs, different tempos. Riding the shelf
+   * entry means backup/restore carries it with no extra handling. */
+  const tempo = (shelf.find(d => d.id === current) || {}).tempo || null;
+  const setTempo = v => setShelf(shelf.map(d => d.id === current ? { ...d, tempo: v || undefined, updated: Date.now() } : d), true);
   const setCurrent = id => { setCurrent_(id); STORE.set("current", id); };
   const newDraft = () => { const d = { id: "d" + Date.now(), name: "draft " + (shelf.length + 1), text: "", updated: Date.now() }; setShelf([...shelf, d], true); setCurrent(d.id); };
   const renameDraft = (id, name) => setShelf(shelf.map(d => d.id === id ? { ...d, name } : d), true);
@@ -528,7 +606,7 @@ function Tome() {
     tune: `${prefs.mineral} · ${prefs.density}`,
   };
   const face = id => ({
-    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} mineral={prefs.mineral} />,
+    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} mineral={prefs.mineral} tempo={tempo} setTempo={setTempo} />,
     lookup: <Lookup bank={bank} setBank={setBank} eng={eng} />,
     check: <Check eng={eng} />,
     bank: <Bank bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride} eng={eng} />,
@@ -538,21 +616,21 @@ function Tome() {
   return (
     <div>
       <header className="binding">
-        <h1 onClick={() => setOpen(null)}>rhyme instrument</h1>
+        <h1><button type="button" className="occvm-act" onClick={() => setOpen(null)}>rhyme instrument</button></h1>
         {sun && <div className="sun"><b>{sun.time}</b> · sun {sun.elev >= 0 ? sun.elev.toFixed(0) + "°" : "set"} · {sun.dir}</div>}
       </header>
       {!loaded ? <div className="stack note">opening</div> : (
         <div className={"stack" + (open ? " open" : "")}>
           {open && (
             <section key={open} className={"slab rise"} style={{ "--veins": veinSVG(prefs.mineral, idx), "--thick": "16px" }}>
-              <div className="head" onClick={() => setOpen(null)}><h2>{open}</h2><span className="hint">tap to close</span></div>
+              <button type="button" className="head occvm-act" onClick={() => setOpen(null)}><h2>{open}</h2><span className="hint">tap to close</span></button>
               {face(open)}
             </section>
           )}
           {FACES.filter(f => f.id !== open).map((f, i) => (
-            <div key={f.id} className="edge" onClick={() => setOpen(f.id)}>
+            <button type="button" key={f.id} className="edge occvm-act" onClick={() => setOpen(f.id)}>
               <span className="name">{f.name}</span><span className="sum">{sums[f.id]}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}
