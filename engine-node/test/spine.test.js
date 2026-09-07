@@ -58,3 +58,38 @@ test("the tool uses the shared sundial rather than a second implementation", () 
 test("the artifact carries a build stamp", () => {
   assert.match(built, /<!-- build-\d{14} -->/);
 });
+
+/* OCCVM-D4 / roadmap 1.6 — no runtime compiler, and nothing fetched at load.
+ *
+ * The exit criterion is that first paint shows the binding, not a blank frame, and that the tool does not
+ * install to a home screen it cannot serve. Removing babel-standalone alone would not have reached it:
+ * React and ReactDOM still came from the same CDN, so an unreachable cdnjs still rendered nothing.
+ */
+test("no runtime compiler ships", () => {
+  assert.ok(!built.includes("babel"), "babel-standalone must be gone");
+  assert.ok(!built.includes('type="text/babel"'), "no block may be compiled in the browser");
+});
+
+test("the artifact fetches nothing at load", () => {
+  const tags = built.match(/<script[^>]*\bsrc\s*=/g) || [];
+  assert.deepEqual(tags, [], "every script must be inline; a src is an external dependency");
+  const links = built.match(/<link[^>]+href="https?:/g) || [];
+  assert.deepEqual(links, [], "no external stylesheet or preload");
+});
+
+test("React is inlined from the committed vendor copy", () => {
+  for (const f of ["react-18.3.1.umd.min.js", "react-dom-18.3.1.umd.min.js"]) {
+    const blob = fs.readFileSync(path.join(ROOT, "vendor", f), "utf8");
+    assert.ok(built.includes(blob.trim().slice(0, 200)), `${f} is not inlined in the artifact`);
+  }
+});
+
+test("the service worker's cache name is the build stamp", () => {
+  const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+  const stamp = (built.match(/build-\d{14}/) || [])[0];
+  assert.ok(stamp, "the artifact carries no stamp");
+  assert.ok(sw.includes(`"tome-${stamp}"`), "sw.js cache name must track the build stamp, not a hand-bumped literal");
+  assert.ok(!sw.includes("cdnjs"), "the shell must not list CDN entries any more");
+  assert.ok(!fs.readFileSync(path.join(ROOT, "tome-src", "sw.js"), "utf8").includes(`tome-${stamp}`),
+    "tome-src/sw.js is the template and must keep its placeholder, not a substituted stamp");
+});

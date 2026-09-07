@@ -32,5 +32,7 @@ jobs:
           node build.js
           echo "-- dist/index.html vs deployed index.html (header comment excluded) --"
           diff -I 'assembled by build.js' dist/index.html index.html
+          echo "-- dist/sw.js vs deployed sw.js (cache name tracks the build stamp) --"
+          diff dist/sw.js sw.js
           echo "-- engine-node/{engine_core,store_core,rule_g2p_v1}.js vs committed --"
           git diff --exit-code -- engine-node/engine_core.js engine-node/store_core.js engine-node/rule_g2p_v1.js
