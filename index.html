@@ -13,7 +13,7 @@
 <title>rhyme instrument — tome</title>
 <style>
 /* ==== OCCVM SPINE spine.css — spliced from occvm/spine.css. do not edit. ==== */
-/* sha256:9fd692623cd7 */
+/* sha256:5166f8d25399 */
 /* OCCVM 1.0 — the spine. Authored in occvm/SPINE.md; this is its machine-readable half.
  *
  * Spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the spliced copy in a tool: the
@@ -110,8 +110,37 @@
   border-top: 1px solid rgba(236, 227, 208, .13);
 }
 
-/* OCCVM-L8 — one focus ring across the system. Adopted at 1.5. */
-.occvm-focus:focus-visible {
+/* OCCVM-L8 (1.5) — an action is a real control.
+ *
+ * This reset lets a <button> carry a surface's own class without the user agent's styling changing how
+ * it looks, so semantics can be corrected without redesigning anything. Everything a UA imposes on a
+ * button and a div does not have is neutralised; nothing else is set, so the surface's own rule still
+ * decides layout, colour and size.
+ *
+ * No pseudo-element is used to enlarge a hit area. Two reasons, both load-bearing: a tool's own class may
+ * already own ::before and ::after (Rhyme's .stone owns both), and an overlay large enough to reach 44px
+ * on a dense inline sequence overlaps the neighbour it exists to distinguish, which trades a size floor
+ * for a wrong target. Where a surface must grow, it grows for real. */
+.occvm-act {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+/* OCCVM-L8 — one focus ring across the system. */
+.occvm-focus:focus-visible,
+.occvm-act:focus-visible {
   outline: 2px solid var(--gilt-b);
   outline-offset: 2px;
 }
@@ -119,6 +148,26 @@
 /* OCCVM-L7 — tabular figures under a column. Adopted at 1.3. */
 .occvm-num {
   font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* OCCVM-L8 (1.5) — every motion respects the viewer's preference.
+ *
+ * Declared once, in the spine, and deliberately not per-surface: a rule listing the selectors that
+ * animate today is a rule that a new animation escapes tomorrow. Before 1.5 BTC's price readout carried a
+ * half-second colour transition and its collapse chevron a transform, both unguarded, while its only
+ * media query tested no-preference — the inverse of the one that matters.
+ *
+ * Durations go to a hundredth of a millisecond rather than zero so that transitionend and animationend
+ * still fire; a listener waiting on one would otherwise hang forever. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 /* ==== END OCCVM spine.css ==== */
 
@@ -306,6 +355,27 @@ textarea.cut { min-height: 9.5em; }
 .bankrow .wd { font-size: 16px; }
 .bankrow .wd.override { color: var(--gilt-a); }
 .bankrow .rm { font-size: 13px; color: var(--bone-lo); padding: 4px 8px; cursor: pointer; }
+/* OCCVM-L8 (1.5) — surfaces that became <button> and were block-level as <div>/<p>. A button defaults to
+   inline-block, so these restate the flow they had; .stones, .break, .ghost, .head and .word set their own
+   display and need nothing. .occvm-act neutralises the rest of the user agent's button styling. */
+.text.occvm-act,
+.edge.occvm-act,
+.pl.occvm-act { display: block; width: 100%; }
+
+/* OCCVM-L8 — the 44px floor, on chrome. Exempt, per the law: anything inline in a flow of text — the
+   stones, the words they sit under, the bar text — because enlarging those restructures the poem and an
+   overlay wide enough to reach 44px covers the neighbouring stone it exists to distinguish. */
+.cast.occvm-act,
+.pl.occvm-act,
+.rm.occvm-act,
+.inlay.occvm-act { min-height: 44px; }
+.clear.occvm-act { min-height: 44px; display: inline-flex; align-items: center; }
+.cast.occvm-act { display: flex; align-items: center; justify-content: center; }
+/* the wordmark and each section head close an open face; both are chrome, so both take the floor */
+.binding h1 .occvm-act,
+.head.occvm-act { min-height: 44px; }
+.head.occvm-act { align-items: center; }
+
 @media (prefers-reduced-motion: reduce) { .slab, .edge { animation: none !important; transition: none !important; } }
 
 /* scheme letter, engraved at the bar's right edge */
@@ -2665,19 +2735,33 @@ const NAMES = {
   UH: "ŏŏ"
 };
 const clean = s => (s || "").toLowerCase().replace(/[^a-z']/g, "");
+
+/* OCCVM-L8 — a stone that can be picked is a real control; one that only displays a vowel is not and must
+   not enter the tab order. The 44px floor does not apply: a stone sits inline inside a word inside a line
+   of a poem, which is the flow-of-text exemption the law states. */
 function Stone({
   v,
   s = 1,
   onClick,
   chosen
 }) {
-  return /*#__PURE__*/React.createElement("span", {
-    className: `stone s${s}${onClick ? " pickable" : ""}${chosen ? " chosen" : ""}`,
-    style: {
-      "--c": VOWEL_COLORS[v] || "#777"
-    },
-    onClick: onClick
-  }, NAMES[v] || (v || "").toLowerCase());
+  const cls = `stone s${s}${onClick ? " pickable occvm-act" : ""}${chosen ? " chosen" : ""}`;
+  const style = {
+    "--c": VOWEL_COLORS[v] || "#777"
+  };
+  const label = NAMES[v] || (v || "").toLowerCase();
+  if (!onClick) return /*#__PURE__*/React.createElement("span", {
+    className: cls,
+    style: style
+  }, label);
+  return /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: cls,
+    style: style,
+    onClick: onClick,
+    "aria-pressed": chosen === undefined ? undefined : !!chosen,
+    "aria-label": `vowel ${label}${s > 0 ? ", stressed" : ""}`
+  }, label);
 }
 function Mark({
   v,
@@ -2738,9 +2822,10 @@ function Picker({
     className: "reads"
   }, /*#__PURE__*/React.createElement("div", {
     className: "who"
-  }, "the dictionary carries ", reads.length, " reads of ", /*#__PURE__*/React.createElement("i", null, word), " \u2014 tap one"), reads.map((r, i) => /*#__PURE__*/React.createElement("div", {
+  }, "the dictionary carries ", reads.length, " reads of ", /*#__PURE__*/React.createElement("i", null, word), " \u2014 tap one"), reads.map((r, i) => /*#__PURE__*/React.createElement("button", {
+    type: "button",
     key: i,
-    className: "stones read" + (same(r) ? " cur" : ""),
+    className: "stones read occvm-act" + (same(r) ? " cur" : ""),
     onClick: () => {
       commit(r);
       onClose();
@@ -2762,8 +2847,9 @@ function Picker({
     s: x.s,
     chosen: i === sel,
     onClick: () => setSel(i)
-  })), /*#__PURE__*/React.createElement("span", {
-    className: "clear",
+  })), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "clear occvm-act",
     onClick: cutStress
   }, cur[sel] && cur[sel].s > 0 ? "stressed" : "unstressed")), /*#__PURE__*/React.createElement("div", {
     className: "stones"
@@ -2774,28 +2860,39 @@ function Picker({
     onClick: () => {
       cutVowel(v);
     }
-  })), has && /*#__PURE__*/React.createElement("span", {
-    className: "clear",
+  })), has && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "clear occvm-act",
     onClick: () => {
       setOverride(word, null);
       onClose();
     }
-  }, "clear all cuts"), /*#__PURE__*/React.createElement("span", {
-    className: "clear",
+  }, "clear all cuts"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "clear occvm-act",
     onClick: onClose
   }, "done")));
 }
+/* OCCVM-L8 — the patina control. 28 call sites reach the interaction floor through this one component.
+   aria-pressed is emitted only when the caller passes `on` AND has not marked the control `action`: five
+   sites write a bare `on` to mean "styled active", and a button that claims to be a pressed toggle
+   announces a state it does not have. */
 function Cast({
   on,
   children,
   onClick,
   patina,
-  style
+  style,
+  label,
+  action
 }) {
-  return /*#__PURE__*/React.createElement("div", {
-    className: `cast${on ? " on" : ""}${patina ? " patina" : ""}`,
+  return /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: `cast${on ? " on" : ""}${patina ? " patina" : ""} occvm-act`,
     onClick: onClick,
-    style: style
+    style: style,
+    "aria-label": label,
+    "aria-pressed": action || on === undefined ? undefined : !!on
   }, children);
 }
 
@@ -2863,12 +2960,14 @@ function Bar({
     onReturn: () => edit.next(bar.i),
     onBackspaceEmpty: () => edit.remove(bar.i),
     onDone: () => edit.done(bar.i)
-  }) : /*#__PURE__*/React.createElement("p", {
-    className: "text",
+  }) : /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "text occvm-act",
     style: {
       margin: 0
     },
-    onClick: () => edit.start(bar.i)
+    onClick: () => edit.start(bar.i),
+    "aria-label": `edit bar ${bar.i + 1}`
   }, bar.field.map((w, i) => /*#__PURE__*/React.createElement(React.Fragment, {
     key: i
   }, /*#__PURE__*/React.createElement("span", {
@@ -2882,8 +2981,11 @@ function Bar({
       key: i,
       className: "word" + (open ? " pick" : ""),
       "data-word": key
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "stones",
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "stones occvm-act",
+      "aria-expanded": !!open,
+      "aria-label": `syllables of ${key}`,
       onClick: () => setPick(open ? null : {
         bar: bar.i,
         word: key,
@@ -3025,6 +3127,7 @@ function Shelf({
     }
   }, /*#__PURE__*/React.createElement(Cast, {
     on: true,
+    action: true,
     onClick: () => setOpen(!open),
     style: {
       flex: 2,
@@ -3040,22 +3143,25 @@ function Shelf({
   }, "name"), /*#__PURE__*/React.createElement(Cast, {
     patina: true,
     on: true,
+    action: true,
     onClick: newDraft
   }, "new")), open && /*#__PURE__*/React.createElement("div", {
     className: "shelflist"
   }, shelf.slice().sort((a, b) => b.updated - a.updated).map(d => /*#__PURE__*/React.createElement("div", {
     key: d.id,
     className: "bankrow" + (d.id === current ? " cur" : "")
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "wd",
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "wd occvm-act",
     onClick: () => {
       setCurrent(d.id);
       setOpen(false);
     }
   }, d.name, /*#__PURE__*/React.createElement("span", {
     className: "dim"
-  }, " \xB7 ", d.text.split("\n").filter(l => l.trim()).length, " bars \xB7 ", when(d.updated))), shelf.length > 1 && /*#__PURE__*/React.createElement("span", {
-    className: "rm",
+  }, " \xB7 ", d.text.split("\n").filter(l => l.trim()).length, " bars \xB7 ", when(d.updated))), shelf.length > 1 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "rm occvm-act",
     onClick: () => {
       if (confirm(`remove “${d.name}” from the shelf?`)) removeDraft(d.id);
     }
@@ -3116,17 +3222,21 @@ function SharePanel({
     onClick: () => setFormat("story")
   }, "9:16")), scope === "one" ? /*#__PURE__*/React.createElement("div", {
     className: "picklist"
-  }, filled.map(b => /*#__PURE__*/React.createElement("div", {
+  }, filled.map(b => /*#__PURE__*/React.createElement("button", {
+    type: "button",
     key: b.i,
-    className: "pl" + (b.i === one ? " on" : ""),
+    className: "pl occvm-act" + (b.i === one ? " on" : ""),
+    "aria-pressed": b.i === one,
     onClick: () => setOne(b.i)
   }, b.text))) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "label"
   }, "start at"), /*#__PURE__*/React.createElement("div", {
     className: "picklist"
-  }, filled.map(b => /*#__PURE__*/React.createElement("div", {
+  }, filled.map(b => /*#__PURE__*/React.createElement("button", {
+    type: "button",
     key: b.i,
-    className: "pl" + (b.i === start ? " on" : ""),
+    className: "pl occvm-act" + (b.i === start ? " on" : ""),
+    "aria-pressed": b.i === start,
     onClick: () => setStart(b.i)
   }, b.text))), /*#__PURE__*/React.createElement("div", {
     className: "row"
@@ -3142,6 +3252,7 @@ function SharePanel({
   }, /*#__PURE__*/React.createElement(Cast, {
     patina: true,
     on: true,
+    action: true,
     onClick: async () => {
       setStatus("…");
       setStatus(await CARD.share(canvasRef.current, "rhyme-instrument-" + Date.now()));
@@ -3365,16 +3476,19 @@ function Draft({
     onReturn: () => edit.next(i),
     onBackspaceEmpty: () => edit.remove(i),
     onDone: () => edit.done(i)
-  })) : lines.length > 1 || ln ? /*#__PURE__*/React.createElement("div", {
+  })) : lines.length > 1 || ln ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
     key: i,
-    className: "break",
-    onClick: () => edit.start(i)
+    className: "break occvm-act",
+    onClick: () => edit.start(i),
+    "aria-label": "edit this break"
   }, /*#__PURE__*/React.createElement("span", null, "break")) : null), reading.bars.some(Boolean) && /*#__PURE__*/React.createElement(Threads, {
     reading: reading,
     host: host,
     quiet: editing != null
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "ghost",
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "ghost occvm-act",
     onClick: edit.append
   }, reading.bars.some(Boolean) ? "+ bar" : "tap to cut the first bar")), reading.terminal && /*#__PURE__*/React.createElement("div", {
     className: "terminal"
@@ -3432,9 +3546,11 @@ function Lookup({
     className: "gh " + label.split(" ")[0]
   }, label, " \xB7 ", list.length), /*#__PURE__*/React.createElement("div", {
     className: "inlays"
-  }, list.slice(0, 90).map(it => /*#__PURE__*/React.createElement("span", {
+  }, list.slice(0, 90).map(it => /*#__PURE__*/React.createElement("button", {
+    type: "button",
     key: it.word,
-    className: `inlay t${it.tier}${banked.has(it.word) ? " banked" : ""}`,
+    className: `inlay occvm-act t${it.tier}${banked.has(it.word) ? " banked" : ""}`,
+    "aria-pressed": banked.has(it.word),
     onClick: () => toggle(it.word)
   }, it.word))))), mos.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "group"
@@ -3535,6 +3651,7 @@ function Bank({
     className: "row"
   }, /*#__PURE__*/React.createElement(Cast, {
     on: true,
+    action: true,
     onClick: commit,
     patina: true
   }, "add")), /*#__PURE__*/React.createElement("div", {
@@ -3557,15 +3674,19 @@ function Bank({
         flex: 1,
         alignItems: "flex-end"
       }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "stones",
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "stones occvm-act",
+      "aria-expanded": !!open,
+      "aria-label": `syllables of ${w}`,
       onClick: () => setPick(open ? null : key)
     }, p.sylls.map((s, k) => /*#__PURE__*/React.createElement(Stone, {
       key: k,
       v: s.v,
       s: s.s
-    })))), /*#__PURE__*/React.createElement("span", {
-      className: "rm",
+    })))), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "rm occvm-act",
       onClick: () => setBank(bank.filter(b => b !== w))
     }, "remove")), open && /*#__PURE__*/React.createElement(Picker, {
       word: key,
@@ -3685,6 +3806,7 @@ function Tune({
     className: "row"
   }, /*#__PURE__*/React.createElement(Cast, {
     on: true,
+    action: true,
     onClick: onExport
   }, "download backup"), /*#__PURE__*/React.createElement(Cast, {
     patina: true,
@@ -3970,9 +4092,11 @@ function Tome() {
   const idx = FACES.findIndex(f => f.id === open);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("header", {
     className: "binding"
-  }, /*#__PURE__*/React.createElement("h1", {
+  }, /*#__PURE__*/React.createElement("h1", null, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "occvm-act",
     onClick: () => setOpen(null)
-  }, "rhyme instrument"), sun && /*#__PURE__*/React.createElement("div", {
+  }, "rhyme instrument")), sun && /*#__PURE__*/React.createElement("div", {
     className: "sun"
   }, /*#__PURE__*/React.createElement("b", null, sun.time), " \xB7 sun ", sun.elev >= 0 ? sun.elev.toFixed(0) + "°" : "set", " \xB7 ", sun.dir)), !loaded ? /*#__PURE__*/React.createElement("div", {
     className: "stack note"
@@ -3985,14 +4109,16 @@ function Tome() {
       "--veins": veinSVG(prefs.mineral, idx),
       "--thick": "16px"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "head",
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "head occvm-act",
     onClick: () => setOpen(null)
   }, /*#__PURE__*/React.createElement("h2", null, open), /*#__PURE__*/React.createElement("span", {
     className: "hint"
-  }, "tap to close")), face(open)), FACES.filter(f => f.id !== open).map((f, i) => /*#__PURE__*/React.createElement("div", {
+  }, "tap to close")), face(open)), FACES.filter(f => f.id !== open).map((f, i) => /*#__PURE__*/React.createElement("button", {
+    type: "button",
     key: f.id,
-    className: "edge",
+    className: "edge occvm-act",
     onClick: () => setOpen(f.id)
   }, /*#__PURE__*/React.createElement("span", {
     className: "name"
@@ -4003,5 +4129,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260907000648 -->
+<!-- build-20260907003827 -->
 </html>

@@ -93,3 +93,37 @@ test("the service worker's cache name is the build stamp", () => {
   assert.ok(!fs.readFileSync(path.join(ROOT, "tome-src", "sw.js"), "utf8").includes(`tome-${stamp}`),
     "tome-src/sw.js is the template and must keep its placeholder, not a substituted stamp");
 });
+
+/* OCCVM-L8 / roadmap 1.5 — the interaction floor.
+ *
+ * D7 was 53 onClick handlers on divs and spans, zero <button>, zero aria, zero tabIndex: the tool was
+ * entirely keyboard-inoperable and announced nothing. These guard the shape of the fix; the rendered
+ * halves — real measured sizes, no surviving non-button handlers — are checked in a browser, because a
+ * source file cannot tell you what an element measures.
+ */
+test("no action is a div or a span any more", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const raw = ui.match(/<(div|span|p|h1|h2|li)[^>]*onClick/g) || [];
+  assert.deepEqual(raw, [], "every action must be a real control");
+});
+
+test("the two components carry the whole tree to the floor", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  assert.match(ui, /function Cast\([^)]*\)\s*\{\s*return <button/, "Cast must render a button");
+  assert.match(ui, /aria-pressed=\{action \|\| on === undefined \? undefined : !!on\}/,
+    "a bare `on` means styled-active, not pressed; an action must not announce a state it lacks");
+  assert.match(ui, /if \(!onClick\) return <span/, "a stone that only displays must stay out of the tab order");
+});
+
+test("every control the artifact renders is a button", () => {
+  const made = (built.match(/createElement\("button"/g) || []).length;
+  assert.ok(made >= 18, `expected the converted tree, found ${made} button call sites`);
+  assert.ok(built.includes('"aria-pressed"'), "toggles must announce their state");
+  assert.ok(built.includes("occvm-act"), "controls must carry the spine's reset");
+});
+
+test("reduced motion is honoured from the spine, system-wide", () => {
+  const spine = fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8");
+  assert.match(spine, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\*::after/);
+  assert.ok(built.includes("transition-duration: .01ms !important"), "the rule must reach the artifact");
+});
