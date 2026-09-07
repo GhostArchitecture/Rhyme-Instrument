@@ -237,3 +237,33 @@ test("P1 stays unwired: no animated horizontal motion exists to be anisotropic a
   assert.ok(!fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8").includes("--dur-a"),
     "no P1 token may ship while P1 is unexpressed — that would be OCCVM-D12 again");
 });
+
+test("P4 stays unwired, and the golden ratio is rejected by name", () => {
+  /* The cell gives a spacing triple a 1.0000 : c 1.1573 : b 1.6069, and it ships nothing: it does not
+   * describe either tool (213 declarations censused, 10.79% mean error, worse coverage than a 4px grid)
+   * and it does not survive integer-pixel rounding at the sizes 84.5% of spacing uses.
+   *
+   * The guard ships anyway, because 1.6069 and the golden ratio 1.6180 differ by 0.04px at step 1 and do
+   * not reach a whole pixel until step 5 — past the largest spacing either tool uses. They are the same
+   * number on screen, so somebody will eventually "correct" one to the other. It is not a typo for phi;
+   * it is 7.97/4.96, and the point of OCCVM-L12 is that a value has a reason. */
+  const fs = require("fs");
+  const M = require(path.join(ROOT, "occvm", "material.js"));
+  const sp = M.spacing(M.ARAGONITE);
+  assert.ok(Math.abs(sp.b - 1.6069) < 1e-3, "b/a is the cell's ratio");
+  assert.ok(Math.abs(M.GOLDEN_RATIO - sp.b) > 0.01, "phi is not the cell's ratio");
+
+  /* the rendered ratio is a function of the base, not the material */
+  const step = b => Math.round(b * sp.c) / b;
+  const steps = [4, 6, 8, 10, 12, 16].map(step);
+  assert.ok(Math.max(...steps) - Math.min(...steps) > 0.1,
+    `the rendered c-step must wander with the base: ${steps.map(v => v.toFixed(3)).join(" ")}`);
+  assert.ok(steps.every(v => Math.abs(v - sp.c) > 1e-6), "no base renders the cell's c-step exactly");
+
+  for (const f of ["occvm/spine.css", "tome-src/20_style.css"]) {
+    const body = fs.readFileSync(path.join(ROOT, f), "utf8");
+    assert.ok(!/1\.618/.test(body), `${f} must carry no golden-ratio constant`);
+  }
+  assert.ok(!/--s[abc]\b|--space-[abc]\b/.test(fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8")),
+    "no P4 spacing token may ship while P4 is unexpressed");
+});
