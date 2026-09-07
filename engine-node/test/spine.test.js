@@ -161,3 +161,49 @@ test("the layer is a decodable data URI, not bare markup", () => {
   assert.ok(svg.includes("href='#v'"), "the reference must be a raw # for encodeURIComponent to escape");
   assert.ok(!svg.includes("%23"), "nothing may be pre-encoded; the caller encodes the whole document");
 });
+
+/* ── 2.0 — the material owns the lattice (OCCVM-L12) ─────────────────────────────────────────── */
+
+test("veins reads the material's cell rather than restating it", () => {
+  const V = require(path.join(ROOT, "occvm", "veins.js"));
+  const M = require(path.join(ROOT, "occvm", "material.js"));
+  assert.equal(V.CELL, M.ARAGONITE.cell, "one lattice, one owner — not two copies of three numbers");
+  assert.equal(M.twinAngle, undefined, "the material must not derive the angle a second time");
+});
+
+test("fracture resolves its angle under the PAGE's load order, with no require", () => {
+  /* The bug this pins was live in this tool from 1.1b until 2.0, and it was not cosmetic. The splicer
+   * inserts every part after one anchor, so parts land in reverse list order and fracture.js is evaluated
+   * BEFORE veins.js is assigned. The old code captured OCCVM_VEINS into a module binding at that moment,
+   * got null, and threw on every cleave() — and because this tool calls
+   *     OCCVM_FRACTURE.cleave(row, () => removeDraft(d.id))
+   * the throw happened before `done` ran, so DELETING A DRAFT SILENTLY DID NOTHING for anyone not on
+   * reduced motion. Node resolved it through require, so every assertion passed. This test loads the
+   * built artifact's own blocks, in the artifact's own order, with no require in scope. */
+  const fs = require("fs"), vm = require("vm");
+  const src = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const blk = n => { const i = src.indexOf("var " + n + " ="); return src.slice(i, src.indexOf("\nif (typeof module", i)); };
+  const iMat = src.indexOf("var OCCVM_MATERIAL ="), iVein = src.indexOf("var OCCVM_VEINS ="), iFrac = src.indexOf("var OCCVM_FRACTURE =");
+  assert.ok(iMat > 0, "material.js must be spliced into the built artifact");
+  assert.ok(iMat < iVein, "material.js must precede veins.js — veins reads the cell at load");
+  assert.ok(iFrac < iVein, "fracture before veins is the real order, and what makes this guard meaningful");
+  const ctx = vm.createContext({ Math, console });
+  for (const n of ["OCCVM_MATERIAL", "OCCVM_FRACTURE", "OCCVM_VEINS"]) vm.runInContext(blk(n), ctx);
+  assert.ok(Math.abs(ctx.OCCVM_FRACTURE.twinAngle() - 116.209) < 1e-3,
+    "cleave() must be able to reach the twin angle in a page");
+});
+
+test("the substrate is derived in linear light, ordered, and hue-preserving", () => {
+  const M = require(path.join(ROOT, "occvm", "material.js")), A = M.ARAGONITE;
+  const lin = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16) / 255)
+    .map(v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const lum = h => { const p = lin(h); return 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]; };
+  const s = M.substrate(A, 1);
+  assert.ok(lum(s.hi) > lum(s.mid) && lum(s.mid) > lum(s.lo), "hi > mid > lo");
+  /* the double-gamma guard: scaling sRGB bytes rendered a 9.35x optical spread as 116x */
+  assert.ok(Math.abs(lum(s.hi) / lum(s.lo) / s.spread - 1) < 0.02,
+    "the rendered spread must equal the optical ratio in linear light");
+  const hue = h => { const p = lin(h), m = Math.max(...p) || 1; return p.map(v => v / m); };
+  hue(A.body).forEach((v, i) => assert.ok(Math.abs(v - hue(s.hi)[i]) < 0.02, "one gain, no hue shift"));
+  assert.equal(M.substrate(A, 0).lo, A.body, "contrast 0 collapses to the body colour");
+});
