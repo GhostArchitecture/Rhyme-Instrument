@@ -168,7 +168,14 @@ function Shelf({ shelf, current, setCurrent, newDraft, renameDraft, removeDraft 
           {shelf.slice().sort((a, b) => b.updated - a.updated).map(d => (
             <div key={d.id} className={"bankrow" + (d.id === current ? " cur" : "")}>
               <button type="button" className="wd occvm-act" onClick={() => { setCurrent(d.id); setOpen(false); }}>{d.name}<span className="dim"> · {d.text.split("\n").filter(l => l.trim()).length} bars · {when(d.updated)}</span></button>
-              {shelf.length > 1 && <button type="button" className="rm occvm-act" onClick={() => { if (confirm(`remove “${d.name}” from the shelf?`)) removeDraft(d.id); }}>remove</button>}
+              {shelf.length > 1 && <button type="button" className="rm occvm-act" onClick={e => {
+                if (!confirm(`remove “${d.name}” from the shelf?`)) return;
+                /* OCCVM-L11 — removing a draft is irreversible, so it cleaves rather than fades. The row
+                   is gone from the shelf only once the fracture has finished, so the two never overlap. */
+                const row = e.currentTarget.closest(".bankrow");
+                if (row && typeof OCCVM_FRACTURE !== "undefined") OCCVM_FRACTURE.cleave(row, () => removeDraft(d.id));
+                else removeDraft(d.id);
+              }}>remove</button>}
             </div>
           ))}
         </div>
