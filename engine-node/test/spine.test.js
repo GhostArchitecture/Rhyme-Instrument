@@ -298,12 +298,30 @@ test("the substrate a surface wears is sundial-written, not the :root fallback",
   assert.ok(!fs.existsSync(path.join(ROOT, "occvm", "substrate.css")),
     "2.3's generated ramp is gone, not left declared and unconsumed — that would be OCCVM-D12");
 
-  /* the sundial owns these, and the offsets it applies are the real L12 adoption target */
+  /* the sundial owns the base colour, and since 2.4 the face offsets applied to it are the material's.
+     This assertion named those offsets as the adoption target while they were still authored; they are
+     adopted now, so it asserts the base ownership and leaves the offsets to the 2.4 test below. */
   const eng = fs.readFileSync(path.join(ROOT, "occvm", "sundial.js"), "utf8");
   assert.ok(/"--sub":\s*hex\(sub\)/.test(eng), "the sundial writes the substrate base");
-  assert.ok(/0\.14 \* \(0\.5 \+ e\)/.test(eng) && /\[0, 0, 0\], 0\.42/.test(eng),
-    "and applies two AUTHORED face offsets — the thing OCCVM-L12 exists to replace");
 
   const M = require(path.join(ROOT, "occvm", "material.js"));
   assert.equal(M.ARAGONITE.body, "#0e0d13", "the body anchoring stays: it matches L1's declared floor");
+});
+
+test("2.4 — the substrate's face offsets are the material's, not two magic numbers", () => {
+  const fs = require("fs");
+  const sun = fs.readFileSync(path.join(ROOT, "occvm", "sundial.js"), "utf8");
+  /* comments stripped: the file records what it replaced, and a guard reading prose fails on its own
+     changelog. This must test the code. */
+  const code = sun.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(!/0\.14 \* \(0\.5 \+ e\)/.test(code), "the authored highlight offset is gone");
+  assert.ok(!/\[0, 0, 0\], 0\.42/.test(code), "the authored shadow offset is gone");
+  assert.ok(/m\.faceRatios\(/.test(code), "the sundial reads the material for them");
+  assert.ok(/0\.14 \* \(0\.5 \+ e\)/.test(sun), "but the file still records what it replaced");
+
+  const M = require(path.join(ROOT, "occvm", "material.js"));
+  assert.equal(M.authoredContrast, undefined, "authoredContrast fitted to the :root fallback and is gone");
+  assert.ok(Math.abs(M.renderedContrast(M.ARAGONITE) - 1.1766) < 1e-3,
+    "contrast anchors to the spread the tools RENDER at high sun, a named instant");
+  assert.ok(Math.abs(M.RENDERED_SPREAD_HIGH - 5.739) > 1, "and not to the fallback's spread — 2.3's error");
 });
