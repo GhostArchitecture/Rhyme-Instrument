@@ -1,3 +1,28 @@
+/* ==== OCCVM SPINE minerals.js — spliced from occvm/minerals.js. do not edit. ==== */
+/* sha256:6ab675b82831 */
+/* OCCVM 1.4 — the mineral set (OCCVM-L6). One implementation, shared by every conforming tool.
+ *
+ * Authored in occvm/SPINE.md; spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the
+ * spliced copy — the next splice reverts it silently.
+ *
+ * The set is closed and the meanings are fixed: amethyst is the default field, malachite is affirmed/
+ * won/positive, ruby is negated/lost/failed. `m`/`mlo` (accent/deep) are the law-pinned pair — SPINE.md's
+ * L6 table states them exactly. `hi`/`lo` are the vein generator's own highlight/shadow tint, derived by
+ * eye rather than by a formula (the existing amethyst/malachite pair wasn't built from one either), and
+ * are cosmetic: changing them is a design call, not a re-registration.
+ *
+ * Before this file, each tool that had a mineral concept declared its own copy. Rhyme's carried only two
+ * of the three — it had never needed a negative mineral, so ruby was never added — which is exactly the
+ * "no local exceptions" gap L6 exists to close (OCCVM-D6's other half: BTC had no mineral system at all).
+ */
+var OCCVM_MINERALS = {
+  amethyst:  { m: "#8d5cf0", mlo: "#4a2a8c", hi: "#c9a6ff", lo: "#5a36a8" },
+  malachite: { m: "#3fbf7e", mlo: "#1c6a45", hi: "#9ff0c5", lo: "#1f7a50" },
+  ruby:      { m: "#e0475f", mlo: "#6b1a2e", hi: "#f5a3b3", lo: "#8f2740" },
+};
+if (typeof module !== "undefined") module.exports = OCCVM_MINERALS;
+/* ==== END OCCVM minerals.js ==== */
+
 /* ==== OCCVM SPINE veins.js — spliced from occvm/veins.js. do not edit. ==== */
 /* sha256:49518901f7dc */
 /* OCCVM 1.1 — the vein generator. One implementation, shared by every conforming tool (OCCVM-L10).
@@ -743,10 +768,10 @@ const SUN = (() => {
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const SESSION = (() => { const fresh = () => String((Date.now() ^ (Math.random() * 1e9)) >>> 0);
   try { let k = sessionStorage.getItem("tome:seed"); if (!k) { k = fresh(); sessionStorage.setItem("tome:seed", k); } return +k; } catch (e) { return +fresh(); } })();
-const MINERALS = {
-  amethyst:  { hi: "#c9a6ff", lo: "#5a36a8", m: "#8d5cf0", mlo: "#4a2a8c" },
-  malachite: { hi: "#9ff0c5", lo: "#1f7a50", m: "#3fbf7e", mlo: "#1c6a45" },
-};
+/* OCCVM-L6 — the mineral set is one implementation, occvm/minerals.js, spliced above. This tool
+   previously carried its own two-entry copy (no ruby: it had never needed a negative mineral), which was
+   the "no local exceptions" gap OCCVM-D6 registered against this file. */
+const MINERALS = OCCVM_MINERALS;
 const VEIN_CACHE = new Map();
 function veinSVGLegacy(mineral, face) {
   /* the pre-1.1 generator: displaced cubic beziers under a turbulence filter. Kept as the fallback

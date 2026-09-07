@@ -16,17 +16,19 @@ order would be exactly the drift the ledger law exists to prevent.
 | **1.1** | landed | generative fidelity: DLA veins, `--vein-density --vein-habit`. Closed nothing; added L10. Its determinism requirement was met at 1.0. |
 | **1.2** | landed | one light, completed. Closed D2, D8, D9, D10. |
 | **1.3** | landed | the numeric face: an owned mono, embedded and subset, two weights. Closed D3. |
-| 1.4 | outstanding | mineral as preference. D6. |
+| **1.4** | landed (narrow) | mineral as preference: one shared implementation, `occvm/minerals.js`, spliced into both tools like `sundial.js`/`veins.js`. Ruby was added to complete the 3-mineral set (Rhyme had never carried a negative mineral). Closed D6. |
 | **1.5** | landed | the interaction floor. Closed D7. |
 | **1.6** | landed | architecture conformance. Closed D4, D5. |
 | 1.7 | outstanding | the night model. |
 | 1.8 | outstanding | the reference surface. |
-| 1.9 | outstanding | freeze and stage. |
+| **1.9** | landed (narrow) | D1 closed: the expired `--ink --meas --bondi` alias block swept to its canonical names. The roadmap's fuller sketch — a full token audit beyond this block, a migration table for other divergences, promoting every remaining divergence to a law amendment or exception — was not performed; nothing else in the spine currently has an open alias needing it. |
 
-Two of eleven defects remain: **D1** (BTC's expired alias block, 1.9) and **D6** (BTC has no mineral
-system, 1.4). D1's aliases were shown to be load-bearing by 1.2's golden diff —
-`--ink --meas --dim` all moved with the tokens they alias — so the block is a live dependency, not dead
-weight, and sweeping it is a migration rather than a deletion.
+**All eleven defects are closed.** D1's aliases were shown to be load-bearing by 1.2's golden diff —
+`--ink --meas --dim` all moved with the tokens they alias — so the block was a live dependency, not dead
+weight, and sweeping it (1.9) was a migration rather than a deletion. D6 (1.4) closed the same way 1.9
+did: BTC gets the mineral system, but only where it was already load-bearing for this tool — the vein
+layer — not ported wholesale as an ambient UI accent the way Rhyme uses it (§L6, and see 1.4's own note
+below).
 
 **1.6 — *architecture conformance*** — closes `OCCVM-D4` and `D5`. Rhyme's JSX is compiled at author time
 and React is inlined from a committed vendor copy, so the artifact fetches nothing at load and
@@ -186,7 +188,24 @@ the only place this spine departs from a stated roadmap exit, and it departs bec
 physically unreachable, not because it is inconvenient.
 
 Mineral **properties** — hardness, cleavage, refractive index — are 2.0's substance and are explicitly not in
-this law. Completed at **1.4**. BTC has no mineral system at all: `OCCVM-D6`.
+this law. Completed at **1.4**, closing `OCCVM-D6`.
+
+**One implementation, `occvm/minerals.js`, spliced into both tools** — the same treatment as `sundial.js`
+and `veins.js`, and the correct fix for what D6 actually was: not just that BTC had no mineral system, but
+that Rhyme's own two-entry copy (no `ruby` — it had never needed a negative mineral) was a *local*
+implementation of a law that says "no local exceptions." Rhyme's `MINERALS` is now `OCCVM_MINERALS` under
+its old name, unchanged at every other call site; ruby exists there for the first time.
+
+**BTC's use is deliberately narrower than Rhyme's, and that is not a partial close.** Rhyme spends the
+mineral pervasively — page wash, slab edges, focus rings, rhyme-match highlighting, picker borders —
+because none of that surface carries any other meaning. BTC's malachite and ruby already carry a fixed
+meaning everywhere (§5 of CLAUDE.md: "the most dangerous possible bug in this tool" is inverting it), so
+widening the mineral onto BTC's chrome risks a reader mistaking a decorative accent for the outcome
+signal. The mineral is wired to the one surface that was already load-bearing for this tool and carries no
+outcome meaning: the vein layer (`veinLayer`/`veinLayerLegacy`), plus a picker in Settings → Advanced. The
+roadmap's 1.4 exit criterion is met — BTC has a working, chosen, persisted mineral preference — without
+touching `--malachite`, `--ruby`, `--up`, `--down`, or any surface §5 governs. `test/occvm.js` pins both
+halves: the mineral drives the vein layer, and switching it never inline-sets an outcome token.
 
 ### OCCVM-L7 — figure discipline
 
@@ -340,15 +359,17 @@ All resolved scalars or hexes, all written by `occvm/sundial.js` at most once a 
 Declared by one tool or by both with divergent derivations. Each is spine at the release that unifies it;
 until then the tools' own declarations stand and the gap is a defect.
 
-| token | today | spine at |
-|---|---|---|
-| `--mineral --mineral-lo --vein-hi --vein-lo --veins` | Rhyme only | **1.4** (L6) |
-| `--ruby --ruby-lo` | BTC only; Rhyme has no negative mineral | **1.4** (L6) |
+*Empty as of 1.4.* `--mineral --mineral-lo --vein-hi --vein-lo` were the last entries here: Rhyme declared
+them alone, and BTC had no `ruby` mineral to declare at all. Both are now driven from the single shared
+`occvm/minerals.js` (§ OCCVM-L6), so the gap this table exists to track is closed. `--ruby --ruby-lo`
+remain BTC-only as *raw* CSS custom properties — that pair names BTC's fixed win/lose colour, §2c's kind of
+tool-local token, not the mineral naming scheme — but the concept the row was tracking, Rhyme having no
+negative mineral, closed with the shared map.
 
 ### 2c. Tool-local — not spine, not promised
 
-Semantic tokens that belong to one tool's subject matter: BTC's `--up --down --err --warn --model
---bondi --field --rule --glass`, Rhyme's `--thick --bthick --stone-h --pad --c --k --text`.
+Semantic tokens that belong to one tool's subject matter: BTC's `--up --down --err --warn
+--field --rule --glass`, Rhyme's `--thick --bthick --stone-h --pad --c --k --text`.
 
 `--bloom` is BTC's malachite glow on `.tile`, renamed at 1.2 so it stops colliding with the spine's
 `--glow`. OCCVM-L9 reserves `--glow` for ink and 1.7's exit is that no surface has taken a glow, so the
@@ -416,12 +437,12 @@ found by measurement after it was written.
 
 | id | tool | defect | closes at |
 |---|---|---|---|
-| **D1** | BTC | the expired `--ink --meas --bondi` alias block, past its removal window and still referenced (lines 26–27, 352, 359, 388, 1253) | 1.9 |
+| **D1** | BTC | the expired `--ink --meas --bondi` alias block, past its removal window and still referenced | **closed 1.9** |
 | **D2** | BTC | one light incomplete: no `--amb --rake --sheen --hi-a --cut-a --shade-a`, 15 fixed `box-shadow` offsets, `--elev` on a different scale with a 0.15 night floor, `--night` a binary step | **closed 1.2** |
 | **D3** | BTC | the numeric face is OS-supplied; metrics vary per platform under a column | **closed 1.3** |
 | **D4** | Rhyme | a runtime compiler: JSX compiled in the browser by `babel-standalone`, fetched with React and ReactDOM from a CDN. **With cdnjs unreachable the tool renders nothing** — measured, not inferred | **closed 1.6** |
 | **D5** | BTC | half-installed PWA: `manifest.webmanifest` and four icons ship, with zero `serviceWorker` registration | **closed 1.6** |
-| **D6** | BTC | no mineral system at all. `--amethyst` is declared once and referenced zero times | **1.4** |
+| **D6** | BTC | no mineral system at all. `--amethyst` is declared once and referenced zero times | **closed 1.4** |
 | **D7** | Rhyme | no interaction floor: 0 `<button>`, 53 `onClick`, 0 `aria-*`, 0 `role`, 0 `tabIndex` | **closed 1.5** |
 | **D8** | BTC | `--glow` is a `calc()` expression, so it never resolves to a number at token level and no law can read it (L3) | **closed 1.2** |
 | **D9** | BTC | the light vector keeps tracking the sun below the horizon (−0.516, −0.856 at −39°) instead of resolving neutral overhead (L3) | **closed 1.2** |
@@ -434,8 +455,8 @@ found by measurement after it was written.
 
 | tool | version | build stamp | violates |
 |---|---|---|---|
-| **BTC Terminal** | 1.0, 1.1, 1.2, 1.3, 1.5, 1.6 | `build-20260907153431` | D1, D6 |
-| **Rhyme Instrument** | 1.0, 1.1, 1.2, 1.5, 1.6 | `build-20260907011503` | — (renders no mono; D3 does not apply) |
+| **BTC Terminal** | 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.9 | `build-20260907161724` | — |
+| **Rhyme Instrument** | 1.0, 1.1, 1.2, 1.4, 1.5, 1.6 | `build-20260907160642` | — (renders no mono; D3 does not apply) |
 | **Reference surface** | — | not built | — (1.8) |
 
 **At 1.0 the splice was a no-op by construction, and the golden set proved it: zero deltas in either tool.**
@@ -507,5 +528,50 @@ rule the next animation escapes; a universal rule is not.
 
 **1.2 did not** delete BTC's surface bloom, adopt any primitive class onto a surface beyond the cast, or
 touch the numeric face, the mineral system or the interaction floor. Those are 1.7, 1.3, 1.4 and 1.5.
+
+**1.9 (narrow)** closed D1. `--ink`, `--meas`, `--dim`, `--faint`, `--bondi`, `--bondi-deep`, `--model`
+and `--model-dim` were a shim from an earlier naming scheme, kept "so nothing downstream breaks" past the
+point anything still depended on the names rather than the values. Two of the eight — `--ink`, `--meas`,
+`--bondi-deep`, `--model` — turned out to have **zero** call sites: pure dead weight. The other four had
+77 call sites between them, every one an inline `style="color:var(--dim)"` string inside JS-generated
+markup — the tool's CSS rules had already moved to the canonical names (`.lbl`, `.srcname`, `.tgl button`
+all read `var(--bone-dim)`/`var(--bone-lo)` directly); only the generated HTML still spoke the old
+dialect. That confirms 1.2's finding: the block was load-bearing, not dead, and the fix is a migration —
+77 call sites moved to their real names (`--dim`→`--bone-lo`, `--faint`→`--bone-dim`,
+`--bondi`→`--verdigris`, `--model-dim`→`--gilt-c`) — not a deletion.
+
+The golden set's own token-set guard (added mid-session, §7's note on it) fired exactly as designed: the
+declared-token scan found eight fewer names and failed the diff on `@token_names` before touching a single
+value. Every one of the 24 value-level deltas that followed was one of those eight tokens going from a
+resolved hex to absent at each of the three instants — nothing else moved. Re-recorded at 338 values.
+
+The roadmap's fuller 1.9 sketch — a full token audit across the whole spine, a migration table for every
+remaining divergence, promoting each to a law amendment or a documented exception — was not performed.
+Nothing else in the spine currently carries an open alias that needs it; when one does, that work is still
+owed under this same release number.
+
+**1.4** closed D6 by moving the mineral set itself, not just BTC's copy of it, into `occvm/minerals.js` —
+the fifth shared part, spliced the same way as `sundial.js`/`veins.js`. Rhyme's local `MINERALS` object
+(two entries: no `ruby`) is now one line, `const MINERALS = OCCVM_MINERALS`, with all 4 of its existing
+call sites unchanged. BTC gained `S.cfg.mineral` (default `amethyst`, persisted in `btc.cfg`), a picker in
+Settings → Advanced, and `--mineral --mineral-lo --vein-hi --vein-lo` custom properties resolved from it —
+consuming, for the first time, the `--amethyst`/`--amethyst-lo` tokens D6 found declared and never
+referenced. `veinLayer()` and its fallback `veinLayerLegacy()` both now tint from the chosen mineral
+instead of a hardcoded malachite hex.
+
+**What 1.4 deliberately did not do.** Rhyme spends its mineral everywhere — background wash, slab edges,
+focus rings, rhyme-match highlighting — because none of that surface means anything else. BTC's
+malachite and ruby already mean something everywhere (§5 of CLAUDE.md, "the most dangerous possible bug
+in this tool" is inverting which one a reader sees): `.up`/`.down`, the verdict banner, the settled-strike
+ring, the live odds gauge, `--up`/`--down` themselves. Widening BTC's mineral onto any of that surface
+would let a decorative preference sit beside — and eventually be mistaken for — the outcome signal the
+whole instrument exists to keep honest. So BTC's mineral touches exactly one surface, the vein layer,
+which carried no outcome meaning before or after. The roadmap's 1.4 exit — "a mineral system exists and is
+a stored preference" — is met; the pervasive-accent shape Rhyme has is not, and is not owed by this law
+(§L6 already states each tool stores its own choice; nothing in it requires the same *extent* of use).
+`test/occvm.js` pins both directions: the vein layer's output changes with the mineral, and switching it
+never inline-sets `--malachite`, `--ruby`, `--up`, or `--down`. Golden-verified: exactly five values moved
+per instant (`--mineral`, `--mineral-lo`, `--vein-hi`, `--vein-lo`, `--vein`) against a token count that
+grew from 62 to 66; nothing else in either tool's recording changed.
 
 A spine no tool has adopted is a proposal. This one is inlined in both.
