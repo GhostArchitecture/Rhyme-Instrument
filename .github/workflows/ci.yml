@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    # claude/** included so work in progress is checked where it is done. Without it this workflow ran
+    # zero times across six OCCVM releases on a feature branch, which is a check that exists on paper.
+    branches: ["main", "claude/**"]
   pull_request:
 
 jobs:
