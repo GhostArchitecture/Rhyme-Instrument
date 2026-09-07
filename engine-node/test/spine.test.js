@@ -267,3 +267,18 @@ test("P4 stays unwired, and the golden ratio is rejected by name", () => {
   assert.ok(!/--s[abc]\b|--space-[abc]\b/.test(fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8")),
     "no P4 spacing token may ship while P4 is unexpressed");
 });
+
+test("--amb is retired: 2.2 renamed it --fill and it may not come back", () => {
+  /* The 1.9 expired-alias treatment. The token was never a model of sky illumination — it is the weight
+   * of the fill, and (1-e) is how much of the fill applies, which is why a value that rises at night is
+   * correct rather than paradoxical. A retired name that can still be written drifts from its
+   * replacement exactly as --ink/--meas/--bondi did. */
+  const fs = require("fs");
+  for (const f of ["occvm/sundial.js", "occvm/spine.css", "tome-src/20_style.css", "tome-src/10_engine.js", "index.html"]) {
+    const p2 = path.join(ROOT, f);
+    if (!fs.existsSync(p2)) continue;
+    assert.ok(!/--amb\b/.test(fs.readFileSync(p2, "utf8")), `${f} still carries --amb; it is --fill since 2.2`);
+  }
+  assert.ok(/--fill\s*:/.test(fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8")),
+    "the stylesheet must declare the fallback under the new name");
+});

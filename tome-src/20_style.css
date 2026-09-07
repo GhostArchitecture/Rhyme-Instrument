@@ -174,7 +174,7 @@
 /* ==== END OCCVM spine.css ==== */
 
 :root {
-  --lx: 0; --ly: 1; --elev: .6; --amb: .7; --night: 0; --glow: .6; --sheen: .6;
+  --lx: 0; --ly: 1; --elev: .6; --fill: .7; --night: 0; --glow: .6; --sheen: .6;
   --rake: 6px; --nglow: 0px; --nglow-s: 0px; --lxpx: 0px; --lypx: 1px;
   --hi-a: .2; --cut-a: .3; --shade-a: .6;
   --sub: #1b1a22; --sub-hi: #2c2a36; --sub-lo: #0e0d13; --edge: #0b0a10;

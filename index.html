@@ -188,7 +188,7 @@
 /* ==== END OCCVM spine.css ==== */
 
 :root {
-  --lx: 0; --ly: 1; --elev: .6; --amb: .7; --night: 0; --glow: .6; --sheen: .6;
+  --lx: 0; --ly: 1; --elev: .6; --fill: .7; --night: 0; --glow: .6; --sheen: .6;
   --rake: 6px; --nglow: 0px; --nglow-s: 0px; --lxpx: 0px; --lypx: 1px;
   --hi-a: .2; --cut-a: .3; --shade-a: .6;
   --sub: #1b1a22; --sub-hi: #2c2a36; --sub-lo: #0e0d13; --edge: #0b0a10;
@@ -2271,7 +2271,7 @@ if (typeof module !== "undefined") module.exports = OCCVM_VEINS;
 /* ==== END OCCVM veins.js ==== */
 
 /* ==== OCCVM SPINE sundial.js — spliced from occvm/sundial.js. do not edit. ==== */
-/* sha256:55ee9c25d128 */
+/* sha256:592585a93387 */
 /* OCCVM 1.2/1.7 — the sundial. One light, shared by every conforming tool (OCCVM-L3).
  *
  * Authored in occvm/SPINE.md; spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the
@@ -2469,13 +2469,13 @@ var OCCVM_SUN = function () {
       "--elev": e.toFixed(3),
       "--night": night.toFixed(3),
       "--dusk-stage": stage,
-      "--amb": amb.toFixed(3),
+      "--fill": amb.toFixed(3),
       "--rake": rake.toFixed(1) + "px",
       "--sheen": (0.25 + 0.55 * e * (1 - night)).toFixed(2),
       /* OCCVM-D12, closed at 1.2a — AMBIENT FILLS WHAT DIRECT LIGHT DOES NOT.
        *
-       * 1.2 recorded that --elev's 0.15 night floor "moved" to --amb. It did not move; it was deleted.
-       * --amb was computed, written, and read by nothing, while these two alphas — the bevel the floor
+       * 1.2 recorded that --elev's 0.15 night floor "moved" to --fill. It did not move; it was deleted.
+       * --fill was computed, written, and read by nothing, while these two alphas — the bevel the floor
        * existed to hold up — collapsed to 0.060 after dark. The law's claim that "a bevel stays legible
        * after dark because ambient light is 0.53 there" was false in both halves: ambient held nothing
        * up, and the figure was 0.630 rather than 0.53. Found by 1.9's audit, which is what an audit is
@@ -5418,5 +5418,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260907193903 -->
+<!-- build-20260907195425 -->
 </html>
