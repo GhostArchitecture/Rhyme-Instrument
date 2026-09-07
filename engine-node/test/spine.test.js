@@ -207,3 +207,33 @@ test("the substrate is derived in linear light, ordered, and hue-preserving", ()
   hue(A.body).forEach((v, i) => assert.ok(Math.abs(v - hue(s.hi)[i]) < 0.02, "one gain, no hue shift"));
   assert.equal(M.substrate(A, 0).lo, A.body, "contrast 0 collapses to the body colour");
 });
+
+test("P1 stays unwired: no animated horizontal motion exists to be anisotropic against", () => {
+  /* The self-retiring guard, over THIS repository's own files. P1 derives a settling time per crystal
+   * axis (1/sqrt(k): a 0.7584, b 0.9454, c 1.0000) and ships no token, because anisotropy is only
+   * observable as a difference between two directions in the same view and nothing here animates
+   * horizontally. When somebody adds a horizontal motion this fails and says P1 has become expressible.
+   *
+   * BTC carries the same guard over its own files rather than one repo censusing both: reaching across
+   * to a sibling checkout makes the verdict depend on what happens to be on disk, which is the
+   * partial-checkout trap already fixed once in the token audit and once in the golden recorder. */
+  const fs = require("fs");
+  const files = [["index.html"], ["tome-src", "20_style.css"], ["tome-src", "30_ui.jsx"], ["occvm", "spine.css"]];
+  let x = 0, seen = 0;
+  for (const g of files) {
+    const f = path.join(ROOT, ...g);
+    if (!fs.existsSync(f)) continue;
+    seen++;
+    for (const line of fs.readFileSync(f, "utf8").split("\n"))
+      if (/translateX|translate3d\(\s*[^0]/.test(line) && /transition|animation|keyframes/.test(line)) x++;
+  }
+  assert.equal(seen, files.length, "the census must actually read every file — a zero from an empty sweep proves nothing");
+  assert.equal(x, 0, `${x} animated horizontal motion site(s): P1 is now expressible — wire --dur-a/--dur-b/--dur-c`);
+
+  const M = require(path.join(ROOT, "occvm", "material.js"));
+  const mo = M.motion(M.ARAGONITE);
+  assert.ok(Math.abs(mo.a - 0.7584) < 1e-3, "duration scales as 1/sqrt(k), the oscillator period");
+  assert.ok(mo.a < mo.b && mo.b < mo.c, "a stiffer axis settles faster");
+  assert.ok(!fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8").includes("--dur-a"),
+    "no P1 token may ship while P1 is unexpressed — that would be OCCVM-D12 again");
+});
