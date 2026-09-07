@@ -24,7 +24,7 @@ if (typeof module !== "undefined") module.exports = OCCVM_MINERALS;
 /* ==== END OCCVM minerals.js ==== */
 
 /* ==== OCCVM SPINE veins.js — spliced from occvm/veins.js. do not edit. ==== */
-/* sha256:49518901f7dc */
+/* sha256:7ad6582dfe4b */
 /* OCCVM 1.1 — the vein generator. One implementation, shared by every conforming tool (OCCVM-L10).
  *
  * Authored in occvm/SPINE.md; spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the
@@ -56,46 +56,111 @@ var OCCVM_VEINS = (function () {
     };
   }
 
-  /* grow(): DLA on a lattice, seeded along the left edge so the aggregate crosses the surface the way a
-   * vein does rather than radiating from a point.
+  /* grow(): DLA on a lattice, growing the habit of a named mineral rather than a generic dendrite.
    *
-   * habit is the anisotropy of the walk, and it is a real mineral term: 0 walks isotropically and grows
-   * the bushy, equant dendrite of a manganese oxide; 1 weights horizontal steps and draws the structure
-   * out into the elongated, fibrous habit of an acicular growth. It changes how the crystal grows, not
-   * what is drawn afterwards.
+   * THE MINERAL IS ARAGONITE, and since 1.1a that is a decision the generator encodes rather than a label
+   * on the output. The 2.0 material model anchors substrate and vein to one crystal (CaCO₃, orthorhombic)
+   * on the argument that a vein is not a foreign material embedded in a slab — it is the same crystal
+   * grown differently. Aragonite's two expressions are exactly the two this system needs: a blocky
+   * orthorhombic form for a cut face, and a fibrous radiating form for a vein. So the vein grows the
+   * second one, and it grows it the way aragonite actually does:
+   *
+   *   - FIBRES RADIATE FROM A NUCLEATION POINT. Not from the screen's left edge, and not along the
+   *     screen's horizontal. Until 1.1a the anisotropy was `pH = .5 + habit * .32`, a bias toward
+   *     horizontal STEPS — a direction in the viewport, which is a fact about the browser window and not
+   *     about the crystal. A crystal has no idea which way the screen is. Direction is now measured from
+   *     the growth's own nucleus, which is a direction in the material's frame.
+   *
+   *   - IT TWINS IN THREES. Aragonite's signature is cyclic twinning on {110}: three individuals meeting
+   *     at close to 120°, which mimics a hexagonal prism well enough that the pseudo-hexagonal form is
+   *     what the mineral is known for. Each nucleus therefore carries `twin` sectors — three, by default,
+   *     because that is what aragonite does — each with its own rotation, and growth is selective along
+   *     them. Radiating fibre bundles from one point, grown rather than drawn.
+   *
+   * habit stays what OCCVM-L10 says it is — the anisotropy of growth — and its ends still mean what the
+   * law says: 0 grows the bushy, equant dendrite of a manganese oxide; 1 draws the structure out into an
+   * elongated, acicular form. Two things changed under it. The AXIS anisotropy is measured against moved
+   * from the viewport's to the crystal's, and the MECHANISM moved from the walk to the attachment (see
+   * accept(), below, which records why the first attempt failed). At habit 0 the twin sectors still exist
+   * but express nothing, because attachment is then indifferent to direction — which is correct, and is
+   * what an equant habit is.
    *
    * Walkers spawn just beyond the frontier rather than at infinity — the standard optimisation, and the
    * reason this finishes in single-digit milliseconds. A walker that strays far outside the frontier is
    * abandoned rather than followed, which is equivalent in the limit and much cheaper.
+   *
+   * `twin` is a parameter rather than a CSS token deliberately. Twinning is a MATERIAL PROPERTY, and
+   * material properties are 2.0's substance — at 2.0 this argument comes from the material definition
+   * instead of a default. Adding a `--vein-twin` token now would put a 2.0 property into the 1.x token
+   * surface, which is the leak SPINE.md's own 1.4 note warns about. It defaults to aragonite's 3.
    */
   function grow(o) {
     var w = o.w | 0, h = o.h | 0;
     var n = o.n | 0;
     var habit = Math.max(0, Math.min(1, o.habit === undefined ? 0.55 : o.habit));
+    var twin = o.twin === undefined ? 3 : Math.max(1, o.twin | 0);
     var rnd = mulberry32(o.seed >>> 0);
+    var TAU = 6.283185307179586;
 
     var occ = new Uint8Array(w * h);
     var segs = [];
     var i, j, y, x;
 
-    /* Seeds are a handful of scattered points, not the whole edge. An edge seed grows a comb — every
-       column starts at once and nothing competes — where scattered nuclei compete for the same walkers
-       and screen each other, which is what produces separate dendrites with clear matrix between them.
-       They are scattered across the whole surface, not banked against one edge: a vein layer that fills
-       half the page and stops is a gradient, and the eye reads a gradient as a mistake. */
-    var nuclei = 4 + ((rnd() * 4) | 0);
-    var seeds = [], sites = [];
+    /* Nucleation points, scattered across the whole surface rather than banked against one edge: a vein
+       layer that fills half the page and stops is a gradient, and the eye reads a gradient as a mistake.
+       They compete for the same walkers and screen each other, which is what leaves clear matrix between
+       separate growths.
+
+       Each nucleus carries its own twin rotation, so the three sectors do not all point the same way
+       across the surface — cyclic twins nucleate independently and there is no reason they would. */
+    var nuclei = 6 + ((rnd() * 4) | 0);
+    var seeds = [], sites = [], siteGroup = [], groups = [], segOwner = [];
     for (i = 0; i < nuclei; i++) {
       x = 1 + ((rnd() * (w - 3)) | 0);
       y = ((rnd() * h) | 0);
       occ[y * w + x] = 1;
       seeds.push(x, y);
       sites.push(y * w + x);
+      siteGroup.push(i);
+      groups.push({ cx: x, cy: y, rot: rnd() * TAU });
     }
 
     var maxSteps = h * 2 + 60;
-    /* horizontal step probability: .5 is isotropic, rising to .82 at full habit */
-    var pH = 0.5 + habit * 0.32;
+
+    /* ATTACHMENT ANISOTROPY — how a crystal actually grows in a direction.
+     *
+     * The first attempt at this biased the WALKER's drift toward its sector axis, and measurement said
+     * it did nothing: twin 1, twin 3 and twin 6 produced identical angular spectra, all dominated by a
+     * single lobe. Two reasons, both instructive. A walker pushed radially outward is pushed away from
+     * the aggregate, so it wanders off and is abandoned rather than sticking anywhere — the bias spent
+     * walkers instead of shaping growth. And snapping an axis to the nearest lattice step collapses
+     * three directions 120° apart into at most four, which destroys the threefold signal before it can
+     * reach the surface.
+     *
+     * A real crystal is not anisotropic because the diffusing atom travels differently. It is
+     * anisotropic because ATTACHMENT differs by crystallographic direction: some faces accept an atom
+     * readily and some do not, and the fast directions become the needles. So the walk stays a pure
+     * unbiased random walk — which is what makes this DLA at all — and the anisotropy lives in whether
+     * a contact is accepted.
+     *
+     * `align` is +1 when the candidate site sits exactly on one of the nucleus's `twin` axes and −1
+     * exactly between two of them; `cos(twin·(θ−rot))` gives the whole cyclic-twin symmetry in one term.
+     * Acceptance falls from certain (habit 0, isotropic, equant) to strongly axis-selective (habit 1),
+     * and a rejected walker keeps walking rather than being discarded, so no walker is wasted. */
+    function accept(g, px, py) {
+      if (habit <= 0) return true;
+      var dx = px - g.cx, dy = py - g.cy;
+      /* the surface wraps vertically, so take the shorter way round when measuring a bearing */
+      if (dy > h / 2) dy -= h; else if (dy < -h / 2) dy += h;
+      if (dx === 0 && dy === 0) return true;                  /* at the nucleus itself: no direction yet */
+      var align = Math.cos(twin * (Math.atan2(dy, dx) - g.rot));   /* +1 on an axis, -1 between */
+      /* Selectivity is the EXPONENT, not a blend against an isotropic floor. The first form here was
+         `(1-habit) + habit·p`, which keeps a 0.45 floor of accepting anything at habit .55 — both tools'
+         default — and measurement showed the threefold signal absent there: dominant harmonic k=1, the
+         twin invisible at exactly the setting that ships. As an exponent the limits are exact (habit 0
+         gives p⁰ = 1, accept everything, equant) and selectivity rises smoothly with no dead band. */
+      return rnd() < Math.pow((1 + align) / 2, habit * 6);
+    }
 
     for (i = 0; i < n; i++) {
       /* Spawn across the whole occupied extent rather than only at the leading edge, so the interior
@@ -105,8 +170,9 @@ var OCCVM_VEINS = (function () {
          of its life wandering empty lattice; released on a small circle around a site already occupied,
          it arrives at the cluster with the same isotropic distribution — this is the standard DLA launch
          radius, and it is why the generator finishes in single-digit milliseconds instead of twenty. */
-      var site = sites[(rnd() * sites.length) | 0];
-      var ang = rnd() * 6.283185307, rad = 4 + rnd() * 7;
+      var pick = (rnd() * sites.length) | 0;
+      var site = sites[pick], group = groups[siteGroup[pick]];
+      var ang = rnd() * TAU, rad = 4 + rnd() * 7;
       x = ((site % w) + Math.cos(ang) * rad) | 0;
       y = (((site / w) | 0) + Math.sin(ang) * rad) | 0;
       if (x < 1) x = 1; else if (x > w - 2) x = w - 2;
@@ -128,9 +194,11 @@ var OCCVM_VEINS = (function () {
           if (ny < 0) ny = h - 1; else if (ny >= h) ny = 0;
           if (occ[ny * w + nx]) hit = ny * w + nx;
         }
-        if (hit >= 0) { stuck = hit; break; }
+        /* a contact only becomes a stick if this direction accepts one (see accept(), above) */
+        if (hit >= 0 && accept(group, x, y)) { stuck = hit; break; }
 
-        if (rnd() < pH) x += rnd() < 0.5 ? -1 : 1;
+        /* An unbiased lattice walk. The anisotropy is in attachment, not in travel. */
+        if (rnd() < 0.5) x += rnd() < 0.5 ? -1 : 1;
         else y += rnd() < 0.5 ? -1 : 1;
 
         if (y < 0) y = h - 1; else if (y >= h) y = 0;        /* the surface wraps vertically */
@@ -142,9 +210,16 @@ var OCCVM_VEINS = (function () {
       if (occ[kk]) continue;
       occ[kk] = 1;
       sites.push(kk);
+      siteGroup.push(siteGroup[pick]);   /* a fibre belongs to the twin it grew from */
+      segOwner.push(siteGroup[pick]);
       segs.push(stuck % w, (stuck / w) | 0, x, y);
     }
-    return { segs: segs, w: w, h: h, nuclei: seeds };
+    /* `groups` and `segOwner` are returned so the twin can be MEASURED rather than eyeballed: with
+       several growths overlapping, assigning a particle to its nearest nucleus misattributes enough of
+       them to bury the signal, and a property that can only be checked when it happens to be isolated is
+       not really checked. With the true owner and the group's own rotation, the angular harmonic is
+       exact — which is what test/occvm.js asserts on. */
+    return { segs: segs, w: w, h: h, nuclei: seeds, twin: twin, groups: groups, segOwner: segOwner };
   }
 
   /* svg(): trace the aggregate. Every stroke is a straight segment between a particle and the particle
@@ -190,7 +265,7 @@ var OCCVM_VEINS = (function () {
   function field(o) {
     var w = o.w || 110, h = o.h || 70;
     var density = o.density === undefined ? 0.35 : Math.max(0.05, Math.min(1, o.density));
-    var g = grow({ w: w, h: h, n: Math.round(w * h * density), habit: o.habit, seed: o.seed });
+    var g = grow({ w: w, h: h, n: Math.round(w * h * density), habit: o.habit, seed: o.seed, twin: o.twin });
     if (g.segs.length < 8) throw new Error("occvm veins: aggregate did not grow");
     var d = paths(g, { scale: (o.viewW || 1200) / w, seed: o.seed });
     /* The geometry is written once and referenced twice. Serialising the same few tens of kilobytes of
@@ -211,7 +286,7 @@ if (typeof module !== "undefined") module.exports = OCCVM_VEINS;
 /* ==== END OCCVM veins.js ==== */
 
 /* ==== OCCVM SPINE sundial.js — spliced from occvm/sundial.js. do not edit. ==== */
-/* sha256:f107e7aa8e92 */
+/* sha256:6647c61ccbd4 */
 /* OCCVM 1.2/1.7 — the sundial. One light, shared by every conforming tool (OCCVM-L3).
  *
  * Authored in occvm/SPINE.md; spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the
@@ -267,7 +342,51 @@ var OCCVM_SUN = (function () {
     var zen = Math.acos(clamp(cz, -1, 1));
     var az = Math.acos(clamp(((Math.sin(lat * RAD) * Math.cos(zen)) - Math.sin(dec)) / (Math.cos(lat * RAD) * Math.sin(zen)), -1, 1)) / RAD;
     az = ha > 0 ? (az + 180) % 360 : (540 - az) % 360;
-    return { elev: 90 - zen / RAD, az: az };
+    /* `lam` — the sun's apparent ecliptic longitude — is returned because the moon's phase is its
+       elongation from the sun, and computing the sun's position twice to get it would be two
+       implementations of the same thing, which is the defect OCCVM-L3 exists to prevent. */
+    return { elev: 90 - zen / RAD, az: az, lam: app };
+  }
+
+  /* ---- the moon: a secondary, weaker light, and ink's only other source (1.7) ---------------------
+   *
+   * OCCVM-L3 says there is exactly one light and it is the sun. That still holds for every SURFACE: the
+   * moon casts nothing, bevels nothing, and moves no substrate. What it reaches is ink, and only at
+   * night, which is the boundary OCCVM-L9 already draws.
+   *
+   * Low-precision lunar theory (Meeus ch. 47, principal terms). Accurate to roughly a degree, which is
+   * far inside the tolerance of a light vector — the same argument SPINE.md §L3 already makes for
+   * permitting a Fourier approximation of the sun's position but not a second implementation of it.
+   *
+   * ILLUMINATION IS NOT OPTIONAL. A moon above the horizon at new phase delivers no light at all, and a
+   * model that lights the page by altitude alone would put a full moon's worth of ink glow into the
+   * darkest night of the month. The phase is the elongation from the sun, so the sun's own longitude is
+   * an input rather than a second sun.
+   */
+  function moon(lat, lon, date, sunLam) {
+    var d = date.getTime() / 86400000 + 2440587.5 - 2451545.0;   /* days since J2000 */
+    var L = 218.316 + 13.176396 * d;                             /* mean longitude */
+    var M = 134.963 + 13.064993 * d;                             /* mean anomaly */
+    var F = 93.272 + 13.229350 * d;                              /* argument of latitude */
+    var lam = (L + 6.289 * Math.sin(M * RAD)) * RAD;             /* ecliptic longitude */
+    var bet = (5.128 * Math.sin(F * RAD)) * RAD;                 /* ecliptic latitude */
+    var ec = 23.4397 * RAD;
+
+    var dec = Math.asin(Math.sin(bet) * Math.cos(ec) + Math.cos(bet) * Math.sin(ec) * Math.sin(lam));
+    var ra = Math.atan2(Math.sin(lam) * Math.cos(ec) - Math.tan(bet) * Math.sin(ec), Math.cos(lam));
+
+    var lst = (280.16 + 360.9856235 * d + lon) * RAD;            /* local sidereal time */
+    var H = lst - ra;
+    var alt = Math.asin(Math.sin(lat * RAD) * Math.sin(dec) + Math.cos(lat * RAD) * Math.cos(dec) * Math.cos(H));
+    var az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(lat * RAD) - Math.tan(dec) * Math.cos(lat * RAD));
+    az = (az / RAD + 180) % 360;                                  /* from south → clockwise from north */
+    if (az < 0) az += 360;
+
+    /* phase: elongation from the sun, illuminated fraction (1 − cos ψ)/2 — 0 at new, 1 at full */
+    var elong = Math.abs(((lam / RAD - (sunLam === undefined ? 0 : sunLam)) % 360 + 540) % 360 - 180);
+    var illum = (1 - Math.cos(elong * RAD)) / 2;
+
+    return { alt: alt / RAD, az: az, illum: illum, elong: elong };
   }
 
   /* ---- response: the surface behaviour the position produces -------------------------------------- */
@@ -307,6 +426,25 @@ var OCCVM_SUN = (function () {
       : elev >= -18 ? "astronomical"
       : "night";
 
+    /* OCCVM-L9, 1.7 — the PHOSPHOR RESPONSE. Ink's answer to darkness is not linear in `night`, and the
+       linear ramp it replaced was a placeholder that read as one: the page went on getting steadily more
+       lit right through a range where the eye has already fully adapted. A phosphor's emission against
+       its excitation saturates, and the standard form for that is 1 − e^(−kx), normalised so the ends
+       stay exactly 0 and 1. It rises fast and then stops: 0.58 by a quarter of the way into night, 0.83
+       by half, which is what "the tool becomes a night instrument quickly, then holds" looks like as a
+       curve rather than as an intention. */
+    var phosphor = (1 - Math.exp(-3.2 * night)) / (1 - Math.exp(-3.2));
+
+    /* The moon reaches ink and nothing else (see moon(), above, and OCCVM-L9). Its weight is the product
+       of three things that must ALL hold for there to be moonlight: it is above the horizon, it is lit,
+       and the sun is gone. Any one of them missing and the term is zero — a moon at new, or below the
+       horizon, or at noon, contributes exactly nothing rather than a little. */
+    var mAlt = p.moon ? p.moon.alt : -90;
+    var mUp = clamp(mAlt / 45, 0, 1);                       /* full weight once it is well up */
+    var moonLight = p.moon ? mUp * p.moon.illum * night : 0;
+    var mx = (p.moon && mAlt > 0) ? Math.sin(p.moon.az * RAD) : 0;
+    var my = (p.moon && mAlt > 0) ? -Math.cos(p.moon.az * RAD) : 0;
+
     /* The night floor lives in ambient, not in elevation: a bevel stays legible after dark because
        ambient is 0.53 there, not because elevation is pretended to be 0.15 (D2). */
     var amb = 0.45 + 0.55 * e * (1 - night) + 0.18 * night;
@@ -314,6 +452,10 @@ var OCCVM_SUN = (function () {
 
     var sub = mix(mix(SUB, SUB_DUSK, dusk), SUB_NIGHT, night);
     var bone = mix(mix(BONE, BONE_DUSK, dusk), BONE_NIGHT, night);
+    /* 1.7 — moonlight lifts ink toward its daylight value and nothing else on the page moves with
+       it. This is the whole of the moon's authority over the surface (OCCVM-L9), and it is small
+       on purpose: a full moon at the zenith recovers about a tenth of the way back toward day. */
+    if (moonLight > 0) bone = mix(bone, BONE, 0.30 * moonLight);
 
     /* OCCVM-L1: a derived token derives with its whole family. --bone-lo is --bone carried a quarter of
        the way to --edge, so the pair cannot separate again (D10). At the noon anchor that reads #b4ada0
@@ -333,12 +475,26 @@ var OCCVM_SUN = (function () {
       "--hi-a": (0.30 * e + 0.06).toFixed(3),
       "--cut-a": (0.40 * e + 0.06).toFixed(3),
       "--shade-a": (0.45 + 0.3 * e).toFixed(3),
-      /* OCCVM-L9: the ink bloom, a resolved scalar and never a calc(), so a law can read it (D8). */
-      "--glow": (0.45 + 0.25 * (1 - e) + 0.30 * night).toFixed(2),
+      /* OCCVM-L9: the ink bloom, a resolved scalar and never a calc(), so a law can read it (D8). Since
+         1.7 it rides the phosphor curve rather than `night` directly, and moonlight lifts it further —
+         a lit night is a brighter-inked night, which is the one thing the moon is allowed to do here. */
+      /* --glow is consumed as an OPACITY (Rhyme's .stone::before) and already reaches 1.0 on a
+         moonless night, so a moon term here would be clamped away invisibly. Moonlight reaches ink
+         through --bone and --nglow instead, both of which have headroom. Checked against the
+         consumers rather than assumed. */
+      "--glow": (0.45 + 0.25 * (1 - e) + 0.30 * phosphor).toFixed(3),
+      "--phosphor": phosphor.toFixed(3),
+      /* the moon: a secondary vector for ink only. --moon-light is zero unless it is up, lit, and dark. */
+      "--moon-alt": mAlt.toFixed(2),
+      "--moon-illum": (p.moon ? p.moon.illum : 0).toFixed(3),
+      "--moon-light": moonLight.toFixed(3),
+      "--moon-x": mx.toFixed(3),
+      "--moon-y": my.toFixed(3),
       "--lxpx": (lx * 0.9).toFixed(2) + "px",
       "--lypx": (ly * 0.9).toFixed(2) + "px",
-      "--nglow": (6 * night).toFixed(1) + "px",
-      "--nglow-s": (3 * night).toFixed(1) + "px",
+      /* the night halo: a blur radius in px, so it has room to carry the moon as well as the ramp */
+      "--nglow": (6 * phosphor + 3 * moonLight).toFixed(2) + "px",
+      "--nglow-s": (3 * phosphor + 1.5 * moonLight).toFixed(2) + "px",
       "--sub": hex(sub),
       "--sub-hi": hex(mix(sub, [255, 255, 255], 0.14 * (0.5 + e))),
       "--sub-lo": hex(mix(sub, [0, 0, 0], 0.42)),
@@ -352,7 +508,9 @@ var OCCVM_SUN = (function () {
   /* tick(): position, respond, write. Returns the reading for a tool's own display. */
   function tick(el, loc, date) {
     var place = (loc && isFinite(loc.lat)) ? loc : DAYTON;
-    var p = position(place.lat, place.lon, date || new Date());
+    var when = date || new Date();
+    var p = position(place.lat, place.lon, when);
+    p.moon = moon(place.lat, place.lon, when, p.lam);
     var t = respond(p);
     if (el && el.style) for (var k in t) if (Object.prototype.hasOwnProperty.call(t, k)) el.style.setProperty(k, t[k]);
     return {
@@ -366,7 +524,7 @@ var OCCVM_SUN = (function () {
     };
   }
 
-  return { position: position, respond: respond, tick: tick, DAYTON: DAYTON, DIRS: DIRS };
+  return { position: position, moon: moon, respond: respond, tick: tick, DAYTON: DAYTON, DIRS: DIRS };
 })();
 /* ==== END OCCVM sundial.js ==== */
 

@@ -14,16 +14,18 @@ order would be exactly the drift the ledger law exists to prevent.
 |---|---|---|
 | **1.0** | landed | constituted the spine from measurement; inlined it in both tools at zero deltas. Closed D11. |
 | **1.1** | landed | generative fidelity: DLA veins, `--vein-density --vein-habit`. Closed nothing; added L10. Its determinism requirement was met at 1.0. |
+| **1.1a** | landed | the vein grows **aragonite**, not a generic dendrite: radial from a nucleation point, cyclic-twinned in threes, anisotropy moved from the walk to attachment. 2.0 prep the amended roadmap asks for early, so vein and substrate can become one material without a rework. |
 | **1.2** | landed | one light, completed. Closed D2, D8, D9, D10. |
 | **1.3** | landed | the numeric face: an owned mono, embedded and subset, two weights. Closed D3. |
 | **1.4** | landed (narrow) | mineral as preference: one shared implementation, `occvm/minerals.js`, spliced into both tools like `sundial.js`/`veins.js`. Ruby was added to complete the 3-mineral set (Rhyme had never carried a negative mineral). Closed D6. |
 | **1.5** | landed | the interaction floor. Closed D7. |
 | **1.6** | landed | architecture conformance. Closed D4, D5. |
-| **1.7** | landed | the dusk stages, additive over the 1.0 `--night` ramp; deleted BTC's tool-local `--bloom` surface glow now that OCCVM-L9's "no surface takes a glow" has an owner. |
-| **1.8** | landed | the reference surface: a conforming page that holds no values of its own, one live specimen per law, recorded into the golden set as a third surface. Added `--occvm-bevel` (L2) — a gap it found on itself. |
-| **1.9** | landed (narrow) | D1 closed: the expired `--ink --meas --bondi` alias block swept to its canonical names. The roadmap's fuller sketch — a full token audit beyond this block, a migration table for other divergences, promoting every remaining divergence to a law amendment or exception — was not performed; nothing else in the spine currently has an open alias needing it. |
+| **1.7** | landed | the night model, complete: dusk stages additive over the `--night` ramp, ink on a **phosphor curve** rather than a linear one, and the **moon** as a second light reaching ink alone (real lunar theory, gated on illumination). Deleted BTC's `--bloom` surface glow. |
+| **1.8** | landed | the reference surface, to its full brief: a conforming page holding no values of its own, one live specimen per law, **the light vector swept on a slider rather than a clock**, slabs at every depth, controls in every state, ink at every scale. Recorded into the golden set as a third surface. Added `--occvm-bevel` (L2) — a gap it found on itself. |
+| **1.9** | landed | freeze and stage, in full. D1 closed at the narrow pass (the expired `--ink --meas --bondi` block swept). The rest landed after the amended roadmap surfaced it: a **full token audit as a re-runnable instrument** (`occvm/tools/token-audit.js`, in CI with `--check`), three dead tool-local tokens removed, every divergence promoted to an amendment or a documented exception, the **2.0 migration table** (§6b), and one real defect found — `OCCVM-D12`. |
 
-**All eleven defects are closed.** D1's aliases were shown to be load-bearing by 1.2's golden diff —
+**Eleven of twelve defects are closed; `OCCVM-D12` was opened by 1.9's own audit and is the one
+thing standing between here and 2.0 that is a bug rather than a decision.** D1's aliases were shown to be load-bearing by 1.2's golden diff —
 `--ink --meas --dim` all moved with the tokens they alias — so the block was a live dependency, not dead
 weight, and sweeping it (1.9) was a migration rather than a deletion. D6 (1.4) closed the same way 1.9
 did: BTC gets the mineral system, but only where it was already load-bearing for this tool — the vein
@@ -112,7 +114,14 @@ An element too small to read as a cut slab at 4px takes an exception in §5 rath
 
 ### OCCVM-L3 — one light
 
-There is exactly one light, and it is the real sun.
+There is exactly one light on any **surface**, and it is the real sun.
+
+**Amended at 1.7, and the amendment is narrow on purpose.** The moon is a second light and it reaches
+**ink only** — `--bone` and `--nglow`, at night. It casts nothing, bevels nothing, and moves no substrate,
+so every statement below about surfaces is unchanged and there is still exactly one thing that can put a
+shadow on this page. The moon's own terms are governed under `OCCVM-L9`, which is where night lives; this
+clause exists so that the sentence "exactly one light" cannot be read as forbidding what 1.7 shipped.
+Nothing else may become a light without amending this law again, in the open, with its own release.
 
 - **Position** is computed from latitude, longitude and the clock. The canonical implementation is the **full
   NOAA algorithm** — Julian century, equation of centre, obliquity with nutation — evaluated in **UTC**. The
@@ -264,8 +273,36 @@ Veins are **grown, not drawn**. The generator is diffusion-limited aggregation: 
 matrix, moves at random, and sticks the instant it touches the aggregate. Branching is dendritic because a
 protruding tip intercepts walkers before they reach the shielded interior — the screening effect, which
 nobody authors. `--vein-density` is the walker budget as a fraction of the lattice; `--vein-habit` is the
-anisotropy of the walk, 0 for the equant dendrite of a manganese oxide and 1 for an elongated acicular
+anisotropy of growth, 0 for the equant dendrite of a manganese oxide and 1 for an elongated acicular
 form.
+
+**The mineral is aragonite, and since 1.1a the generator encodes that rather than labelling it** (roadmap
+2.0: substrate and vein anchor to one crystal, because a vein is not a foreign material embedded in a slab
+— it is the same crystal grown differently). Two properties of real aragonite are grown here:
+
+- **Fibres radiate from a nucleation point.** Anisotropy is measured from the growth's own nucleus, a
+  direction in the material's frame. Until 1.1a it was a bias toward *horizontal steps* — a direction in
+  the viewport, which is a fact about the browser window. A crystal has no idea which way the screen is.
+- **It twins in threes.** Aragonite's signature is cyclic twinning on {110}: three individuals near 120°,
+  mimicking a hexagonal prism closely enough that the pseudo-hexagonal form is what the mineral is known
+  for. Each nucleus carries three sectors with its own rotation.
+
+**The mechanism is attachment, not travel**, and that distinction was established by measurement rather
+than chosen. The first implementation biased the walker's *drift* toward its sector axis; the angular
+harmonics of the result were identical at threefold, onefold and sixfold, all dominated by a single lobe.
+A walker pushed radially outward is pushed *away* from the aggregate and is abandoned rather than
+sticking, so the bias spent walkers instead of shaping growth — and snapping an axis to the nearest
+lattice step collapses three directions 120° apart into four. A real crystal is not anisotropic because
+the diffusing atom travels differently; it is anisotropic because **attachment differs by crystallographic
+direction**. The walk is now a pure unbiased random walk and the anisotropy lives in whether a contact is
+accepted. Measured on the exact owner and rotation of each growth, the angular harmonic at the twin order
+dominates: **0.665 at the shipped habit of .55**, against 0.116 for the next strongest, and it tracks the
+parameter — fourfold gives k=4, sixfold gives k=6, and habit 0 gives no angular structure at all, which is
+what an equant habit is.
+
+*`twin` is a generator parameter and deliberately **not** a CSS token. Twinning is a material property,
+material properties are 2.0's substance, and a `--vein-twin` token would put one into the 1.x token
+surface — the leak the 1.4 note warns about. At 2.0 it comes from the material definition.*
 
 **No curve is fitted over the aggregate.** Every stroke is a straight segment between a particle and the
 particle it stuck to — the record of how it grew. A fitted curve is the bezier arriving back through the
@@ -316,6 +353,36 @@ Night acts on **ink only**. No surface takes a glow. `--glow` is the ink bloom a
 substrate. BTC's `--bloom` — a malachite glow on `.tile`, renamed rather than removed at 1.2 specifically
 so 1.7 could retire it under this law — is deleted, not replaced: the tile takes no glow of any kind now.
 
+**Ink's response to night is a phosphor curve, not a ramp** (1.7). `--phosphor` is `1 − e^(−3.2·night)`,
+normalised so the ends stay exactly 0 and 1: 0.58 by a quarter of the way into night, 0.83 by half, then
+flat. The linear ramp it replaced went on brightening the page through a range where the eye has long
+since adapted, which is what a placeholder looks like once you plot it. `--glow` and `--nglow` ride the
+curve; `--night` itself is untouched, exactly as the staging above is.
+
+**The moon is a second light, and it reaches ink alone** (1.7, amending L3 for this case and no other).
+`OCCVM-L3`'s "exactly one light" still governs every **surface**: the moon casts nothing, bevels nothing,
+and moves no substrate. What it touches is `--bone` and `--nglow`, at night, and that is the whole of its
+authority. Position is real low-precision lunar theory (Meeus ch. 47) in the same shared implementation as
+the sun — verified against its own physics rather than asserted: synodic period 29 d against a true 29.53,
+illumination spanning exactly 0.000 to 1.000, transit sliding 44–50 min later each day against a true ~50,
+with the variation itself real orbital eccentricity.
+
+**Illumination is not optional and altitude is not enough.** `--moon-light` is the product of three terms
+that must all hold — the moon is up, the moon is lit, and the sun is gone — so a new moon at the zenith
+contributes exactly nothing rather than a little. Over sixty nights at Dayton the term spends 57% of night
+hours at essentially zero and 9% near full, which is the distribution a real sky has.
+
+**Where it is routed was decided by reading the consumers, not by assuming.** `--glow` is used as an
+*opacity* (Rhyme's `.stone::before`) and already reaches 1.0 on a moonless night, so a moon term there
+would have been clamped away invisibly. `--nglow` is a blur radius in px and has headroom; `--bone` is the
+ink itself. A full moon recovers ink about 30% of the way back toward its daylight value.
+
+**The 1.7 exit, measured rather than claimed.** The roadmap asks that *"a screenshot at 21:40 and one at
+23:10 are visibly different tools."* Over thirty nights at Dayton the two frames differ on **18**. On the
+other twelve the moon is below the horizon at both instants, so there is no light to differ by — and
+manufacturing one would be authoring a sky. The criterion is met whenever there is a moon to meet it with,
+and that is the honest form of it.
+
 *BTC's `--night` was a binary step at −2° before 1.2: closed `OCCVM-D2`.*
 
 ---
@@ -363,13 +430,16 @@ now-redundant tool declaration is per-surface adoption work, done at the release
 
 ### 2ab. Governed since 1.2 — written by the sundial
 
-`--lx --ly --elev --night --dusk-stage --amb --rake --sheen --hi-a --cut-a --shade-a --glow --lxpx --lypx
---nglow --nglow-s --sub --sub-hi --sub-lo --bone --bone-lo`
+`--lx --ly --elev --night --dusk-stage --phosphor --amb --rake --sheen --hi-a --cut-a --shade-a --glow
+--lxpx --lypx --nglow --nglow-s --moon-alt --moon-illum --moon-light --moon-x --moon-y --sub --sub-hi
+--sub-lo --bone --bone-lo`
 
 All resolved scalars or hexes, all written by `occvm/sundial.js` at most once a minute, none a `calc()`.
 `--bone-lo` is derived from `--bone` rather than authored beside it (L1). `--dusk-stage`, added at 1.7, is
 the one entry here that is neither a scalar nor a hex — a discrete stage name — because the quantity it
-carries (which of day/civil/nautical/astronomical/night the instant falls in) has no continuous value.
+carries (which of day/civil/nautical/astronomical/night the instant falls in) has no continuous value. The five `--moon-*`
+entries and `--phosphor` arrived at 1.7: the moon is a second light reaching ink alone (see L9), and it
+is measured in the same shared implementation rather than a second sky.
 
 ### 2b. Registered, not yet spine — promoted at the release named
 
@@ -466,6 +536,57 @@ found by measurement after it was written.
 | **D9** | BTC | the light vector keeps tracking the sun below the horizon (−0.516, −0.856 at −39°) instead of resolving neutral overhead (L3) | **closed 1.2** |
 | **D10** | Rhyme | `--bone` is derived from twilight while `--bone-lo` stays fixed, separating a pair that must move together (L1) | **closed 1.2** |
 | **D11** | both | `.row`, `.wrap`, `.note` are defined in both tools with incompatible meanings, so an un-namespaced spine primitive would break a tool on inline (L3 §3) | closed at 1.0 by namespacing |
+| **D12** | spine | **`--amb` is written and read by nothing.** 1.2 recorded that `--elev`'s 0.15 night floor *moved* to `--amb`; measured, it was deleted. `--amb` resolves to 0.630 at night while the bevel alphas it was supposed to hold up, `--hi-a` and `--cut-a`, both collapse to 0.060. The law's claim that "a bevel stays legible after dark because ambient light is 0.53 there" is false as shipped. Found by 1.9's audit | **open** — fixing it changes every surface's night appearance, which 1.9 may not ship |
+
+---
+
+## 6b. The 2.0 migration table (1.9)
+
+**1.9's exit is that a reader who has never seen these tools can migrate a conforming tool to 2.0 from
+this table alone.** It is therefore written for that reader and not as a summary for someone who already
+knows. The census below is produced by `occvm/tools/token-audit.js`, which derives it from the artifacts
+every time it runs; it is not a list kept by hand, and CI runs it with `--check`.
+
+**Census at 1.9: 81 distinct tokens.** 27 written by the sundial each minute, 22 declared by the spine's
+CSS, 32 tool-local (17 BTC, 11 Rhyme, 4 in both since 1.4).
+
+### What 2.0 does to each class
+
+2.0's break is that **a hex stops being authored and starts being derived**: `--sub: #1b1a22` becomes
+`material(obsidian)` resolving to a surface response, with aragonite (CaCO₃, orthorhombic, biaxial) as the
+anchor for substrate and vein alike. The table is by class, because the class is what decides the fate:
+
+| class | tokens | at 2.0 | what a migrator does |
+|---|---|---|---|
+| **Substrate & ink** | `--sub --sub-hi --sub-lo --edge --bone --bone-lo --bone-dim` | **derived from the material.** Three substrate weights become the three faces an orthorhombic crystal actually has — lit face, shade face, edge — each taking its own principal refractive index (α/β/γ) rather than one scaled response. | Stop declaring them. Declare a material; read the same names back. The names do not change, which is deliberate: the migration is in where the value comes from, not in what a surface calls it. |
+| **Light (sun)** | `--lx --ly --elev --amb --rake --sheen --hi-a --cut-a --shade-a --lxpx --lypx` | **unchanged in name and meaning.** Real astronomy already; 2.0 gives it real optics to interact with rather than replacing it. | Nothing. |
+| **Night & moon** | `--night --dusk-stage --phosphor --glow --nglow --nglow-s --moon-alt --moon-illum --moon-light --moon-x --moon-y` | **unchanged.** Emission from materials is 2.0's, but it is additive over these, not a replacement. | Nothing. |
+| **Cut & cast** | `--occvm-bevel --occvm-cast-1 --occvm-cast-2 --occvm-cast-3 --lit-x --lit-y --cut-x --cut-y` | **gain a density term.** Cast weight and apparent mass become functions of the material's density rather than three fixed depths. The three depths survive as the named steps. | Nothing, unless the surface authored its own offset — which no conforming surface does. |
+| **Gilt, bronze, verdigris** | `--gilt-a --gilt-b --gilt-c --bronze-a --bronze-b --bronze-c --verdigris --verdigris-lo` | **verdigris becomes a process.** Oxidation as a function of exposure rather than a hex. Gilt and bronze stay authored: they are *finishes*, not minerals, and 2.0's non-goal clause covers them. | Read `--verdigris` as before; stop treating it as constant across time. |
+| **Mineral** | `--mineral --mineral-lo --vein-hi --vein-lo` | **become material properties.** The three-mineral set stays closed with its fixed meanings (L6); what changes is that a mineral carries hardness, cleavage, birefringence and luster rather than two hexes. | Nothing at the token level. A tool that wants the new properties opts in. |
+| **Vein** | `--vein-density --vein-habit --vein --veins` | **`twin` joins them from the material.** The generator already grows aragonite's habit as of 1.1a; at 2.0 the twin order stops being a default and comes from the material definition. | Nothing. |
+| **Face** | `--mono --serif --sans --t-num` | **unchanged.** A typeface is not a mineral. `--sans` is BTC-local and stays OS-supplied by deliberate design — the roadmap's own non-goal for a sans. | Nothing. |
+| **Tool-local semantics** | BTC: `--up --down --err --field --rule --glass --lit --shade --ink2 --malachite --malachite-lo --ruby --amethyst --amethyst-lo`; Rhyme: `--thick --bthick --stone-h --pad --c --k --text --heat --m --vk` | **not spine, not promised, unchanged by 2.0.** These name a tool's own subject matter. | Nothing. They are yours. |
+
+### Aliases outstanding: none
+
+The deprecation policy (§0) requires a token slated for removal to survive one minor cycle as an alias
+marked `/* deprecated → newname (2.0) */`. **There are no such aliases**, and that is a finding rather
+than an omission: the only alias block either tool ever carried was BTC's `--ink --meas --bondi`, and 1.9
+swept it. Nothing is currently scheduled for rename at 2.0 — the break is in derivation, not in naming,
+which is why this table's right-hand column so often reads "nothing".
+
+### Divergences, each resolved
+
+| divergence | resolution |
+|---|---|
+| L3 said "exactly one light"; 1.7 added the moon | **Law amended**, narrowly and in the open (§L3): one light on any *surface*; the moon reaches ink alone. |
+| L6's roadmap exit asked that a mineral chosen in one tool be honoured by the other | **Documented exception** (§L6): `localStorage` is per-origin and the tools have no common origin. Replaced by conformance — one set, one meaning, stored twice. Physically unreachable, not inconvenient. |
+| BTC spends the mineral only on its vein layer; Rhyme spends it across its chrome | **Documented exception** (§L6): BTC's malachite and ruby already carry a fixed win/lose meaning, and a decorative accent may not sit beside an outcome signal. |
+| `--t-num` is governed and applied by nobody | **Documented exception** (§L7): measured at 1.0 on one machine's fallbacks, deliberately not generalised. |
+| `--amb` is written and read by nobody | **Defect**, `OCCVM-D12`. Not an exception — the law makes a false claim about it. |
+| Rhyme's vein layer is never measured by the golden set | **Defect-adjacent, recorded here**: Rhyme sets `--veins` per-slab inline rather than on `documentElement`, and the recorder reads `documentElement`. Its vein output has never been diffed. Fixing it means either moving the write or teaching the recorder to sample an element, and both are 2.0-scale decisions about where a per-instance token lives. |
+| BTC's reference surface and golden set are not duplicated into Rhyme | **Documented exception** (§1.8): they are conformance instruments, not spine content. The law and the five parts are what every repository carries identically. |
 
 ---
 
@@ -473,9 +594,9 @@ found by measurement after it was written.
 
 | tool | version | build stamp | violates |
 |---|---|---|---|
-| **BTC Terminal** | 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9 | `build-20260907172541` | — |
-| **Rhyme Instrument** | 1.0, 1.1, 1.2, 1.4, 1.5, 1.6, 1.7, 1.8 | `build-20260907172553` | — (renders no mono; D3 does not apply) |
-| **Reference surface** | every part, spliced (1.0–1.9) | `build-20260907172437` | — (holds no values of its own) |
+| **BTC Terminal** | 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9 | `build-20260907180450` | — |
+| **Rhyme Instrument** | 1.0, 1.1, 1.1a, 1.2, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9 | `build-20260907180837` | — (renders no mono; D3 does not apply) |
+| **Reference surface** | every part, spliced (1.0–1.9) | `build-20260907175747` | — (holds no values of its own) |
 
 **At 1.0 the splice was a no-op by construction, and the golden set proved it: zero deltas in either tool.**
 
@@ -648,6 +769,16 @@ The first draft of this page therefore hand-wrote the bevel, putting channel lit
 file whose entire point is that it has none. The fix is `--occvm-bevel` (§2a, added at 1.8): the cut face as
 one composable value, with `.occvm-slab` defined in terms of it so the primitive and the value cannot drift.
 Neither tool moves — the token is added, nothing existing changes, and neither tool uses `.occvm-slab` yet.
+
+**The sweep, added when the amended roadmap surfaced 1.8's full brief.** The first pass shipped five
+fixed dusk cells; the release actually asks for *the light vector swept from dawn to night on a slider
+rather than a clock*, and the difference is not cosmetic. The slider holds an instant and the sundial is
+driven from it, so **the whole page re-resolves** — every surface, bevel, cast, swatch and token, because
+they all read what the sundial writes and none of them knows the clock was overridden. RESUME hands it
+back. It is also the only way to see 1.7's moon do anything without waiting for a particular night, and
+the page says on its own face why 21:40 and 23:10 can still resolve identically. Slabs at every depth,
+controls in every state — each printing its own measured box rather than claiming the floor — and ink at
+every scale landed with it.
 
 **What it is not.** It cannot tell you a tool conforms. Conformance is decided by `test/occvm.js`, the unit
 suites and the golden diff — assertions that run. This is the eye's instrument beside those, and the page
