@@ -1,5 +1,5 @@
 /* ==== OCCVM SPINE spine.css — spliced from occvm/spine.css. do not edit. ==== */
-/* sha256:5166f8d25399 */
+/* sha256:a0bbdf891cb7 */
 /* OCCVM 1.0 — the spine. Authored in occvm/SPINE.md; this is its machine-readable half.
  *
  * Spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the spliced copy in a tool: the
@@ -66,6 +66,13 @@
   --lit-y: calc(var(--ly, 1) * 1px);
   --cut-x: calc(var(--lx, 0) * -1px);
   --cut-y: calc(var(--ly, 1) * -1px);
+
+  /* OCCVM-L10 (1.1) — vein habit. density is the walker budget as a fraction of the lattice; habit is
+     the anisotropy of the growth, 0 for the equant dendrite of a manganese oxide and 1 for an elongated
+     acicular form. Both are read by the shared generator, so a tool tunes its own surface without
+     acquiring a second generator. */
+  --vein-density: .3;
+  --vein-habit: .55;
 }
 
 /* ---- primitives (SPINE.md 3) ----------------------------------------------------------------------
@@ -344,9 +351,12 @@ textarea.cut { min-height: 9.5em; }
 /* OCCVM-L8 (1.5) — surfaces that became <button> and were block-level as <div>/<p>. A button defaults to
    inline-block, so these restate the flow they had; .stones, .break, .ghost, .head and .word set their own
    display and need nothing. .occvm-act neutralises the rest of the user agent's button styling. */
+/* .edge is NOT here on purpose: it sets its own display:flex with space-between, and forcing block on it
+   collapsed the face rows into jammed text. A button only needs its flow restated when the element it
+   replaced was block by default and the class says nothing about display. */
 .text.occvm-act,
-.edge.occvm-act,
 .pl.occvm-act { display: block; width: 100%; }
+.edge.occvm-act { width: 100%; }
 
 /* OCCVM-L8 — the 44px floor, on chrome. Exempt, per the law: anything inline in a flow of text — the
    stones, the words they sit under, the bar text — because enlarging those restructures the poem and an
@@ -360,7 +370,8 @@ textarea.cut { min-height: 9.5em; }
 /* the wordmark and each section head close an open face; both are chrome, so both take the floor */
 .binding h1 .occvm-act,
 .head.occvm-act { min-height: 44px; }
-.head.occvm-act { align-items: center; }
+.head.occvm-act { align-items: center; width: 100%; }
+/* a button is shrink-to-fit, so a flex container that is one collapses its own space-between */
 
 @media (prefers-reduced-motion: reduce) { .slab, .edge { animation: none !important; transition: none !important; } }
 

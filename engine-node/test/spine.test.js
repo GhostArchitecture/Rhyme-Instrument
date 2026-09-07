@@ -127,3 +127,37 @@ test("reduced motion is honoured from the spine, system-wide", () => {
   assert.match(spine, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\*::after/);
   assert.ok(built.includes("transition-duration: .01ms !important"), "the rule must reach the artifact");
 });
+
+/* OCCVM-L10 / roadmap 1.1 — veins are grown, not drawn. */
+test("the vein generator is spliced and the previous one is kept as the fallback", () => {
+  const eng = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
+  assert.ok(eng.includes("OCCVM_VEINS.field"), "veinSVG must use the shared generator");
+  assert.match(eng, /function veinSVGLegacy\(/, "the bezier generator stays as the fallback");
+  assert.match(eng, /catch \(e\) \{ svg = veinSVGLegacy/, "growth must be guarded");
+  assert.ok(eng.includes("--vein-density") && eng.includes("--vein-habit"), "it must read the spine's tokens");
+});
+
+test("the aggregate is traced as straight segments, with no curve fitted over it", () => {
+  const V = require(path.join(ROOT, "occvm", "veins.js"));
+  const f = V.field({ seed: 20260906, w: 80, h: 34, viewW: 480, viewH: 200, density: 0.3, habit: 0.55 });
+  const d = f.svg.match(/<path id='v' d='([^']+)'/)[1];
+  assert.match(d, /^[ML0-9 .,-]+$/, "only moveto and lineto: C/S/Q/T/A is the bezier coming back");
+  assert.ok(f.particles > 200, `expected a grown aggregate, got ${f.particles} particles`);
+});
+
+test("growth is seeded and pure", () => {
+  const V = require(path.join(ROOT, "occvm", "veins.js"));
+  const a = V.field({ seed: 7, w: 80, h: 34, density: 0.3 }).svg;
+  assert.equal(a, V.field({ seed: 7, w: 80, h: 34, density: 0.3 }).svg, "same seed, same bytes");
+  assert.notEqual(a, V.field({ seed: 8, w: 80, h: 34, density: 0.3 }).svg, "a different seed must differ");
+});
+
+test("the layer is a decodable data URI, not bare markup", () => {
+  /* Both the fragment reference and the colours carry a literal '#'. Left raw inside a data: URI it ends
+     the URI; pre-encoded to %23 it survives into the parsed SVG as two literal characters and href="%23v"
+     resolves to nothing, so the layer renders empty while every string check still passes. */
+  const V = require(path.join(ROOT, "occvm", "veins.js"));
+  const svg = V.field({ seed: 1, w: 80, h: 34, density: 0.3, lo: "#1c6a45", hi: "#3fbf7e" }).svg;
+  assert.ok(svg.includes("href='#v'"), "the reference must be a raw # for encodeURIComponent to escape");
+  assert.ok(!svg.includes("%23"), "nothing may be pre-encoded; the caller encodes the whole document");
+});
