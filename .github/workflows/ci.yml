@@ -29,6 +29,11 @@ jobs:
       - name: OCCVM spine is spliced and current
         run: node occvm/tools/splice-spine.js --check
 
+      # The laws were the last claim in this system with no instrument behind it. Fails when a law
+      # measured as DIVERGED is not recorded as such in SPINE.md.
+      - name: OCCVM law conformance
+        run: node occvm/tools/law-audit.js --check
+
       - name: Regenerate from tome-src and check nothing drifted
         run: |
           node build.js
