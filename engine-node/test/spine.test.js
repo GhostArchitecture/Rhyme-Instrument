@@ -134,7 +134,8 @@ test("the vein generator is spliced and the previous one is kept as the fallback
   assert.ok(eng.includes("OCCVM_VEINS.field"), "veinSVG must use the shared generator");
   assert.match(eng, /function veinSVGLegacy\(/, "the bezier generator stays as the fallback");
   assert.match(eng, /catch \(e\) \{ svg = veinSVGLegacy/, "growth must be guarded");
-  assert.ok(eng.includes("--vein-density") && eng.includes("--vein-habit"), "it must read the spine's tokens");
+  assert.ok(eng.includes("--vein-density"), "it must read the spine's density token");
+  assert.ok(!/"--vein-habit"/.test(eng), "and not the habit token, retired at 2.8 — a suspension has no direction");
 });
 
 test("the aggregate is traced as straight segments, with no curve fitted over it", () => {
@@ -164,108 +165,91 @@ test("the layer is a decodable data URI, not bare markup", () => {
 
 /* ── 2.0 — the material owns the lattice (OCCVM-L12) ─────────────────────────────────────────── */
 
-test("veins reads the material's cell rather than restating it", () => {
+test("2.8 — the crystal is retired: nothing reads it, so it is gone", () => {
+  const fs = require("fs");
+  for (const f of ["material.js", "fracture.js"])
+    assert.ok(!fs.existsSync(path.join(ROOT, "occvm", f)), `occvm/${f} must be deleted, not left declared and unconsumed`);
+  const { RETIRED, PARTS } = require(path.join(ROOT, "occvm", "tools", "splice-spine.js"));
+  assert.ok(RETIRED.includes("material.js") && RETIRED.includes("fracture.js"), "the splicer must list both as retired");
+  assert.ok(PARTS.some(p => p.name === "yield.js"), "yield.js is the part fracture.js was");
+  const eng = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
+  assert.ok(!/OCCVM_MATERIAL|OCCVM_FRACTURE/.test(eng), "no crystal block lingers in the source");
+  assert.ok(!/OCCVM_MATERIAL|OCCVM_FRACTURE/.test(built), "and none reaches the built artifact");
   const V = require(path.join(ROOT, "occvm", "veins.js"));
-  const M = require(path.join(ROOT, "occvm", "material.js"));
-  assert.equal(V.CELL, M.ARAGONITE.cell, "one lattice, one owner — not two copies of three numbers");
-  assert.equal(M.twinAngle, undefined, "the material must not derive the angle a second time");
+  assert.equal(V.CELL, undefined, "veins carries no lattice");
+  assert.equal(V.TWIN_ANGLE, undefined, "and no twin angle — a suspension has no crystallographic direction");
 });
 
-test("fracture resolves its angle under the PAGE's load order, with no require", () => {
-  /* The bug this pins was live in this tool from 1.1b until 2.0, and it was not cosmetic. The splicer
-   * inserts every part after one anchor, so parts land in reverse list order and fracture.js is evaluated
-   * BEFORE veins.js is assigned. The old code captured OCCVM_VEINS into a module binding at that moment,
-   * got null, and threw on every cleave() — and because this tool calls
-   *     OCCVM_FRACTURE.cleave(row, () => removeDraft(d.id))
-   * the throw happened before `done` ran, so DELETING A DRAFT SILENTLY DID NOTHING for anyone not on
-   * reduced motion. Node resolved it through require, so every assertion passed. This test loads the
-   * built artifact's own blocks, in the artifact's own order, with no require in scope. */
-  const fs = require("fs"), vm = require("vm");
-  const src = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const blk = n => { const i = src.indexOf("var " + n + " ="); return src.slice(i, src.indexOf("\nif (typeof module", i)); };
-  const iMat = src.indexOf("var OCCVM_MATERIAL ="), iVein = src.indexOf("var OCCVM_VEINS ="), iFrac = src.indexOf("var OCCVM_FRACTURE =");
-  assert.ok(iMat > 0, "material.js must be spliced into the built artifact");
-  assert.ok(iMat < iVein, "material.js must precede veins.js — veins reads the cell at load");
-  assert.ok(iFrac < iVein, "fracture before veins is the real order, and what makes this guard meaningful");
+test("2.8 — the shelf yields rather than cleaves, and the vocabulary is pinned out", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  assert.match(ui, /OCCVM_YIELD\.pinch\(row, \(\) => removeDraft\(d\.id\)\)/, "removing a draft pinches off");
+  assert.ok(!/OCCVM_FRACTURE|\.cleave\(/.test(ui), "no cleave call survives — in a page it would throw");
+  /* the primitive is used for the irreversible action and nothing else: one call site, the removal */
+  assert.equal((ui.match(/OCCVM_YIELD\.pinch/g) || []).length, 1, "yield marks the one irreversible action, not everything");
+});
+
+test("2.8 — yield resolves its curve under the PAGE's load order, with no require", () => {
+  /* The guard 1.1b's null capture taught: the splicer lands parts in reverse list order, so yield is
+   * evaluated BEFORE rheology is assigned. A lazy read is order-independent; this proves it on the built
+   * artifact's own blocks, in the artifact's own order, with no require in scope. */
+  const vm = require("vm");
+  const blk = n => { const i = built.indexOf("var " + n + " ="); return built.slice(i, built.indexOf("\nif (typeof module", i)); };
+  const iY = built.indexOf("var OCCVM_YIELD ="), iR = built.indexOf("var OCCVM_RHEOLOGY =");
+  assert.ok(iY > 0 && iR > 0 && iY < iR, "yield before rheology is the real order, and what makes this guard meaningful");
   const ctx = vm.createContext({ Math, console });
-  for (const n of ["OCCVM_MATERIAL", "OCCVM_FRACTURE", "OCCVM_VEINS"]) vm.runInContext(blk(n), ctx);
-  assert.ok(Math.abs(ctx.OCCVM_FRACTURE.twinAngle() - 116.209) < 1e-3,
-    "cleave() must be able to reach the twin angle in a page");
+  vm.runInContext(blk("OCCVM_YIELD"), ctx);
+  vm.runInContext(blk("OCCVM_RHEOLOGY"), ctx);
+  assert.match(ctx.OCCVM_YIELD.easing(), /^linear\(0, /, "pinch() must be able to reach the substance's curve in a page");
+  const ctx2 = vm.createContext({ Math, console });
+  vm.runInContext(blk("OCCVM_VEINS"), ctx2);
+  assert.ok(ctx2.OCCVM_VEINS.grow({ w: 20, h: 12, n: 24, seed: 1 }).particles === 24, "veins aggregates with nothing spliced before it");
+});
+
+test("2.8 — the vein is a suspension that gels: DLCA, measured", () => {
+  const V = require(path.join(ROOT, "occvm", "veins.js"));
+  const g = V.grow({ w: 80, h: 34, n: Math.round(80 * 34 * 0.3), seed: 1 });
+  assert.equal(g.bonds.length / 2, g.particles - g.clusters, "one bond per merge: particles minus clusters");
+  /* the stop is AT OR BELOW the target: one step can merge a cluster with two neighbours at once */
+  assert.ok(g.clusters >= 1 && g.clusters <= 8, `a gel is many flocs joined, not one cluster (${g.clusters})`);
+  const same = V.field({ seed: 5, w: 80, h: 34, density: 0.3 }).svg;
+  assert.equal(V.field({ seed: 5, w: 80, h: 34, density: 0.3, habit: 1 }).svg, same, "habit is accepted and ignored");
+  assert.ok(V.field({ seed: 5, w: 80, h: 34, density: 0.15 }).bonds < V.field({ seed: 5, w: 80, h: 34, density: 0.3 }).bonds,
+    "density is the axis a suspension has, and it expresses");
+  assert.match(same, /feGaussianBlur/, "the deep stroke is blurred: a floc is suspended in the fluid, not carved into a solid");
+  const fs = require("fs");
+  const style = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(!/--vein-habit\s*:/.test(style), "--vein-habit is retired from the spine and from this tool's own CSS");
 });
 
 test("the substrate is derived in linear light, ordered, and hue-preserving", () => {
-  const M = require(path.join(ROOT, "occvm", "material.js")), A = M.ARAGONITE;
+  const R = require(path.join(ROOT, "occvm", "rheology.js")), K = R.SUBSTANCE;
   const lin = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16) / 255)
     .map(v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
   const lum = h => { const p = lin(h); return 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]; };
-  const s = M.substrate(A, 1);
+  const s = R.substrate(K, 1);
   assert.ok(lum(s.hi) > lum(s.mid) && lum(s.mid) > lum(s.lo), "hi > mid > lo");
   /* the double-gamma guard: scaling sRGB bytes rendered a 9.35x optical spread as 116x */
   assert.ok(Math.abs(lum(s.hi) / lum(s.lo) / s.spread - 1) < 0.02,
     "the rendered spread must equal the optical ratio in linear light");
   const hue = h => { const p = lin(h), m = Math.max(...p) || 1; return p.map(v => v / m); };
-  hue(A.body).forEach((v, i) => assert.ok(Math.abs(v - hue(s.hi)[i]) < 0.02, "one gain, no hue shift"));
-  assert.equal(M.substrate(A, 0).lo, A.body, "contrast 0 collapses to the body colour");
+  hue(K.body).forEach((v, i) => assert.ok(Math.abs(v - hue(s.hi)[i]) < 0.02, "one gain, no hue shift"));
+  assert.equal(R.substrate(K, 0).lo, K.body, "contrast 0 collapses to the body colour");
 });
 
-test("P1 stays unwired: no animated horizontal motion exists to be anisotropic against", () => {
-  /* The self-retiring guard, over THIS repository's own files. P1 derives a settling time per crystal
-   * axis (1/sqrt(k): a 0.7584, b 0.9454, c 1.0000) and ships no token, because anisotropy is only
-   * observable as a difference between two directions in the same view and nothing here animates
-   * horizontally. When somebody adds a horizontal motion this fails and says P1 has become expressible.
-   *
-   * BTC carries the same guard over its own files rather than one repo censusing both: reaching across
-   * to a sibling checkout makes the verdict depend on what happens to be on disk, which is the
-   * partial-checkout trap already fixed once in the token audit and once in the golden recorder. */
+test("2.8 — P1 and P4 retired with the crystal: a fluid has no stiffness tensor and no unit cell", () => {
+  /* P1 derived a settling time per crystal axis from the stiffness tensor and P4 a spacing triple from the
+   * cell; both shipped no token and carried guards. Neither quantity exists on a fluid, so both retire —
+   * not ported, because a derivation whose input is gone is an authored number wearing its old name. */
   const fs = require("fs");
-  const files = [["index.html"], ["tome-src", "20_style.css"], ["tome-src", "30_ui.jsx"], ["occvm", "spine.css"]];
-  let x = 0, seen = 0;
-  for (const g of files) {
-    const f = path.join(ROOT, ...g);
-    if (!fs.existsSync(f)) continue;
-    seen++;
-    for (const line of fs.readFileSync(f, "utf8").split("\n"))
-      if (/translateX|translate3d\(\s*[^0]/.test(line) && /transition|animation|keyframes/.test(line)) x++;
-  }
-  assert.equal(seen, files.length, "the census must actually read every file — a zero from an empty sweep proves nothing");
-  assert.equal(x, 0, `${x} animated horizontal motion site(s): P1 is now expressible — wire --dur-a/--dur-b/--dur-c`);
-
-  const M = require(path.join(ROOT, "occvm", "material.js"));
-  const mo = M.motion(M.ARAGONITE);
-  assert.ok(Math.abs(mo.a - 0.7584) < 1e-3, "duration scales as 1/sqrt(k), the oscillator period");
-  assert.ok(mo.a < mo.b && mo.b < mo.c, "a stiffer axis settles faster");
-  assert.ok(!fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8").includes("--dur-a"),
-    "no P1 token may ship while P1 is unexpressed — that would be OCCVM-D12 again");
-});
-
-test("P4 stays unwired, and the golden ratio is rejected by name", () => {
-  /* The cell gives a spacing triple a 1.0000 : c 1.1573 : b 1.6069, and it ships nothing: it does not
-   * describe either tool (213 declarations censused, 10.79% mean error, worse coverage than a 4px grid)
-   * and it does not survive integer-pixel rounding at the sizes 84.5% of spacing uses.
-   *
-   * The guard ships anyway, because 1.6069 and the golden ratio 1.6180 differ by 0.04px at step 1 and do
-   * not reach a whole pixel until step 5 — past the largest spacing either tool uses. They are the same
-   * number on screen, so somebody will eventually "correct" one to the other. It is not a typo for phi;
-   * it is 7.97/4.96, and the point of OCCVM-L12 is that a value has a reason. */
-  const fs = require("fs");
-  const M = require(path.join(ROOT, "occvm", "material.js"));
-  const sp = M.spacing(M.ARAGONITE);
-  assert.ok(Math.abs(sp.b - 1.6069) < 1e-3, "b/a is the cell's ratio");
-  assert.ok(Math.abs(M.GOLDEN_RATIO - sp.b) > 0.01, "phi is not the cell's ratio");
-
-  /* the rendered ratio is a function of the base, not the material */
-  const step = b => Math.round(b * sp.c) / b;
-  const steps = [4, 6, 8, 10, 12, 16].map(step);
-  assert.ok(Math.max(...steps) - Math.min(...steps) > 0.1,
-    `the rendered c-step must wander with the base: ${steps.map(v => v.toFixed(3)).join(" ")}`);
-  assert.ok(steps.every(v => Math.abs(v - sp.c) > 1e-6), "no base renders the cell's c-step exactly");
-
-  for (const f of ["occvm/spine.css", "tome-src/20_style.css"]) {
-    const body = fs.readFileSync(path.join(ROOT, f), "utf8");
-    assert.ok(!/1\.618/.test(body), `${f} must carry no golden-ratio constant`);
-  }
-  assert.ok(!/--s[abc]\b|--space-[abc]\b/.test(fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8")),
-    "no P4 spacing token may ship while P4 is unexpressed");
+  const R = require(path.join(ROOT, "occvm", "rheology.js")), K = R.SUBSTANCE;
+  assert.equal(R.motion, undefined, "no motion derivation on the substance");
+  assert.equal(R.spacing, undefined, "no spacing derivation on the substance");
+  assert.equal(R.GOLDEN_RATIO, undefined, "and nothing left to reject the golden ratio against");
+  assert.ok(K.C === undefined && K.cell === undefined, "no tensor, no cell");
+  const spine = fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8");
+  for (const tok of ["--dur-a", "--dur-b", "--dur-c", "--s-a", "--space-a"])
+    assert.ok(!spine.includes(tok), `${tok} never shipped and does not now`);
 });
 
 test("--amb is retired: 2.2 renamed it --fill and it may not come back", () => {
@@ -304,8 +288,8 @@ test("the substrate a surface wears is sundial-written, not the :root fallback",
   const eng = fs.readFileSync(path.join(ROOT, "occvm", "sundial.js"), "utf8");
   assert.ok(/"--sub":\s*hex\(sub\)/.test(eng), "the sundial writes the substrate base");
 
-  const M = require(path.join(ROOT, "occvm", "material.js"));
-  assert.equal(M.ARAGONITE.body, "#0e0d13", "the body anchoring stays: it matches L1's declared floor");
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  assert.equal(R.SUBSTANCE.body, "#0e0d13", "the body anchoring stays: it matches L1's declared floor");
 });
 
 test("2.4 — the substrate's face offsets are the material's, not two magic numbers", () => {
@@ -319,9 +303,52 @@ test("2.4 — the substrate's face offsets are the material's, not two magic num
   assert.ok(/m\.faceRatios\(/.test(code), "the sundial reads the material for them");
   assert.ok(/0\.14 \* \(0\.5 \+ e\)/.test(sun), "but the file still records what it replaced");
 
-  const M = require(path.join(ROOT, "occvm", "material.js"));
-  assert.equal(M.authoredContrast, undefined, "authoredContrast fitted to the :root fallback and is gone");
-  assert.ok(Math.abs(M.renderedContrast(M.ARAGONITE) - 1.1766) < 1e-3,
+  const R = require(path.join(ROOT, "occvm", "rheology.js")), K = R.SUBSTANCE;
+  assert.equal(R.authoredContrast, undefined, "authoredContrast fitted to the :root fallback and is gone");
+  assert.ok(Math.abs(R.substrate(K, R.renderedContrast(K)).spread - R.RENDERED_SPREAD_HIGH) < 0.02,
     "contrast anchors to the spread the tools RENDER at high sun, a named instant");
-  assert.ok(Math.abs(M.RENDERED_SPREAD_HIGH - 5.739) > 1, "and not to the fallback's spread — 2.3's error");
+  assert.ok(Math.abs(R.RENDERED_SPREAD_HIGH - 5.739) > 1, "and not to the fallback's spread — 2.3's error");
+});
+
+test("2.5 step A — the sundial stands on the fluid, and names it by role", () => {
+  /* The substance swap, done as a strangler rather than a big bang: rheology.js is spliced BESIDE
+   * material.js, not in place of it, because veins.js still reads the crystal's cell. Both live until
+   * nothing reads the older one. */
+  const fs = require("fs");
+  const sun = fs.readFileSync(path.join(ROOT, "occvm", "sundial.js"), "utf8");
+  const code = sun.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  assert.ok(/m\.faceRatios\(m\.SUBSTANCE\)/.test(code),
+    "the sundial asks for the SUBSTANCE, not for a named mineral — naming the mineral at the call site " +
+    "is part of why swapping it cost what it did");
+  assert.ok(!/m\.ARAGONITE/.test(code), "no mineral name survives in the sundial's code");
+  assert.ok(/m\.faceRatios\(m\.ARAGONITE\)/.test(sun), "but the file records the call it replaced");
+  assert.ok(!/require\("\.\/material\.js"\)/.test(code),
+    "no fallback to the retired crystal: a fallback that answers with the other substance would render " +
+    "a crystal substrate while every assertion passed");
+
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  assert.ok(Math.abs(R.renderedContrast(R.SUBSTANCE) - 1) < 0.01,
+    "the fluid's own optics reproduce the rendered substrate within 1% of unity");
+  assert.equal(R.SUBSTANCE, R.KETCHUP, "SUBSTANCE is the role; KETCHUP is the identity behind it");
+  assert.ok(R.SUBSTANCE.cell === undefined && R.SUBSTANCE.C === undefined,
+    "no unit cell and no stiffness tensor survive on a fluid");
+
+  /* both substances were spliced from 2.5 to 2.7, deliberately, until 2.8 moved veins off the crystal */
+  assert.ok(/var OCCVM_RHEOLOGY =/.test(built), "rheology.js reaches the built artifact");
+  assert.ok(!/var OCCVM_MATERIAL =/.test(built), "and the crystal no longer does: the strangler finished");
+});
+
+test("2.7 — L7: the reading surface and the heads are owned, and are two faces", () => {
+  const fs = require("fs");
+  const style = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const own = style.replace(/\/\* ==== OCCVM SPINE [\s\S]*?\/\* ==== END OCCVM [^*]*\*\//g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(/font-family:\s*"OCCVM Serif"/.test(style), "serif.css is spliced here");
+  assert.ok(/font-family:\s*"OCCVM Reading"/.test(style), "reading.css is spliced here — this tool's body is a serif");
+  assert.ok(!/--serif\s*:/.test(own), "the tool no longer restates --serif; the spine governs it");
+  assert.ok(/html,\s*body\s*\{[^}]*font-family:\s*var\(--reading\)/.test(own),
+    "the reading surface is set in --reading, not the display serif");
+  assert.ok(/\.slab \.head h2\s*\{[^}]*font-family:\s*var\(--serif\)/.test(own),
+    "the heads carry --serif explicitly now that they no longer inherit it from body");
+  assert.ok(fs.existsSync(path.join(ROOT, "occvm", "fonts", "OFL-Faustina.txt")), "Faustina's licence ships with it");
 });
