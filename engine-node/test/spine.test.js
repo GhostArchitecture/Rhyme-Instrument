@@ -355,3 +355,17 @@ test("2.5 step A — the sundial stands on the fluid, and names it by role", () 
   assert.ok(/var OCCVM_RHEOLOGY =/.test(built), "rheology.js reaches the built artifact");
   assert.ok(/var OCCVM_MATERIAL =/.test(built), "and material.js is still there, because veins reads it");
 });
+
+test("2.7 — L7: the reading surface and the heads are owned, and are two faces", () => {
+  const fs = require("fs");
+  const style = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const own = style.replace(/\/\* ==== OCCVM SPINE [\s\S]*?\/\* ==== END OCCVM [^*]*\*\//g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(/font-family:\s*"OCCVM Serif"/.test(style), "serif.css is spliced here");
+  assert.ok(/font-family:\s*"OCCVM Reading"/.test(style), "reading.css is spliced here — this tool's body is a serif");
+  assert.ok(!/--serif\s*:/.test(own), "the tool no longer restates --serif; the spine governs it");
+  assert.ok(/html,\s*body\s*\{[^}]*font-family:\s*var\(--reading\)/.test(own),
+    "the reading surface is set in --reading, not the display serif");
+  assert.ok(/\.slab \.head h2\s*\{[^}]*font-family:\s*var\(--serif\)/.test(own),
+    "the heads carry --serif explicitly now that they no longer inherit it from body");
+  assert.ok(fs.existsSync(path.join(ROOT, "occvm", "fonts", "OFL-Faustina.txt")), "Faustina's licence ships with it");
+});
