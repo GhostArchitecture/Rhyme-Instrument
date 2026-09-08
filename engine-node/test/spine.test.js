@@ -325,3 +325,33 @@ test("2.4 — the substrate's face offsets are the material's, not two magic num
     "contrast anchors to the spread the tools RENDER at high sun, a named instant");
   assert.ok(Math.abs(M.RENDERED_SPREAD_HIGH - 5.739) > 1, "and not to the fallback's spread — 2.3's error");
 });
+
+test("2.5 step A — the sundial stands on the fluid, and names it by role", () => {
+  /* The substance swap, done as a strangler rather than a big bang: rheology.js is spliced BESIDE
+   * material.js, not in place of it, because veins.js still reads the crystal's cell. Both live until
+   * nothing reads the older one. */
+  const fs = require("fs");
+  const sun = fs.readFileSync(path.join(ROOT, "occvm", "sundial.js"), "utf8");
+  const code = sun.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  assert.ok(/m\.faceRatios\(m\.SUBSTANCE\)/.test(code),
+    "the sundial asks for the SUBSTANCE, not for a named mineral — naming the mineral at the call site " +
+    "is part of why swapping it cost what it did");
+  assert.ok(!/m\.ARAGONITE/.test(code), "no mineral name survives in the sundial's code");
+  assert.ok(/m\.faceRatios\(m\.ARAGONITE\)/.test(sun), "but the file records the call it replaced");
+  assert.ok(!/require\("\.\/material\.js"\)/.test(code),
+    "no fallback to the retired crystal: a fallback that answers with the other substance would render " +
+    "a crystal substrate while every assertion passed");
+
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  assert.ok(Math.abs(R.renderedContrast(R.SUBSTANCE) - 1) < 0.01,
+    "the fluid's own optics reproduce the rendered substrate within 1% of unity");
+  assert.equal(R.SUBSTANCE, R.KETCHUP, "SUBSTANCE is the role; KETCHUP is the identity behind it");
+  assert.ok(R.SUBSTANCE.cell === undefined && R.SUBSTANCE.C === undefined,
+    "no unit cell and no stiffness tensor survive on a fluid");
+
+  /* both substances spliced, deliberately, until step C moves veins off the crystal */
+  const built = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.ok(/var OCCVM_RHEOLOGY =/.test(built), "rheology.js reaches the built artifact");
+  assert.ok(/var OCCVM_MATERIAL =/.test(built), "and material.js is still there, because veins reads it");
+});
