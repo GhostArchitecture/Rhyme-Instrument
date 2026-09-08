@@ -170,10 +170,12 @@ function Shelf({ shelf, current, setCurrent, newDraft, renameDraft, removeDraft 
               <button type="button" className="wd occvm-act" onClick={() => { setCurrent(d.id); setOpen(false); }}>{d.name}<span className="dim"> · {d.text.split("\n").filter(l => l.trim()).length} bars · {when(d.updated)}</span></button>
               {shelf.length > 1 && <button type="button" className="rm occvm-act" onClick={e => {
                 if (!confirm(`remove “${d.name}” from the shelf?`)) return;
-                /* OCCVM-L11 — removing a draft is irreversible, so it cleaves rather than fades. The row
-                   is gone from the shelf only once the fracture has finished, so the two never overlap. */
+                /* OCCVM-L11 — removing a draft is irreversible, so it YIELDS rather than fades: the row
+                   necks, pinches off, and the two bodies come to a hard stop (2.8; it cleaved along the
+                   crystal's angle from 1.1b to 2.7). The row is gone from the shelf only once the pinch has
+                   finished, so the two never overlap. */
                 const row = e.currentTarget.closest(".bankrow");
-                if (row && typeof OCCVM_FRACTURE !== "undefined") OCCVM_FRACTURE.cleave(row, () => removeDraft(d.id));
+                if (row && typeof OCCVM_YIELD !== "undefined") OCCVM_YIELD.pinch(row, () => removeDraft(d.id));
                 else removeDraft(d.id);
               }}>remove</button>}
             </div>
