@@ -101,9 +101,21 @@ const LAWS = [
       if (isNaN(men)) return { state: "DIVERGES", detail: `${vessel}; the bevel carries no meniscus — still the crystal's chisel` };
       if (!wears) return { state: "DIVERGES", detail: `${vessel}; --occvm-meniscus is declared but the bevel does not read it` };
       const ok = Math.abs(men - lc) < 0.05;
+      /* WHO WEARS IT IS MEASURED, NEVER TYPED. This line ended in the literal string "(reference
+         surface wears it; neither tool has adopted it)" from 2.10 until now — true when it was
+         written, false from 2.11, and it went on printing through 2.12 — the two releases that put the
+         meniscus and its recess onto both tools' own surfaces. An auditor that
+         exists because the conformance table read "violates: —" for six releases was carrying the
+         same defect one level down. Counted from the tool's own CSS now, so it cannot outlive its
+         fact. */
+      const bevel = (tool.own.match(/var\(--occvm-bevel\)/g) || []).length;
+      const well = (tool.own.match(/var\(--occvm-well\)/g) || []).length;
+      const worn = bevel + well
+        ? `worn at ${bevel + well} site(s): ${bevel} raised, ${well} recessed`
+        : "worn by no surface in this tool";
       return { state: ok ? "CONFORMS" : "DIVERGES",
-        detail: `${vessel}; meniscus: bevel band ${men}px against lc ${lc.toFixed(2)}px` +
-                (ok ? " (reference surface wears it; neither tool has adopted it)" : " — drifted from the substance") };
+        detail: `${vessel}; meniscus: bevel band ${men}px against lc ${lc.toFixed(2)}px — ` +
+                (ok ? worn : "drifted from the substance") };
     } },
 
   { id: "L3", name: "one light",
@@ -231,6 +243,38 @@ const LAWS = [
       return lit > 3
         ? { state: "DIVERGES", detail: `${lit} substrate literals in the tool's own CSS` }
         : { state: "CONFORMS", detail: lit ? `${lit} :root fallback(s), overwritten by the sundial` : "no literal" };
+    } },
+
+  { id: "L13", name: "ambient motion",
+    claim: "a decorative floor may run unconditionally; the material may not move at rest",
+    measure(tool) {
+      /* L13 grants the floor PER TOOL and the grant is asymmetric, so the split is measured rather than
+         merely written: Rhyme is granted the draft face, BTC is withheld. A law whose scope lives only in
+         prose is the "violates: --" failure waiting to happen again, so the table in L13 and this measure
+         say the same thing and the code is what is true.
+
+         The marker is the entry point's NAME. A floor declares itself by being called `ambientFloor` —
+         chosen rather than sniffed, because there is no honest way to detect "decorative perpetual motion"
+         generically, and a measure that guesses is worse than one that requires a word. */
+      const RHYME = /Rhyme/.test(tool.name);
+      const calls = [...tool.own.matchAll(/ambientFloor\s*\(/g)];
+      if (!calls.length)
+        return { state: "UNADOPTED", detail: "no ambient floor in this tool" };
+      if (!RHYME)
+        return { state: "DIVERGES",
+                 detail: `${calls.length} ambient floor call site(s) — L13 withholds the floor from this tool` };
+      /* Granted is not unguarded: L8 still governs, so every call site must sit inside a reduced-motion
+         guard. Checked at the call rather than file-wide, because both tools already carry the string
+         somewhere and a file-wide match would pass a floor that ignores the setting entirely. */
+      const unguarded = calls.filter(m => {
+        const w = tool.own.slice(Math.max(0, m.index - 240), m.index + 240);
+        return !/prefers-reduced-motion|reducedMotion|\bRM\b/.test(w);
+      }).length;
+      return unguarded
+        ? { state: "DIVERGES",
+            detail: `${unguarded} of ${calls.length} floor call site(s) unguarded by prefers-reduced-motion` }
+        : { state: "CONFORMS",
+            detail: `${calls.length} floor call site(s), each reduced-motion guarded` };
     } }
 ];
 
@@ -265,7 +309,7 @@ function rollup(states) {
 /* 2.10 — the reporting half runs only when this file is INVOKED. It is required as a module now, so that
    rollup() can be tested on synthetic states rather than on the repository happening to carry a real
    divergence; without this guard that require would print a full audit into the harness output. */
-module.exports = { rollup };
+module.exports = { rollup, LAWS };   /* LAWS so a harness can drive one measure on a synthetic tool */
 if (require.main === module) main();
 function main() {
 if (process.argv.includes("--json")) {
