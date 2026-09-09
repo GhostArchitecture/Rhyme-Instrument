@@ -1592,12 +1592,27 @@ const E2 = (() => {
     const accents = bar.field.reduce((n, w) => n + w.sylls.filter(s => s.m > 0).length, 0);
     const slotDelta = sylls - g.slotsPerBar;
     const barSeconds = (g.beatMs * g.beats) / 1000;
+    /* ROOM IS NOT EVEN WHEN THE BEAT IS SWUNG, and `rate` is a bar mean that cannot see it. 2.18
+     * called that a virtue - "swing changes where, never how many or how fast" - and that is wrong
+     * in the way that matters: the writing is not what swings. The BEAT swings, and a line is
+     * written against it. So half the slots are short and half are long, and two syllables landing
+     * on the short side of a pair have a third less mouth-room than the same two on the long side.
+     * A mean over the bar hides exactly the constraint the feel exists to impose.
+     *
+     * Reported, not modelled. This tool does not know which slot a syllable lands in - that is the
+     * writer's ear and the performance's - so it states the room the beat gives and how many slots
+     * carry it, and stops there. `tightRate` is the honest ceiling: syllables per second if a pair's
+     * worth of them sat on the short side. Nothing here says a line is wrong. */
+    const tight = Math.min(g.shortMs, g.longMs);
     return {
       i: bar.i, syllables: sylls, accents,
       slots: g.slotsPerBar, beats: g.beats, slotDelta,
       room: slotDelta === 0 ? "exact" : slotDelta > 0 ? "over" : "under",
       rate: sylls / barSeconds,
       accentsPerBeat: accents / g.beats,
+      tightMs: tight,
+      even: g.shortMs === g.longMs,
+      tightRate: 1000 / tight,
     };
   }
   function tempo(read, opts = {}) {

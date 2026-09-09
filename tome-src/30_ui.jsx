@@ -341,8 +341,8 @@ function TempoPanel({ tempo, setTempo, pacing, onClose }) {
             {/* what the feel does to TIME, stated rather than implied. Until 2.18 swing produced a grid
                 identical to straight and this line could only ever have said "16 slots" either way. */}
             <div className="gh">{g.feel === "swing"
-              ? `swung ${Math.round(g.swingRatio * 1000) / 10}% — each pair runs ${g.longMs.toFixed(0)}ms long, ${g.shortMs.toFixed(0)}ms short`
-              : `even — every slot runs ${g.meanSlotMs.toFixed(0)}ms`}</div>
+              ? `swung ${Math.round(g.swingRatio * 1000) / 10}% — pairs run ${g.longMs.toFixed(0)}ms long, ${g.shortMs.toFixed(0)}ms short · the short side is ${(1000 / g.shortMs).toFixed(1)}/sec for anything landing on it`
+              : `even — every slot runs ${g.meanSlotMs.toFixed(0)}ms (${(1000 / g.meanSlotMs).toFixed(1)}/sec)`}</div>
             {pacing.bars.map(b => (
               <div key={b.i} className="fit">
                 <span className="nm" style={{ flex: "0 0 58px" }}>{b.rate.toFixed(1)}/sec</span>
@@ -353,7 +353,10 @@ function TempoPanel({ tempo, setTempo, pacing, onClose }) {
             ))}
           </div>
           <div className="note">
-            arithmetic, not a measurement. this is how many syllables a second each bar needs to fit the
+            arithmetic, not a measurement. the beat carries the feel — you are writing to it, not swinging
+            the writing — so a swung grid gives uneven room and the per-bar rate below is a mean across it.
+            the short side of a pair is the real constraint and it is stated above. this is how many
+            syllables a second each bar needs to fit the
             grid at this tempo — check it against your own mouth. <b>over grid</b> means the line wants finer
             subdivision than the feel you set, not that it's wrong. where the syllables actually land inside
             a beat is yours; nothing here claims to know it.

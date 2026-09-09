@@ -210,6 +210,24 @@ test("grid(): triplet is uniform and is never silently swung", () => {
   assert.equal(new Set(gaps).size, 1);
 });
 
+/* THE BEAT CARRIES THE FEEL AND THE LINE IS WRITTEN AGAINST IT. 2.18 said swing "changes where, never
+ * how many or how fast" and called that a virtue; it is wrong in the way that matters. Half a swung
+ * bar's slots are short, and a syllable landing there has a third less room than one on the long side.
+ * The bar mean sees none of it, which is the constraint the feel exists to impose. */
+
+test("pace(): a swung beat gives uneven room, and the bar mean hides it", () => {
+  const read = E.reading("the quick brown fox jumped over it", { pop: 20 });
+  const s = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "straight" }).bars[0];
+  const w = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "swing" }).bars[0];
+  assert.equal(s.even, true, "a straight beat's slots are interchangeable");
+  assert.equal(w.even, false, "a swung beat's are not");
+  assert.ok(w.tightMs < s.tightMs, "the short side is tighter than any straight slot");
+  assert.ok(w.tightRate > s.tightRate, "and demands more syllables a second to land on");
+  /* measured at 90bpm: 111.1ms short against 166.7ms even - 9.0/sec against 6.0/sec */
+  assert.ok(Math.abs(w.tightRate - 9) < 0.01 && Math.abs(s.tightRate - 6) < 0.01);
+  assert.equal(w.rate, s.rate, "while the bar mean is identical, which is the point");
+});
+
 test("grid(): pace() is unmoved by feel — swing changes placement, not count or rate", () => {
   const read = E.reading("the quick brown fox jumped over it", { pop: 20 });
   const a = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "straight" });
