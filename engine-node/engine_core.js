@@ -311,6 +311,14 @@ const E2 = (() => {
     return { rows, ranked, best, weakest, bars: rows.length };
   }
   /* ---------- tempo grid ----------
+   * SPINE.md section 11 governs this whole block: THE BEAT IS ARITHMETIC AND MAY BE DESCRIBED; THE
+   * PERFORMANCE IS NOT THIS TOOL'S. BPM, time signature, subdivision and - since 2.18 - where a swung
+   * pair places its two onsets all follow from numbers a person entered, so the tool may state them.
+   * Which slot a syllable actually lands in, whether a writer leans early or late, what a line does in a
+   * mouth: none of that is reachable from a draft and none of it is estimated here. A writer writes to
+   * the beat; this does not write to the writer, and it never synthesises a performance from what is
+   * typed. The guard in engine-node/test/engine.test.js fails the day the public surface grows a
+   * syllable-to-onset map, which is the one shape this rule is most likely to be broken by.
    * Arithmetic, not a model. BPM and time signature give a real slot count per bar; nothing
    * here listens to anything or knows how a line is actually performed.
    *

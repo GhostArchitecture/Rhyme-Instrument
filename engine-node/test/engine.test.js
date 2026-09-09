@@ -210,6 +210,37 @@ test("grid(): triplet is uniform and is never silently swung", () => {
   assert.equal(new Set(gaps).size, 1);
 });
 
+/* ---- SPINE.md section 11: what this tool models, and what it refuses to -------------------------
+ * The beat is arithmetic and may be described. The PERFORMANCE is not this tool's and never will be:
+ * which slot a syllable lands in, whether a writer leans early or late, what a line does in a mouth.
+ * The engine states the room the beat gives and stops.
+ *
+ * This guard is deliberately narrow. It catches the ONE shape the rule is most likely to be broken by -
+ * a public function handing back an assignment of syllables to onsets - because a broad "does not model
+ * performance" assertion cannot be written and a guard that cannot fail is decoration. It fails the day
+ * the engine's public surface grows one. */
+
+test("the engine never returns a syllable-to-onset assignment — performance is not modelled", () => {
+  const read = E.reading("the quick brown fox jumped over it", { pop: 20 });
+  const t = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "swing" });
+  /* the grid carries onsets - that is the BEAT, arithmetic, and allowed */
+  assert.ok(Array.isArray(t.grid.onsets), "the beat's own onsets are the tool's to describe");
+  /* no per-bar row may carry them, because a bar is written material and placing it is performance */
+  for (const b of t.bars) {
+    for (const [k, v] of Object.entries(b)) {
+      assert.ok(!/onset|placement|lands|pocket|ahead|behind/i.test(k),
+        `pace() row must not carry a placement field, found "${k}"`);
+      assert.ok(!(Array.isArray(v) && v.length === b.syllables),
+        `pace() row field "${k}" is one entry per syllable — that is a placement, not a description`);
+    }
+  }
+  /* and nothing public may be named for it */
+  for (const k of Object.keys(E)) {
+    assert.ok(!/place|perform|pocket|quantize|quantise/i.test(k),
+      `the engine's public surface must not name a performance operation, found "${k}"`);
+  }
+});
+
 /* THE BEAT CARRIES THE FEEL AND THE LINE IS WRITTEN AGAINST IT. 2.18 said swing "changes where, never
  * how many or how fast" and called that a virtue; it is wrong in the way that matters. Half a swung
  * bar's slots are short, and a syllable landing there has a third less room than one on the long side.
