@@ -425,6 +425,11 @@ textarea.cut { min-height: 9.5em; }
 
 /* ---- bars: thin slabs nested in the draft face ---- */
 .bars { position: relative; padding-right: 22px; }
+/* OCCVM-L13 (2.22) — the ambient floor. z-index -1 is what makes it a LAYER rather than the material:
+   it paints inside .bars' own stacking context, above the substrate and beneath every bar, so no surface
+   carrying --heat or an outcome ever has it drawn over. Under reduced motion the canvas keeps its single
+   painted frame — a static frame, which is what L8 asks for, not a subtler floor and not a blank one. */
+.floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
   box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 0 rgba(255,255,255,var(--hi-a)), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(0,0,0,.6),

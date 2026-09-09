@@ -452,3 +452,133 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
   assert.ok(!/^\s*--slide\s*:/m.test(fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8")),
     "and the spine does not declare it: the spine only reads a surface input");
 });
+
+/* ---- 2.22: the ambient floor (OCCVM-L13) ----------------------------------------------------- */
+
+/* Loads the floor out of the BUILT artifact and runs it against a recording canvas, so what is asserted
+   is what ships rather than what the source says. jsdom is not in this repo's dependencies and is not
+   needed: the floor touches a 2-D context, getComputedStyle and rAF, and all three are stubbed here. */
+function loadFloor(over) {
+  const vm = require("vm");
+  const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
+  const code = cut("var FLOOR_N =", "function useAmbientFloor");
+  const ops = [];
+  const ctx2d = new Proxy({}, {
+    get(t, k) {
+      if (k === "createRadialGradient") return () => ({ addColorStop() {} });
+      if (k === "setTransform" || k === "clearRect" || k === "beginPath" || k === "arc" ||
+          k === "fill" || k === "moveTo" || k === "lineTo" || k === "closePath")
+        return (...a) => ops.push([k, ...a]);
+      return t[k];
+    },
+    set(t, k, v) { ops.push(["set:" + String(k), v]); t[k] = v; return true; }
+  });
+  const canvas = { width: 0, height: 0, getContext: () => ctx2d, getBoundingClientRect: () => ({ width: 320, height: 480 }) };
+  const frames = [];
+  const sandbox = {
+    Math, performance: { now: () => 0 },
+    OCCVM_VEINS: require(path.join(ROOT, "occvm", "veins.js")),
+    getComputedStyle: () => ({ getPropertyValue: k => (over && k in over ? over[k] : (k === "--vein-hi" ? "#c9a6ff" : k === "--vein-lo" ? "#5a36a8" : "")) }),
+    document: { documentElement: {} },
+    window: { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {} },
+    requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
+    cancelAnimationFrame() {}
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(code, sandbox);
+  return { sandbox, canvas, ops, frames };
+}
+
+test("2.22 — P-3: the bridge grows LINEARLY in time, which is the viscous law and not the inertial one", () => {
+  const { sandbox } = loadFloor();
+  const r = sandbox.bridgeRadius;
+  /* linearity proved by doubling, not by reading the source: r(2t) = 2·r(t) at every t */
+  for (const t of [1, 17, 250, 1000, 4000])
+    assert.ok(Math.abs(r(2 * t) - 2 * r(t)) < 1e-12, `linear at ${t}ms`);
+  /* and the substitution anybody would actually make — √t, the INERTIAL law — is excluded by the same
+     test: it fails doubling by a factor of √2. Recorded so the guard's own bite is visible. */
+  const sq = t => Math.sqrt(t);
+  assert.ok(Math.abs(sq(2000) - 2 * sq(1000)) > 1, "the guard would reject a sqrt merge");
+  assert.equal(r(0), 0, "a merge starts at zero bridge");
+  assert.equal(r(-50), 0, "and never runs backwards, which is where the ELS log correction goes wrong");
+});
+
+test("2.22 — L6: the floor carries no colour of its own, and paints nothing without the palette", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("function useAmbientFloor"));
+  const bare = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(bare.replace(/#\[0-9a-f\]\{6\}/g, "")), "no hex literal");
+  assert.ok(!/\brgba?\s*\(/.test(bare), "no rgb() triplet");
+  assert.ok(!/\b(white|black|red|green|blue|gold|silver)\b/i.test(bare), "no colour keyword");
+  assert.match(bare, /--vein-hi/, "the colour comes from the mineral tokens");
+  /* an unresolved palette paints nothing rather than an invented accent */
+  const dead = loadFloor({ "--vein-hi": "", "--vein-lo": "" });
+  const stop = dead.sandbox.ambientFloor(dead.canvas, true);
+  assert.equal(dead.ops.length, 0, "no palette, no paint");
+  assert.equal(typeof stop, "function", "and it still hands back a teardown");
+});
+
+test("2.22 — L8: reduced motion gets one painted frame and no animation at all", () => {
+  const live = loadFloor();
+  live.sandbox.ambientFloor(live.canvas, false);
+  assert.ok(live.frames.length > 0, "the floor runs unconditionally — L13 grants exactly that");
+
+  const still = loadFloor();
+  const stop = still.sandbox.ambientFloor(still.canvas, true);
+  assert.equal(still.frames.length, 0, "reduced motion requests no frame: a static frame, not a slower floor");
+  assert.ok(still.ops.some(o => o[0] === "arc"), "and it is a frame, not a blank canvas");
+  assert.equal(typeof stop, "function");
+});
+
+test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measured value", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+
+  /* a LAYER on the material, never the material deforming at rest: its own canvas, under every bar */
+  assert.match(css, /\.floor \{ position: absolute; inset: 0; z-index: -1;/, "it paints beneath the in-flow bars");
+  assert.match(ui, /<canvas className="floor" ref=\{floor\} aria-hidden="true" \/>/, "and it is its own element");
+  assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
+
+  /* ungated and unmodulated: lawful at zero modulation is what makes L13 a grant rather than the
+     gated-motion case, so nothing real may be reaching in here */
+  for (const forbidden of ["--heat", "reading", "pacing", "tempo", "bpm", "limit", "drone"])
+    assert.ok(!body.includes(forbidden), `the floor reads no measured value: found ${forbidden}`);
+  assert.match(ui, /useAmbientFloor\(floor\);/, "one call site, on the draft face");
+  assert.match(ui, /return ambientFloor\(ref\.current, reduce\);/, "the only inputs are the canvas and the motion setting");
+});
+
+test("2.22 — the auditor measures the per-tool grant, through the path the runner uses", () => {
+  const LA = require(path.join(ROOT, "occvm", "tools", "law-audit.js"));
+  const L13 = LA.LAWS.find(l => l.id === "L13");
+  /* the defect this closes: readTool handed the measure {raw, own} with no name, so L13's per-tool
+     grant read `undefined` and answered "withheld" for both tools on every real run, while four
+     synthetic cases built their own {name, own} and passed */
+  for (const t of LA.TOOLS) {
+    const src = LA.readTool(t);
+    if (!src) continue;
+    assert.equal(src.name, t.name, `${t.name} carries its own name into the measure`);
+  }
+  const rhyme = LA.readTool(LA.TOOLS.find(t => /Rhyme/.test(t.name)));
+  assert.equal(L13.measure(rhyme).state, "CONFORMS", "the granted floor conforms where it was granted");
+  assert.match(L13.measure(rhyme).detail, /reduced-motion guarded/);
+  assert.equal(L13.measure({ name: "BTC Terminal", own: rhyme.own }).state, "DIVERGES",
+    "and the identical source in the withheld tool diverges — the split is the law's, not the file's");
+});
+
+test("2.22 — the deployed root copies are byte-identical to the build output", () => {
+  /* The guard the existing stamp check could not be: at 2.21 the suite ran BEFORE `node build.js
+     --stamp`, and the copy that followed refreshed index.html and not sw.js, so that commit shipped a
+     page at build-20260909214145 against a cache named tome-build-20260909212530 — a service worker
+     serving the previous cache under a name the new page no longer matches. Every assertion had passed,
+     because they had all run against the previous state. A stamp check cannot catch that: it reads
+     whatever is on disk when it runs. This one does not depend on ordering — a half-copied artifact is
+     a difference between two files, whenever it is looked at. */
+  for (const f of ["index.html", "sw.js", "manifest.json"]) {
+    const root = fs.readFileSync(path.join(ROOT, f));
+    const dist = fs.readFileSync(path.join(ROOT, "dist", f));
+    assert.ok(root.equals(dist), `${f} at the repo root differs from dist/${f} — the deploy copy is partial`);
+  }
+});

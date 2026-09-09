@@ -465,6 +465,8 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   /* the toggle never unmounts, which is why Reading A lives on it rather than inside the panel */
   const beatPulse = useBeatPulse(tempo);
   const host = useRef(null);
+  const floor = useRef(null);
+  useAmbientFloor(floor);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
   const pacing = useMemo(() => tempo ? E2.tempo(reading, tempo) : null, [reading, tempo]);
   const paceBy = useMemo(() => new Map((pacing ? pacing.bars : []).map(b => [b.i, b])), [pacing]);
@@ -499,6 +501,7 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
         <div className="bars" ref={host}>
+          <canvas className="floor" ref={floor} aria-hidden="true" />
           {lines.map((ln, i) => reading.bars[i]
             ? <Bar key={i} bar={reading.bars[i]} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} pace={paceBy.get(i)} />
             : (editing === i
@@ -572,6 +575,163 @@ function Check({ eng }) {
       )}
     </div>
   );
+}
+
+/* ---- the ambient floor (OCCVM-L13, 2.22) ------------------------------------------------------
+
+   L13 grants Rhyme a decorative floor on the draft face and withholds it from BTC, and the auditor
+   measures that split by this function's NAME. What follows is the whole of what the law permits and
+   nothing beyond it.
+
+   WHAT IS DERIVED. The merge is coalescence, and P-3's citation pass ran here, at build time, exactly as
+   SPINE.md §10 said it would. Confirmed: in the VISCOUS regime the bridge radius grows LINEARLY in time,
+   r ∝ t (Eggers, Lister & Stone, J. Fluid Mech. 401, 293–310, 1999). The √t everyone reaches for is the
+   INERTIAL law, r_b = D(γa/ρ)^(1/4)·t^(1/2), and a yield-stress tomato matrix is nowhere near it.
+   So the floor merges linearly, and that is not a choice.
+
+   WHAT WAS MEASURED AND DROPPED. ELS carry a logarithmic factor, r_m ~ (γt/πη)·ln[γt/(ηR)]. It is an
+   EARLY-TIME asymptotic, valid for t ≪ t_v = ηR/γ, and −t·ln(t/t_v) turns over at t/t_v = 1/e and then
+   predicts the bridge SHRINKING. A merge rendered to completion runs straight past that, so carrying the
+   log here would be using an asymptotic outside its regime — the class of error 2.8 caught in the 3-D
+   fractal dimension on a planar lattice and 2.10 caught in k and n. Linear, without the correction.
+
+   WHAT IS AUTHORED, AND WHY THE ABSOLUTE RATE CANNOT BE DERIVED. The magnitude of the linear rate is
+   γ/η, and η is the substance's apparent viscosity, which depends on the shear rate the merge itself
+   sets. Measured across a plausible range: γ̇ = 0.01 → η 2,627 Pa·s → 5.8e-5 px/ms; γ̇ = 10 → η 4.99 →
+   3.0e-2 px/ms. The same 24 px bridge takes 417 SECONDS at one end and 0.8 s at the other, and nothing
+   fixes γ̇ independently of the rate it would produce. That is P-4's η(γ̇) arriving as a consumer and
+   showing why it was parked: the arithmetic is right and the input is not determined. Per P-3's own
+   disposition, the rate is authored and named as authored — the LOCK_RELAX_MS treatment.
+
+   The DRIFT is authored too, and L13 already made that call: a yield-stress fluid below τ₀ does not
+   spontaneously drift, so the floor contradicts the substance and the law records that as the owner's
+   aesthetic judgment rather than dressing it as a derivation.
+
+   WHAT THE LAW FORBIDS AND THIS RESPECTS. The floor is a LAYER on the material, never the material
+   deforming at rest — it is its own canvas, painted under the bars, and no surface's own geometry moves.
+   It never draws over a bar: `.bar` carries --heat, a measured value, and L13 bars a floor from any
+   surface carrying one. It takes its colour from the mineral tokens and carries no literal of its own,
+   so an unresolved palette paints nothing rather than painting an invented accent (L6). And it is
+   lawful at zero modulation: nothing gates it, nothing triggers it, no real value scales it. */
+var FLOOR_N = 7;              /* authored: droplets on the face at once */
+var FLOOR_R = [10, 26];       /* authored: the radius band, in px */
+var FLOOR_DRIFT_PX_S = 1.4;   /* authored: L13 names the drift itself as judgment, not derivation */
+var FLOOR_MERGE_PX_S = 2.6;   /* authored MAGNITUDE; the linearity above it is derived and confirmed */
+var FLOOR_ALPHA = 0.05;       /* authored: a floor is read at the edge of vision or it is not a floor */
+var FLOOR_SEED = 0x0CCF1005;  /* fixed, so the field is the same field every session and can be recorded */
+
+/* P-3's confirmed law, on its own so it can be driven rather than read. Linear in t, and the guard
+   proves linearity by doubling rather than by matching the source text: r(2t) = 2·r(t), which √t does
+   not satisfy and which is the one substitution anybody is likely to make here. */
+function bridgeRadius(ms) { return FLOOR_MERGE_PX_S * Math.max(0, ms) / 1000; }
+
+function ambientFloor(canvas, still) {
+  if (!canvas || !canvas.getContext) return function () {};
+  var V = typeof OCCVM_VEINS === "undefined" ? null : OCCVM_VEINS;
+  if (!V || !V.mulberry32) return function () {};
+
+  var ink = (function () {
+    try {
+      var cs = getComputedStyle(document.documentElement);
+      var hi = (cs.getPropertyValue("--vein-hi") || "").trim();
+      var lo = (cs.getPropertyValue("--vein-lo") || "").trim();
+      return /^#[0-9a-f]{6}$/i.test(hi) && /^#[0-9a-f]{6}$/i.test(lo) ? [hi, lo] : null;
+    } catch (e) { return null; }
+  })();
+  if (!ink) return function () {};
+
+  var ctx = canvas.getContext("2d"), rnd = V.mulberry32(FLOOR_SEED >>> 0);
+  var w = 0, h = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
+
+  function spawn(seedEdge) {
+    var r = FLOOR_R[0] + rnd() * (FLOOR_R[1] - FLOOR_R[0]);
+    var a = rnd() * Math.PI * 2;
+    return { x: seedEdge ? (rnd() < 0.5 ? -r : w + r) : rnd() * w, y: rnd() * h, r: r,
+             vx: Math.cos(a) * FLOOR_DRIFT_PX_S / 1000, vy: Math.sin(a) * FLOOR_DRIFT_PX_S / 1000 };
+  }
+
+  function size() {
+    var box = canvas.getBoundingClientRect();
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    w = Math.max(1, Math.round(box.width)); h = Math.max(1, Math.round(box.height));
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!drops.length) for (var i = 0; i < FLOOR_N; i++) drops.push(spawn(false));
+  }
+
+  function blob(d, alpha) {
+    var g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
+    g.addColorStop(0, ink[0]); g.addColorStop(1, ink[1]);
+    ctx.globalAlpha = alpha; ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /* the bridge: a band between two centres whose half-width is the bridge radius, growing linearly */
+  function bridge(a, b, rb) {
+    var dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+    ctx.globalAlpha = FLOOR_ALPHA; ctx.fillStyle = ink[1];
+    ctx.beginPath();
+    ctx.moveTo(a.x + nx * rb, a.y + ny * rb); ctx.lineTo(b.x + nx * rb, b.y + ny * rb);
+    ctx.lineTo(b.x - nx * rb, b.y - ny * rb); ctx.lineTo(a.x - nx * rb, a.y - ny * rb);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function step(dt) {
+    var i, j;
+    for (i = 0; i < drops.length; i++) {
+      var d = drops[i];
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      if (d.x < -d.r * 2) d.x = w + d.r; else if (d.x > w + d.r * 2) d.x = -d.r;
+      if (d.y < -d.r * 2) d.y = h + d.r; else if (d.y > h + d.r * 2) d.y = -d.r;
+    }
+    for (i = 0; i < welds.length; i++) {
+      var wd = welds[i];
+      wd.t += dt; wd.rb = bridgeRadius(wd.t);              /* r ∝ t — the derived half */
+      if (wd.rb >= wd.target) {
+        var a = wd.a, b = wd.b, m = a.r * a.r + b.r * b.r;  /* area conserved through the merge */
+        a.x = (a.x * a.r * a.r + b.x * b.r * b.r) / m; a.y = (a.y * a.r * a.r + b.y * b.r * b.r) / m;
+        a.r = Math.sqrt(m); a.merging = false; b.gone = true;
+        welds.splice(i--, 1);
+        drops = drops.filter(function (x) { return !x.gone; });
+        while (drops.length < FLOOR_N) drops.push(spawn(true));
+      }
+    }
+    for (i = 0; i < drops.length; i++) for (j = i + 1; j < drops.length; j++) {
+      var p = drops[i], q = drops[j];
+      if (p.merging || q.merging) continue;
+      if (Math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r) continue;
+      p.merging = q.merging = true;
+      welds.push({ a: p, b: q, t: 0, rb: 0, target: Math.min(p.r, q.r) });
+    }
+  }
+
+  function paint() {
+    ctx.clearRect(0, 0, w, h);
+    for (var i = 0; i < welds.length; i++) bridge(welds[i].a, welds[i].b, welds[i].rb);
+    for (i = 0; i < drops.length; i++) blob(drops[i], FLOOR_ALPHA);
+    ctx.globalAlpha = 1;
+  }
+
+  size();
+  if (still) { paint(); return function () {}; }
+  last = performance.now();
+  var frame = function (t) {
+    var dt = Math.min(100, t - last); last = t;
+    step(dt); paint();
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  var onResize = function () { size(); };
+  window.addEventListener("resize", onResize);
+  return function () { cancelAnimationFrame(raf); window.removeEventListener("resize", onResize); };
+}
+
+function useAmbientFloor(ref) {
+  useEffect(() => {
+    let reduce = false;
+    try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    return ambientFloor(ref.current, reduce);
+  }, []);
 }
 
 /* ---- bank ---- */
