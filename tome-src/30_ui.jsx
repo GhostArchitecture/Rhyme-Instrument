@@ -56,6 +56,46 @@ function Picker({ word, overrides, setOverride, onClose }) {
     </div>
   );
 }
+/* OCCVM-L13 (2.18) — the metronome pulse, Reading A. GATED motion, not the ambient floor: it runs only
+   while a real tempo is set, which is a state a person actively created, and it stops the moment the tempo
+   is cleared. L13's gated-motion clause is the one that governs it, and that clause has one sentence this
+   hook exists to obey:
+
+     THE GATE IS THE ACTUAL VALUE, NEVER ITS DISPLAY FALLBACK.
+
+   TempoPanel keeps `const t = tempo || { bpm: 90, ... }` so the panel has something to render before a
+   tempo exists. Reading `t` here would leave the pulse beating at 90 forever under a default nobody set —
+   a tool asserting a tempo it was never given. This takes `tempo` and nothing else; null means silent.
+
+   The clock is performance.now(), never a frame count: a backgrounded tab throttles rAF and a counted
+   pulse would drift out of phase with the beat it claims to mark, then silently recover at the wrong
+   place. Reading the wall clock each frame means a resumed tab lands on the correct beat immediately.
+
+   Reduced motion stops it entirely rather than slowing it — L8 is untouched by L13, and a degraded
+   metronome is a wrong metronome. It pulses the BEAT: swing displaces the sixteenths inside a beat, not
+   the beats themselves, so a beat pulse reads identically under all three feels and claims nothing about
+   the displacement. What the feel actually does is stated numerically in the panel, where it can be read
+   rather than inferred from a flash. */
+function useBeatPulse(tempo) {
+  const [phase, setPhase] = React.useState(0);
+  React.useEffect(() => {
+    if (!tempo || !isFinite(tempo.bpm) || tempo.bpm <= 0) { setPhase(0); return; }
+    let reduce = false;
+    try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    if (reduce) { setPhase(0); return; }
+    const beatMs = 60000 / tempo.bpm, t0 = performance.now();
+    let raf = 0;
+    const step = () => {
+      const u = ((performance.now() - t0) % beatMs) / beatMs;
+      setPhase(u < 0.18 ? 1 - u / 0.18 : 0);   /* a strike and a decay, not a sine: a beat is an onset */
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [tempo && tempo.bpm]);
+  return phase;
+}
+
 /* OCCVM-L8 — the patina control. 28 call sites reach the interaction floor through this one component.
    aria-pressed is emitted only when the caller passes `on` AND has not marked the control `action`: five
    sites write a bare `on` to mean "styled active", and a button that claims to be a pressed toggle
@@ -298,6 +338,11 @@ function TempoPanel({ tempo, setTempo, pacing, onClose }) {
         <div>
           <div className="group">
             <div className="gh">{g.slotsPerBar} slots · {g.beats} beats × {g.subdivision} · bar runs {((g.beatMs * g.beats) / 1000).toFixed(2)}s</div>
+            {/* what the feel does to TIME, stated rather than implied. Until 2.18 swing produced a grid
+                identical to straight and this line could only ever have said "16 slots" either way. */}
+            <div className="gh">{g.feel === "swing"
+              ? `swung ${Math.round(g.swingRatio * 1000) / 10}% — each pair runs ${g.longMs.toFixed(0)}ms long, ${g.shortMs.toFixed(0)}ms short`
+              : `even — every slot runs ${g.meanSlotMs.toFixed(0)}ms`}</div>
             {pacing.bars.map(b => (
               <div key={b.i} className="fit">
                 <span className="nm" style={{ flex: "0 0 58px" }}>{b.rate.toFixed(1)}/sec</span>
@@ -327,6 +372,8 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   const [share, setShare] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
   const [tempoOpen, setTempoOpen] = useState(false);
+  /* the toggle never unmounts, which is why Reading A lives on it rather than inside the panel */
+  const beatPulse = useBeatPulse(tempo);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
   const pacing = useMemo(() => tempo ? E2.tempo(reading, tempo) : null, [reading, tempo]);
@@ -351,7 +398,8 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
       <div className="row">
         <Cast on={quarry} patina onClick={() => setQuarry(!quarry)}>quarry</Cast>
         <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)}>meter</Cast>
-        <Cast on={tempoOpen} patina onClick={() => setTempoOpen(!tempoOpen)}>{tempo ? tempo.bpm + " bpm" : "tempo"}</Cast>
+        <Cast on={tempoOpen} patina onClick={() => setTempoOpen(!tempoOpen)}
+          style={{ "--pulse": beatPulse.toFixed(3) }}>{tempo ? tempo.bpm + " bpm" : "tempo"}</Cast>
         <Cast on={share} patina onClick={() => setShare(!share)}>share</Cast>
       </div>
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}

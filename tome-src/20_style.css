@@ -410,6 +410,15 @@ textarea.cut { min-height: 9.5em; }
 .cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--mineral)), color-mix(in srgb, var(--m, var(--mineral)) 55%, black));
   box-shadow: 0 0 0 1px var(--m, var(--mineral)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--mineral)) 45%, transparent), 0 2px 0 #1f1508; }
 .cast.patina.on { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); box-shadow: 0 0 0 1px var(--verdigris) inset, 0 2px 0 #1f1508; }
+/* OCCVM-L13 (2.18) — Reading A. --pulse is written by useBeatPulse and is 0 unless a real tempo is set,
+   so with no tempo this rule resolves to exactly the surface the button already had: the fallback IS the
+   off state, and nothing here can beat under a default nobody chose. The strike lands on the rim rather
+   than the fill, so a pulsing control still reads as the same control. */
+.cast { --pulse: 0; }
+.cast[style*="--pulse"] { box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508,
+  0 0 calc(var(--pulse) * 10px) rgba(255,255,255,calc(var(--pulse) * .30)),
+  inset 0 0 0 1px rgba(255,255,255,calc(var(--pulse) * .22)); }
+@media (prefers-reduced-motion: reduce) { .cast[style*="--pulse"] { box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508; } }
 .label { font-size: 12.5px; color: var(--bone-lo); margin: 14px 0 6px; }
 .note { font-size: 12.5px; line-height: 1.5; color: var(--bone-lo); margin-top: 12px; }
 .note b { font-weight: 400; color: var(--bone); }

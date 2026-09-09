@@ -424,6 +424,15 @@ textarea.cut { min-height: 9.5em; }
 .cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--mineral)), color-mix(in srgb, var(--m, var(--mineral)) 55%, black));
   box-shadow: 0 0 0 1px var(--m, var(--mineral)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--mineral)) 45%, transparent), 0 2px 0 #1f1508; }
 .cast.patina.on { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); box-shadow: 0 0 0 1px var(--verdigris) inset, 0 2px 0 #1f1508; }
+/* OCCVM-L13 (2.18) — Reading A. --pulse is written by useBeatPulse and is 0 unless a real tempo is set,
+   so with no tempo this rule resolves to exactly the surface the button already had: the fallback IS the
+   off state, and nothing here can beat under a default nobody chose. The strike lands on the rim rather
+   than the fill, so a pulsing control still reads as the same control. */
+.cast { --pulse: 0; }
+.cast[style*="--pulse"] { box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508,
+  0 0 calc(var(--pulse) * 10px) rgba(255,255,255,calc(var(--pulse) * .30)),
+  inset 0 0 0 1px rgba(255,255,255,calc(var(--pulse) * .22)); }
+@media (prefers-reduced-motion: reduce) { .cast[style*="--pulse"] { box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508; } }
 .label { font-size: 12.5px; color: var(--bone-lo); margin: 14px 0 6px; }
 .note { font-size: 12.5px; line-height: 1.5; color: var(--bone-lo); margin-top: 12px; }
 .note b { font-weight: 400; color: var(--bone); }
@@ -3454,16 +3463,55 @@ const E2 = (() => {
    * here listens to anything or knows how a line is actually performed.
    *
    * `feel` changes how a beat subdivides: straight and swing both cut it in four (swing shifts
-   * where the offbeats sit in time, not how many there are), triplet cuts it in three. */
+   * where the offbeats sit in time, not how many there are), triplet cuts it in three.
+   *
+   * THAT SENTENCE WAS TRUE OF THE INTENT AND FALSE OF THE CODE until now. SUBDIVISION gave swing
+   * and straight the same 4, slotMs was beatMs/per for both, and nothing anywhere carried an
+   * onset - so `swing` produced a grid byte-identical to `straight` and differed only by its own
+   * label. A feel that names a displacement and displaces nothing is the same class of defect as a
+   * conformance table reading "violates: --": the claim outlived the thing it described. Swing is
+   * the feel that matters most in the field, so it is the one that had to stop being a label.
+   *
+   * WHAT SWING IS, sourced rather than invented. Swung subdivisions are the first and third of a
+   * triplet: the pair splits 2:1, the long note taking two thirds of it. That is the notated meaning
+   * of "swing eighths" and the value MPC-style swing percentage is measured against - 50% straight,
+   * 66.7% this. It is a musical convention rather than a property of any substance, so SWING_RATIO
+   * is AUTHORED and says so, the same discipline the spine holds for a duration.
+   *
+   * The displacement applies at the PAIR, and with per = 4 a pair is one eighth split into two
+   * sixteenths - sixteenth-note swing, which is where hip-hop puts it. An odd subdivision has no
+   * pairs to swing, so triplet returns uniform rather than being silently swung into something else. */
   const SUBDIVISION = {
     straight: 4,
     swing: 4,
     triplet: 3
   };
+  const SWING_RATIO = 2 / 3; /* authored: the long note's share of each swung pair */
+  /* onset of every slot inside one beat, in ms from the beat - uniform unless swing displaces it */
+  function beatOnsets(per, beatMs, feel) {
+    if (feel !== "swing" || per % 2) {
+      const out = [];
+      for (let i = 0; i < per; i++) out.push(i * beatMs / per);
+      return out;
+    }
+    const pairs = per / 2,
+      pairMs = beatMs / pairs,
+      out = [];
+    for (let p = 0; p < pairs; p++) {
+      out.push(p * pairMs);
+      out.push(p * pairMs + pairMs * SWING_RATIO);
+    }
+    return out;
+  }
   function grid(bpm = 90, timeSig = "4/4", feel = "straight") {
     const beats = Math.max(1, parseInt(String(timeSig).split("/")[0], 10) || 4);
     const per = SUBDIVISION[feel] || 4;
     const beatMs = 60000 / Math.max(1, bpm);
+    const one = beatOnsets(per, beatMs, feel);
+    const onsets = [];
+    for (let b = 0; b < beats; b++) for (const o of one) onsets.push(b * beatMs + o);
+    const swung = feel === "swing" && !(per % 2),
+      pairMs = beatMs / (per / 2);
     return {
       bpm,
       timeSig,
@@ -3471,8 +3519,20 @@ const E2 = (() => {
       beats,
       subdivision: per,
       slotsPerBar: beats * per,
-      slotMs: beatMs / per,
-      beatMs
+      beatMs,
+      onsets,
+      swingRatio: swung ? SWING_RATIO : 0.5,
+      /* the two durations a swung pair actually has, so a panel can state them instead of
+       * implying a uniform slot; equal under straight and triplet, which is how "no swing"
+       * says itself honestly */
+      longMs: swung ? pairMs * SWING_RATIO : beatMs / per,
+      shortMs: swung ? pairMs * (1 - SWING_RATIO) : beatMs / per,
+      /* the MEAN slot, named as a mean: under swing no slot has this duration, and the field
+       * this replaces claimed every slot did. No product code read it - its only two readers
+       * were assertions checking that it tracked bpm, which is true of a mean and was the
+       * thing making the uniform-slot claim look verified. A guarded lie is worse than an
+       * unguarded one, because the guard is what stops anybody looking again. */
+      meanSlotMs: beatMs / per
     };
   }
   /* How a written bar sits against that grid.
@@ -4381,6 +4441,55 @@ function Picker({
     onClick: onClose
   }, "done")));
 }
+/* OCCVM-L13 (2.18) — the metronome pulse, Reading A. GATED motion, not the ambient floor: it runs only
+   while a real tempo is set, which is a state a person actively created, and it stops the moment the tempo
+   is cleared. L13's gated-motion clause is the one that governs it, and that clause has one sentence this
+   hook exists to obey:
+
+     THE GATE IS THE ACTUAL VALUE, NEVER ITS DISPLAY FALLBACK.
+
+   TempoPanel keeps `const t = tempo || { bpm: 90, ... }` so the panel has something to render before a
+   tempo exists. Reading `t` here would leave the pulse beating at 90 forever under a default nobody set —
+   a tool asserting a tempo it was never given. This takes `tempo` and nothing else; null means silent.
+
+   The clock is performance.now(), never a frame count: a backgrounded tab throttles rAF and a counted
+   pulse would drift out of phase with the beat it claims to mark, then silently recover at the wrong
+   place. Reading the wall clock each frame means a resumed tab lands on the correct beat immediately.
+
+   Reduced motion stops it entirely rather than slowing it — L8 is untouched by L13, and a degraded
+   metronome is a wrong metronome. It pulses the BEAT: swing displaces the sixteenths inside a beat, not
+   the beats themselves, so a beat pulse reads identically under all three feels and claims nothing about
+   the displacement. What the feel actually does is stated numerically in the panel, where it can be read
+   rather than inferred from a flash. */
+function useBeatPulse(tempo) {
+  const [phase, setPhase] = React.useState(0);
+  React.useEffect(() => {
+    if (!tempo || !isFinite(tempo.bpm) || tempo.bpm <= 0) {
+      setPhase(0);
+      return;
+    }
+    let reduce = false;
+    try {
+      reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {}
+    if (reduce) {
+      setPhase(0);
+      return;
+    }
+    const beatMs = 60000 / tempo.bpm,
+      t0 = performance.now();
+    let raf = 0;
+    const step = () => {
+      const u = (performance.now() - t0) % beatMs / beatMs;
+      setPhase(u < 0.18 ? 1 - u / 0.18 : 0); /* a strike and a decay, not a sine: a beat is an onset */
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [tempo && tempo.bpm]);
+  return phase;
+}
+
 /* OCCVM-L8 — the patina control. 28 call sites reach the interaction floor through this one component.
    aria-pressed is emitted only when the caller passes `on` AND has not marked the control `action`: five
    sites write a bare `on` to mean "styled active", and a button that claims to be a pressed toggle
@@ -4919,7 +5028,9 @@ function TempoPanel({
     className: "group"
   }, /*#__PURE__*/React.createElement("div", {
     className: "gh"
-  }, g.slotsPerBar, " slots \xB7 ", g.beats, " beats \xD7 ", g.subdivision, " \xB7 bar runs ", (g.beatMs * g.beats / 1000).toFixed(2), "s"), pacing.bars.map(b => /*#__PURE__*/React.createElement("div", {
+  }, g.slotsPerBar, " slots \xB7 ", g.beats, " beats \xD7 ", g.subdivision, " \xB7 bar runs ", (g.beatMs * g.beats / 1000).toFixed(2), "s"), /*#__PURE__*/React.createElement("div", {
+    className: "gh"
+  }, g.feel === "swing" ? `swung ${Math.round(g.swingRatio * 1000) / 10}% — each pair runs ${g.longMs.toFixed(0)}ms long, ${g.shortMs.toFixed(0)}ms short` : `even — every slot runs ${g.meanSlotMs.toFixed(0)}ms`), pacing.bars.map(b => /*#__PURE__*/React.createElement("div", {
     key: b.i,
     className: "fit"
   }, /*#__PURE__*/React.createElement("span", {
@@ -4975,6 +5086,8 @@ function Draft({
   const [share, setShare] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
   const [tempoOpen, setTempoOpen] = useState(false);
+  /* the toggle never unmounts, which is why Reading A lives on it rather than inside the panel */
+  const beatPulse = useBeatPulse(tempo);
   const host = useRef(null);
   const reading = useMemo(() => E2.reading(draft, {
     pop
@@ -5045,7 +5158,10 @@ function Draft({
   }, "meter"), /*#__PURE__*/React.createElement(Cast, {
     on: tempoOpen,
     patina: true,
-    onClick: () => setTempoOpen(!tempoOpen)
+    onClick: () => setTempoOpen(!tempoOpen),
+    style: {
+      "--pulse": beatPulse.toFixed(3)
+    }
   }, tempo ? tempo.bpm + " bpm" : "tempo"), /*#__PURE__*/React.createElement(Cast, {
     on: share,
     patina: true,
@@ -5767,5 +5883,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260909131224 -->
+<!-- build-20260909205707 -->
 </html>

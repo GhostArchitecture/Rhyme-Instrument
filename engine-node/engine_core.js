@@ -315,13 +315,56 @@ const E2 = (() => {
    * here listens to anything or knows how a line is actually performed.
    *
    * `feel` changes how a beat subdivides: straight and swing both cut it in four (swing shifts
-   * where the offbeats sit in time, not how many there are), triplet cuts it in three. */
+   * where the offbeats sit in time, not how many there are), triplet cuts it in three.
+   *
+   * THAT SENTENCE WAS TRUE OF THE INTENT AND FALSE OF THE CODE until now. SUBDIVISION gave swing
+   * and straight the same 4, slotMs was beatMs/per for both, and nothing anywhere carried an
+   * onset - so `swing` produced a grid byte-identical to `straight` and differed only by its own
+   * label. A feel that names a displacement and displaces nothing is the same class of defect as a
+   * conformance table reading "violates: --": the claim outlived the thing it described. Swing is
+   * the feel that matters most in the field, so it is the one that had to stop being a label.
+   *
+   * WHAT SWING IS, sourced rather than invented. Swung subdivisions are the first and third of a
+   * triplet: the pair splits 2:1, the long note taking two thirds of it. That is the notated meaning
+   * of "swing eighths" and the value MPC-style swing percentage is measured against - 50% straight,
+   * 66.7% this. It is a musical convention rather than a property of any substance, so SWING_RATIO
+   * is AUTHORED and says so, the same discipline the spine holds for a duration.
+   *
+   * The displacement applies at the PAIR, and with per = 4 a pair is one eighth split into two
+   * sixteenths - sixteenth-note swing, which is where hip-hop puts it. An odd subdivision has no
+   * pairs to swing, so triplet returns uniform rather than being silently swung into something else. */
   const SUBDIVISION = { straight: 4, swing: 4, triplet: 3 };
+  const SWING_RATIO = 2 / 3;   /* authored: the long note's share of each swung pair */
+  /* onset of every slot inside one beat, in ms from the beat - uniform unless swing displaces it */
+  function beatOnsets(per, beatMs, feel) {
+    if (feel !== "swing" || per % 2) {
+      const out = []; for (let i = 0; i < per; i++) out.push(i * beatMs / per); return out;
+    }
+    const pairs = per / 2, pairMs = beatMs / pairs, out = [];
+    for (let p = 0; p < pairs; p++) { out.push(p * pairMs); out.push(p * pairMs + pairMs * SWING_RATIO); }
+    return out;
+  }
   function grid(bpm = 90, timeSig = "4/4", feel = "straight") {
     const beats = Math.max(1, parseInt(String(timeSig).split("/")[0], 10) || 4);
     const per = SUBDIVISION[feel] || 4;
     const beatMs = 60000 / Math.max(1, bpm);
-    return { bpm, timeSig, feel, beats, subdivision: per, slotsPerBar: beats * per, slotMs: beatMs / per, beatMs };
+    const one = beatOnsets(per, beatMs, feel);
+    const onsets = [];
+    for (let b = 0; b < beats; b++) for (const o of one) onsets.push(b * beatMs + o);
+    const swung = feel === "swing" && !(per % 2), pairMs = beatMs / (per / 2);
+    return { bpm, timeSig, feel, beats, subdivision: per, slotsPerBar: beats * per, beatMs, onsets,
+             swingRatio: swung ? SWING_RATIO : 0.5,
+             /* the two durations a swung pair actually has, so a panel can state them instead of
+              * implying a uniform slot; equal under straight and triplet, which is how "no swing"
+              * says itself honestly */
+             longMs: swung ? pairMs * SWING_RATIO : beatMs / per,
+             shortMs: swung ? pairMs * (1 - SWING_RATIO) : beatMs / per,
+             /* the MEAN slot, named as a mean: under swing no slot has this duration, and the field
+              * this replaces claimed every slot did. No product code read it - its only two readers
+              * were assertions checking that it tracked bpm, which is true of a mean and was the
+              * thing making the uniform-slot claim look verified. A guarded lie is worse than an
+              * unguarded one, because the guard is what stops anybody looking again. */
+             meanSlotMs: beatMs / per };
   }
   /* How a written bar sits against that grid.
    *
