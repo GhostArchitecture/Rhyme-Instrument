@@ -311,17 +311,68 @@ const E2 = (() => {
     return { rows, ranked, best, weakest, bars: rows.length };
   }
   /* ---------- tempo grid ----------
+   * SPINE.md section 11 governs this whole block: THE BEAT IS ARITHMETIC AND MAY BE DESCRIBED; THE
+   * PERFORMANCE IS NOT THIS TOOL'S. BPM, time signature, subdivision and - since 2.18 - where a swung
+   * pair places its two onsets all follow from numbers a person entered, so the tool may state them.
+   * Which slot a syllable actually lands in, whether a writer leans early or late, what a line does in a
+   * mouth: none of that is reachable from a draft and none of it is estimated here. A writer writes to
+   * the beat; this does not write to the writer, and it never synthesises a performance from what is
+   * typed. The guard in engine-node/test/engine.test.js fails the day the public surface grows a
+   * syllable-to-onset map, which is the one shape this rule is most likely to be broken by.
    * Arithmetic, not a model. BPM and time signature give a real slot count per bar; nothing
    * here listens to anything or knows how a line is actually performed.
    *
    * `feel` changes how a beat subdivides: straight and swing both cut it in four (swing shifts
-   * where the offbeats sit in time, not how many there are), triplet cuts it in three. */
+   * where the offbeats sit in time, not how many there are), triplet cuts it in three.
+   *
+   * THAT SENTENCE WAS TRUE OF THE INTENT AND FALSE OF THE CODE until now. SUBDIVISION gave swing
+   * and straight the same 4, slotMs was beatMs/per for both, and nothing anywhere carried an
+   * onset - so `swing` produced a grid byte-identical to `straight` and differed only by its own
+   * label. A feel that names a displacement and displaces nothing is the same class of defect as a
+   * conformance table reading "violates: --": the claim outlived the thing it described. Swing is
+   * the feel that matters most in the field, so it is the one that had to stop being a label.
+   *
+   * WHAT SWING IS, sourced rather than invented. Swung subdivisions are the first and third of a
+   * triplet: the pair splits 2:1, the long note taking two thirds of it. That is the notated meaning
+   * of "swing eighths" and the value MPC-style swing percentage is measured against - 50% straight,
+   * 66.7% this. It is a musical convention rather than a property of any substance, so SWING_RATIO
+   * is AUTHORED and says so, the same discipline the spine holds for a duration.
+   *
+   * The displacement applies at the PAIR, and with per = 4 a pair is one eighth split into two
+   * sixteenths - sixteenth-note swing, which is where hip-hop puts it. An odd subdivision has no
+   * pairs to swing, so triplet returns uniform rather than being silently swung into something else. */
   const SUBDIVISION = { straight: 4, swing: 4, triplet: 3 };
+  const SWING_RATIO = 2 / 3;   /* authored: the long note's share of each swung pair */
+  /* onset of every slot inside one beat, in ms from the beat - uniform unless swing displaces it */
+  function beatOnsets(per, beatMs, feel) {
+    if (feel !== "swing" || per % 2) {
+      const out = []; for (let i = 0; i < per; i++) out.push(i * beatMs / per); return out;
+    }
+    const pairs = per / 2, pairMs = beatMs / pairs, out = [];
+    for (let p = 0; p < pairs; p++) { out.push(p * pairMs); out.push(p * pairMs + pairMs * SWING_RATIO); }
+    return out;
+  }
   function grid(bpm = 90, timeSig = "4/4", feel = "straight") {
     const beats = Math.max(1, parseInt(String(timeSig).split("/")[0], 10) || 4);
     const per = SUBDIVISION[feel] || 4;
     const beatMs = 60000 / Math.max(1, bpm);
-    return { bpm, timeSig, feel, beats, subdivision: per, slotsPerBar: beats * per, slotMs: beatMs / per, beatMs };
+    const one = beatOnsets(per, beatMs, feel);
+    const onsets = [];
+    for (let b = 0; b < beats; b++) for (const o of one) onsets.push(b * beatMs + o);
+    const swung = feel === "swing" && !(per % 2), pairMs = beatMs / (per / 2);
+    return { bpm, timeSig, feel, beats, subdivision: per, slotsPerBar: beats * per, beatMs, onsets,
+             swingRatio: swung ? SWING_RATIO : 0.5,
+             /* the two durations a swung pair actually has, so a panel can state them instead of
+              * implying a uniform slot; equal under straight and triplet, which is how "no swing"
+              * says itself honestly */
+             longMs: swung ? pairMs * SWING_RATIO : beatMs / per,
+             shortMs: swung ? pairMs * (1 - SWING_RATIO) : beatMs / per,
+             /* the MEAN slot, named as a mean: under swing no slot has this duration, and the field
+              * this replaces claimed every slot did. No product code read it - its only two readers
+              * were assertions checking that it tracked bpm, which is true of a mean and was the
+              * thing making the uniform-slot claim look verified. A guarded lie is worse than an
+              * unguarded one, because the guard is what stops anybody looking again. */
+             meanSlotMs: beatMs / per };
   }
   /* How a written bar sits against that grid.
    *
@@ -339,12 +390,27 @@ const E2 = (() => {
     const accents = bar.field.reduce((n, w) => n + w.sylls.filter(s => s.m > 0).length, 0);
     const slotDelta = sylls - g.slotsPerBar;
     const barSeconds = (g.beatMs * g.beats) / 1000;
+    /* ROOM IS NOT EVEN WHEN THE BEAT IS SWUNG, and `rate` is a bar mean that cannot see it. 2.18
+     * called that a virtue - "swing changes where, never how many or how fast" - and that is wrong
+     * in the way that matters: the writing is not what swings. The BEAT swings, and a line is
+     * written against it. So half the slots are short and half are long, and two syllables landing
+     * on the short side of a pair have a third less mouth-room than the same two on the long side.
+     * A mean over the bar hides exactly the constraint the feel exists to impose.
+     *
+     * Reported, not modelled. This tool does not know which slot a syllable lands in - that is the
+     * writer's ear and the performance's - so it states the room the beat gives and how many slots
+     * carry it, and stops there. `tightRate` is the honest ceiling: syllables per second if a pair's
+     * worth of them sat on the short side. Nothing here says a line is wrong. */
+    const tight = Math.min(g.shortMs, g.longMs);
     return {
       i: bar.i, syllables: sylls, accents,
       slots: g.slotsPerBar, beats: g.beats, slotDelta,
       room: slotDelta === 0 ? "exact" : slotDelta > 0 ? "over" : "under",
       rate: sylls / barSeconds,
       accentsPerBeat: accents / g.beats,
+      tightMs: tight,
+      even: g.shortMs === g.longMs,
+      tightRate: 1000 / tight,
     };
   }
   function tempo(read, opts = {}) {

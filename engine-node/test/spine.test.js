@@ -185,8 +185,16 @@ test("2.8 — the shelf yields rather than cleaves, and the vocabulary is pinned
   const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
   assert.match(ui, /OCCVM_YIELD\.pinch\(row, \(\) => removeDraft\(d\.id\)\)/, "removing a draft pinches off");
   assert.ok(!/OCCVM_FRACTURE|\.cleave\(/.test(ui), "no cleave call survives — in a page it would throw");
-  /* the primitive is used for the irreversible action and nothing else: one call site, the removal */
-  assert.equal((ui.match(/OCCVM_YIELD\.pinch/g) || []).length, 1, "yield marks the one irreversible action, not everything");
+  /* The primitive is used for irreversible actions and NOTHING ELSE. This read `=== 1` until 2.21 added
+   * the bank row's swipe removal, and a correct change then failed a correct guard — the same typed-count
+   * defect 2.15 found in the law-count assertions. L11 does not say one action is irreversible; it says
+   * the vocabulary belongs to the ones that are. So the property is what is asserted: every call site's
+   * own callback names a removal. A pinch on a save, a toggle or an open fails; a third real removal
+   * passes without editing this line. */
+  const pinches = [...ui.matchAll(/OCCVM_YIELD\.pinch\(([^;]*?)\)\s*;/g)].map(m => m[1]);
+  assert.ok(pinches.length >= 1, "the yield vocabulary reaches at least one action");
+  for (const args of pinches)
+    assert.match(args, /remove|drop|delete/i, "pinch marks a removal, never a reversible action: " + args.trim());
 });
 
 test("2.8 — yield resolves its curve under the PAGE's load order, with no require", () => {
@@ -351,4 +359,310 @@ test("2.7 — L7: the reading surface and the heads are owned, and are two faces
   assert.ok(/\.slab \.head h2\s*\{[^}]*font-family:\s*var\(--serif\)/.test(own),
     "the heads carry --serif explicitly now that they no longer inherit it from body");
   assert.ok(fs.existsSync(path.join(ROOT, "occvm", "fonts", "OFL-Faustina.txt")), "Faustina's licence ships with it");
+});
+
+/* ---- 2.21: the swipe test bed, on bank rows -------------------------------------------------- */
+
+test("2.21 — the dead band IS the yield stress, derived not authored", () => {
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  const m = R.SUBSTANCE;
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const Y = +(/var SWIPE_YIELD_PX = (\d+(?:\.\d+)?)/.exec(ui) || [])[1];
+  assert.ok(Y > 0, "the one authored anchor is declared and readable");
+
+  /* the map the hook applies, restated here so the identity is checked rather than assumed */
+  const flowed = d => {
+    const tau = m.tau0 * Math.abs(d) / Y;
+    if (!(R.shearRate(m, tau) > 0)) return 0;
+    return Math.sign(d) * Math.abs(d) * (tau - m.tau0) / tau;
+  };
+
+  /* below τ₀ the substance does not flow, so the row does not move — however far the thumb has gone */
+  for (const d of [0, 1, Y / 3, Y / 2, Y * 0.99, Y])
+    assert.equal(flowed(d), 0, `held at ${d}px: below the yield stress nothing moves`);
+  /* above it, the transmitted fraction (τ−τ₀)/τ times the imposed travel is exactly d − Y. That identity
+     is why the gesture reads as an ordinary swipe with a sticky start rather than as a rubber band. */
+  for (const d of [Y + 1, Y + 10, Y * 1.5, Y * 2, Y * 4])
+    assert.ok(Math.abs(flowed(d) - (d - Y)) < 1e-9, `past yield the row tracks the finger 1:1 at ${d}px`);
+  assert.ok(Math.abs(flowed(-(Y + 12)) + 12) < 1e-9, "and it is signed: the material has no preferred direction");
+});
+
+test("2.21 — the commit distance stays inside the yield-dominated regime", () => {
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  const m = R.SUBSTANCE;
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const Y = +(/var SWIPE_YIELD_PX = (\d+(?:\.\d+)?)/.exec(ui) || [])[1];
+  const C = +(/var SWIPE_COMMIT_PX = (\d+(?:\.\d+)?)/.exec(ui) || [])[1];
+
+  /* The crossover k·γ̇ⁿ/τ₀ = 1 is τ = 2τ₀ by definition, which under the hook's map is 2Y of finger
+     travel — i.e. an offset of Y. Measured against the substance rather than asserted, so the day the
+     constants move the guard moves with them. */
+  const crossoverTau = m.tau0 + m.k * Math.pow(R.shearRate(m, 2 * m.tau0), m.n);
+  assert.ok(Math.abs(crossoverTau - 2 * m.tau0) < 1e-6, "the regime crossover sits at exactly twice the yield stress");
+  assert.ok(C < Y, `commit at ${C}px must stay under the crossover offset ${Y}px, or one swipe renders two vocabularies`);
+
+  const tauAtCommit = m.tau0 * (C + Y) / Y;
+  const ratio = (tauAtCommit - m.tau0) / m.tau0;         /* = k·γ̇ⁿ/τ₀ at the moment of commit */
+  assert.ok(ratio < 1, "yield-dominated at commit");
+  assert.ok(ratio > 0.5, "and not so far under the crossover that the ceiling is meaningless");
+  /* the recorded headroom, in the same shape 2.16 recorded LOCK_V0_MAX's 14.4% */
+  assert.ok(Math.abs(ratio - 0.8667) < 0.02, `headroom drifted: ratio ${ratio.toFixed(4)}`);
+});
+
+test("2.21 — tap-to-remove stays live, and one removal has one vocabulary", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+
+  assert.match(ui, /className="rm occvm-act" onClick=\{remove\}/, "the remove button survives the swipe and calls the same removal");
+  assert.match(ui, /className="stones occvm-act"/, "so does the stones button");
+  /* the gesture only claims the pointer AFTER it has yielded; inside the dead band there is nothing to
+     capture and no default to prevent, which is what keeps both buttons tappable through a light drag */
+  const mv = /const move = e => \{[\s\S]*?\n  \};/.exec(ui)[0];
+  assert.ok(mv.indexOf("s.live = true") < mv.indexOf("e.preventDefault()"),
+    "preventDefault and pointer capture both sit past the yield point, never before it");
+  assert.ok(mv.indexOf("setPointerCapture") > mv.indexOf("Math.abs(dx) <= SWIPE_YIELD_PX"),
+    "capture is taken only once the material has yielded");
+  assert.match(mv, /Math\.abs\(dy\) > Math\.abs\(dx\)/, "a vertical gesture is the page's scroll, not a swipe");
+  assert.match(css, /\.bankrow \{ --slide: 0px; transform: translateX\(var\(--slide\)\); touch-action: pan-y; \}/,
+    "the row claims one axis and leaves the page its own");
+});
+
+test("2.21 — L8: reduced motion gets a static frame, and the gesture still commits", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  assert.match(ui, /"--slide": \(reduce\(\) \? 0 : off\)/, "the travel is withheld, not shrunk");
+  assert.match(ui, /if \(ret && !reduce\(\)\)/, "and so is the return flow's transition");
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.bankrow \{ transform: none !important; \} \}/,
+    "the stylesheet says the same thing, so a JS path that missed it still lands on a static frame");
+  /* the commit test reads the flowed offset, which reduce() never touches: the setting removes the
+     animation, never the ability to act. A reduced-motion user swipes the same distance. */
+  const upFn = /const up = e => \{[\s\S]*?\n  \};/.exec(ui)[0];
+  assert.ok(!/reduce\(\)/.test(upFn), "commit is decided by the material, not by a motion preference");
+});
+
+test("2.21 — --slide is registered where §2a-0 says a tool-local token goes", () => {
+  const fs = require("fs");
+  const spine = fs.readFileSync(path.join(ROOT, "occvm", "SPINE.md"), "utf8");
+  const row = /\*\*Tool-local semantics\*\*[^\n]*/.exec(spine)[0];
+  assert.ok(row.includes("--slide"), "the census must be able to find it in §6b's migration table");
+  assert.ok(!/^\s*--slide\s*:/m.test(fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8")),
+    "and the spine does not declare it: the spine only reads a surface input");
+});
+
+/* ---- 2.22: the ambient floor (OCCVM-L13) ----------------------------------------------------- */
+
+/* Loads the floor out of the BUILT artifact and runs it against a recording canvas, so what is asserted
+   is what ships rather than what the source says. jsdom is not in this repo's dependencies and is not
+   needed: the floor touches a 2-D context, getComputedStyle and rAF, and all three are stubbed here. */
+function loadFloor(over) {
+  const vm = require("vm");
+  const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
+  const code = cut("var FLOOR_N =", "function useAmbientFloor");
+  const ops = [];
+  const ctx2d = new Proxy({}, {
+    get(t, k) {
+      if (k === "createRadialGradient") return () => ({ addColorStop() {} });
+      if (k === "setTransform" || k === "clearRect" || k === "beginPath" || k === "arc" ||
+          k === "fill" || k === "moveTo" || k === "lineTo" || k === "closePath")
+        return (...a) => ops.push([k, ...a]);
+      return t[k];
+    },
+    set(t, k, v) { ops.push(["set:" + String(k), v]); t[k] = v; return true; }
+  });
+  const canvas = { width: 0, height: 0, getContext: () => ctx2d, getBoundingClientRect: () => ({ width: 320, height: 480 }) };
+  const frames = [];
+  const sandbox = {
+    Math, performance: { now: () => 0 },
+    OCCVM_VEINS: require(path.join(ROOT, "occvm", "veins.js")),
+    getComputedStyle: () => ({ getPropertyValue: k => (over && k in over ? over[k] : (k === "--vein-hi" ? "#c9a6ff" : k === "--vein-lo" ? "#5a36a8" : "")) }),
+    document: { documentElement: {} },
+    window: { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {} },
+    requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
+    cancelAnimationFrame() {}
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(code, sandbox);
+  return { sandbox, canvas, ops, frames };
+}
+
+test("2.22 — P-3: the bridge grows LINEARLY in time, which is the viscous law and not the inertial one", () => {
+  const { sandbox } = loadFloor();
+  const r = sandbox.bridgeRadius;
+  /* linearity proved by doubling, not by reading the source: r(2t) = 2·r(t) at every t */
+  for (const t of [1, 17, 250, 1000, 4000])
+    assert.ok(Math.abs(r(2 * t) - 2 * r(t)) < 1e-12, `linear at ${t}ms`);
+  /* and the substitution anybody would actually make — √t, the INERTIAL law — is excluded by the same
+     test: it fails doubling by a factor of √2. Recorded so the guard's own bite is visible. */
+  const sq = t => Math.sqrt(t);
+  assert.ok(Math.abs(sq(2000) - 2 * sq(1000)) > 1, "the guard would reject a sqrt merge");
+  assert.equal(r(0), 0, "a merge starts at zero bridge");
+  assert.equal(r(-50), 0, "and never runs backwards, which is where the ELS log correction goes wrong");
+});
+
+test("2.22 — L6: the floor carries no colour of its own, and paints nothing without the palette", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("function useAmbientFloor"));
+  const bare = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(bare.replace(/#\[0-9a-f\]\{6\}/g, "")), "no hex literal");
+  assert.ok(!/\brgba?\s*\(/.test(bare), "no rgb() triplet");
+  assert.ok(!/\b(white|black|red|green|blue|gold|silver)\b/i.test(bare), "no colour keyword");
+  assert.match(bare, /--vein-hi/, "the colour comes from the mineral tokens");
+  /* an unresolved palette paints nothing rather than an invented accent */
+  const dead = loadFloor({ "--vein-hi": "", "--vein-lo": "" });
+  const stop = dead.sandbox.ambientFloor(dead.canvas, true);
+  assert.equal(dead.ops.length, 0, "no palette, no paint");
+  assert.equal(typeof stop, "function", "and it still hands back a teardown");
+});
+
+test("2.22 — L8: reduced motion gets one painted frame and no animation at all", () => {
+  const live = loadFloor();
+  live.sandbox.ambientFloor(live.canvas, false);
+  assert.ok(live.frames.length > 0, "the floor runs unconditionally — L13 grants exactly that");
+
+  const still = loadFloor();
+  const stop = still.sandbox.ambientFloor(still.canvas, true);
+  assert.equal(still.frames.length, 0, "reduced motion requests no frame: a static frame, not a slower floor");
+  assert.ok(still.ops.some(o => o[0] === "arc"), "and it is a frame, not a blank canvas");
+  assert.equal(typeof stop, "function");
+});
+
+test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measured value", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+
+  /* a LAYER on the material, never the material deforming at rest: its own canvas, under every bar */
+  assert.match(css, /\.floor \{ position: absolute; inset: 0; z-index: -1;/, "it paints beneath the in-flow bars");
+  assert.match(ui, /<canvas className="floor" ref=\{floor\} aria-hidden="true" \/>/, "and it is its own element");
+  assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
+
+  /* ungated and unmodulated: lawful at zero modulation is what makes L13 a grant rather than the
+     gated-motion case, so nothing real may be reaching in here */
+  for (const forbidden of ["--heat", "reading", "pacing", "tempo", "bpm", "limit", "drone"])
+    assert.ok(!body.includes(forbidden), `the floor reads no measured value: found ${forbidden}`);
+  assert.match(ui, /useAmbientFloor\(floor\);/, "one call site, on the draft face");
+  assert.match(ui, /return ambientFloor\(ref\.current, reduce\);/, "the only inputs are the canvas and the motion setting");
+});
+
+test("2.22 — the auditor measures the per-tool grant, through the path the runner uses", () => {
+  const LA = require(path.join(ROOT, "occvm", "tools", "law-audit.js"));
+  const L13 = LA.LAWS.find(l => l.id === "L13");
+  /* the defect this closes: readTool handed the measure {raw, own} with no name, so L13's per-tool
+     grant read `undefined` and answered "withheld" for both tools on every real run, while four
+     synthetic cases built their own {name, own} and passed */
+  for (const t of LA.TOOLS) {
+    const src = LA.readTool(t);
+    if (!src) continue;
+    assert.equal(src.name, t.name, `${t.name} carries its own name into the measure`);
+  }
+  const rhyme = LA.readTool(LA.TOOLS.find(t => /Rhyme/.test(t.name)));
+  assert.equal(L13.measure(rhyme).state, "CONFORMS", "the granted floor conforms where it was granted");
+  assert.match(L13.measure(rhyme).detail, /reduced-motion guarded/);
+  assert.equal(L13.measure({ name: "BTC Terminal", own: rhyme.own }).state, "DIVERGES",
+    "and the identical source in the withheld tool diverges — the split is the law's, not the file's");
+});
+
+test("2.22 — the committed artifact is what a build produces, and the worker came with it", () => {
+  /* THE DEFECT. 2.21 shipped an index.html at build-20260909214145 against an sw.js naming
+     tome-build-20260909212530: the suite ran BEFORE `build.js --stamp`, and the copy that followed
+     refreshed the page and not the worker. The stamp assertion above would have caught it — it was not
+     missing, it ran against the previous state. So the hole is ORDERING, and no assertion placed after
+     a stale copy can close it.
+
+     TWO WRONG INSTRUMENTS, BOTH RECORDED. The first compared the repo root against dist/ with nothing
+     guaranteeing dist/ existed; it is not committed, so on a fresh checkout CI failed on the guard
+     rather than on the code — 101 of 102, the one failure mine. The second added `pretest` that built
+     AND copied dist/ over the root. That is worse than useless: it would have LAUNDERED the drift, on
+     CI as well, repairing a stale committed artifact in the working tree and then passing every
+     comparison downstream of it — a gate that repairs what it is meant to detect.
+
+     WHAT IS IN FORCE. `pretest` builds and does not copy, so dist/ always exists and is always fresh;
+     the copy into the repo root stays a deliberate act. Then this comparison is exact and cannot be
+     satisfied by accident: a committed artifact that is not what a build produces fails, whatever order
+     anything ran in. */
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.equal(pkg.scripts.pretest, "node build.js", "pretest builds and must never copy — a gate may not repair its own subject");
+
+  for (const f of ["index.html", "sw.js", "manifest.json"]) {
+    const root = fs.readFileSync(path.join(ROOT, f));
+    const dist = fs.readFileSync(path.join(ROOT, "dist", f));
+    assert.ok(root.equals(dist), `${f} at the repo root is not what build.js produces — the deploy copy is stale or partial`);
+  }
+});
+
+test("2.22b — the floor tracks the face it sits behind, and sits behind the face", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+
+  /* MEASURED IN CHROMIUM, not reasoned about. The floor first sized itself once at mount, from a `.bars`
+     that is nearly empty until bars exist, and nothing re-measured: 356×44 px behind a face several
+     times that. Every assertion in this file passed. A canvas whose backing store is set from a
+     measurement needs an observer on the thing it measures, or it is sized to a moment. */
+  assert.match(ui, /new ResizeObserver\(onResize\)/, "the floor observes its own container");
+  assert.match(ui, /ro\.observe\(canvas\.parentNode \|\| canvas\)/, "and observes the element it fills");
+  assert.match(ui, /if \(ro\) ro\.disconnect\(\)/, "and disconnects on teardown");
+
+  /* AND WHERE IT SITS WAS ALSO MEASURED. Inside `.bars` it moved 0.81% of pixels at a mean 1.18 L*: the
+     bar cards are opaque, so a floor between them has almost nowhere to show. Behind the whole face it
+     moves 28.35% at a median 0.42 L*, p99 3.03, max 22.65 — a broad sub-threshold wash with rare
+     brighter cores, which is what a floor is. The authored alpha was never the lever; the coverage was,
+     and widening beats brightening. */
+  assert.match(css, /\.draftface \{ position: relative;/, "the face is the positioning context");
+  const face = ui.slice(ui.indexOf('<div className="draftface"'), ui.indexOf('<div className="bars"'));
+  assert.match(face, /<canvas className="floor" ref=\{floor\}/, "the canvas is a child of the face, not of the bar list");
+  assert.ok(!/className="bars"[\s\S]{0,120}canvas className="floor"/.test(ui), "and never went back inside .bars");
+});
+
+/* ---- 2.23: Reading B — the whole face carries the beat --------------------------------------- */
+
+test("2.23 — the gate is the actual tempo, never the panel's display fallback", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  /* L13's one clause about gated motion, and the reason Reading A was built the way it was. TempoPanel
+     keeps `tempo || {bpm: 90, ...}` so it can render before a tempo exists; if the pulse read THAT, a
+     draft nobody has set a tempo on would beat at 90 forever. Measured in Chromium: with no tempo the
+     face reads --pulse 0.000 and the wash resolves fully transparent; after one +5 the button reads
+     95 bpm and the pulse peaks at 0.993 on 21 of 120 samples — the hook's 18% strike window. */
+  assert.match(ui, /const beatPulse = useBeatPulse\(tempo\);/, "the hook takes the real tempo");
+  assert.ok(!/useBeatPulse\(\s*t\s*\)/.test(ui), "never the panel's local fallback `t`");
+  const panel = ui.slice(ui.indexOf("function TempoPanel"), ui.indexOf("function Draft"));
+  assert.match(panel, /const t = tempo \|\| \{ bpm: 90/, "the fallback still exists, for rendering only");
+  assert.ok(!/useBeatPulse/.test(panel), "and the panel never drives a motion from it");
+});
+
+test("2.23 — the beat reaches the whole face, under everything, and never a measured surface", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  assert.match(ui, /<div className="draftface" style=\{\{ "--pulse": beatPulse\.toFixed\(3\) \}\}>/,
+    "the face carries the phase");
+  assert.match(css, /\.draftface \{ position: relative;\n\s*background-image: radial-gradient/,
+    "and paints it on its own background, which sits under every in-flow child");
+  assert.match(css, /var\(--pulse, 0\)/, "with a fallback of zero, so a missing phase is a still face");
+
+  /* the orphan, recorded rather than adopted: `.face` is declared and worn by nothing, and an element
+     taking that name would silently inherit `.face + .edge`'s margin */
+  assert.match(css, /^\.face \{ position: relative; \}$/m, "the orphan is still declared");
+  assert.ok(!/className="face"/.test(ui), "and still worn by nothing — D14's shape in tool-local CSS");
+
+  /* a bar carries --heat, a measured value; the beat never reaches one */
+  const barRules = css.split("\n").filter(l => /^\.bar[\s.[{:]/.test(l)).join("\n");
+  assert.ok(barRules.length > 0, "there are bar rules to check");
+  assert.ok(!/--pulse/.test(barRules), "no bar reads the beat");
+});
+
+test("2.23 — L8: reduced motion gets a still face, from both the hook and the stylesheet", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const hook = ui.slice(ui.indexOf("function useBeatPulse"), ui.indexOf("return phase;"));
+  assert.match(hook, /prefers-reduced-motion: reduce/, "the hook checks the setting");
+  assert.match(hook, /if \(reduce\) \{ setPhase\(0\); return; \}/, "and stops rather than slowing");
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.draftface \{ background-image: none; \} \}/,
+    "and the stylesheet says it too, so a missed JS path still lands still");
+  /* measured in Chromium under reducedMotion:"reduce" with a real 95 bpm tempo set: --pulse stayed 0
+     across 120 samples and the resolved background-image was `none` */
 });

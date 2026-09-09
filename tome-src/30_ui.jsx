@@ -56,6 +56,133 @@ function Picker({ word, overrides, setOverride, onClose }) {
     </div>
   );
 }
+/* OCCVM-L13 (2.18) — the metronome pulse, Reading A. GATED motion, not the ambient floor: it runs only
+   while a real tempo is set, which is a state a person actively created, and it stops the moment the tempo
+   is cleared. L13's gated-motion clause is the one that governs it, and that clause has one sentence this
+   hook exists to obey:
+
+     THE GATE IS THE ACTUAL VALUE, NEVER ITS DISPLAY FALLBACK.
+
+   TempoPanel keeps `const t = tempo || { bpm: 90, ... }` so the panel has something to render before a
+   tempo exists. Reading `t` here would leave the pulse beating at 90 forever under a default nobody set —
+   a tool asserting a tempo it was never given. This takes `tempo` and nothing else; null means silent.
+
+   The clock is performance.now(), never a frame count: a backgrounded tab throttles rAF and a counted
+   pulse would drift out of phase with the beat it claims to mark, then silently recover at the wrong
+   place. Reading the wall clock each frame means a resumed tab lands on the correct beat immediately.
+
+   Reduced motion stops it entirely rather than slowing it — L8 is untouched by L13, and a degraded
+   metronome is a wrong metronome. It pulses the BEAT: swing displaces the sixteenths inside a beat, not
+   the beats themselves, so a beat pulse reads identically under all three feels and claims nothing about
+   the displacement. What the feel actually does is stated numerically in the panel, where it can be read
+   rather than inferred from a flash. */
+function useBeatPulse(tempo) {
+  const [phase, setPhase] = React.useState(0);
+  React.useEffect(() => {
+    if (!tempo || !isFinite(tempo.bpm) || tempo.bpm <= 0) { setPhase(0); return; }
+    let reduce = false;
+    try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    if (reduce) { setPhase(0); return; }
+    const beatMs = 60000 / tempo.bpm, t0 = performance.now();
+    let raf = 0;
+    const step = () => {
+      const u = ((performance.now() - t0) % beatMs) / beatMs;
+      setPhase(u < 0.18 ? 1 - u / 0.18 : 0);   /* a strike and a decay, not a sine: a beat is an onset */
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [tempo && tempo.bpm]);
+  return phase;
+}
+
+/* OCCVM-L11 / 2.21 — the swipe test bed, bank rows only.
+
+   The gesture is the yield criterion rendered directly, with ONE authored anchor. Finger travel maps to
+   applied stress at SWIPE_YIELD_PX — the distance at which the stress reaches the substance's own τ₀ —
+   because SPINE.md §10 P-2 says no derivation carries px into a substance's units and each consumer must
+   name its own anchor. Everything the row then does follows from Herschel-Bulkley and from nothing else:
+
+     τ(d)   = τ₀ · d / SWIPE_YIELD_PX                the authored map, and the only authored step
+     γ̇      = ((τ − τ₀)/k)^(1/n), exactly 0 below τ₀   OCCVM_RHEOLOGY.shearRate
+     offset = d · (τ − τ₀)/τ  =  d − SWIPE_YIELD_PX     the transmitted fraction of the imposed travel
+
+   So the row does not move at all for the first SWIPE_YIELD_PX and tracks the finger 1:1 after it. The
+   dead band is not a tap/swipe heuristic bolted on beside the physics — it IS the yield stress, and it is
+   what keeps tap-to-remove and the stones button live through the whole gesture: inside the band there is
+   no movement to capture and no default to prevent.
+
+   The ceiling is derived, not chosen. The crossover this system has tracked since 2.10 is k·γ̇ⁿ = τ₀,
+   which is τ = 2τ₀ — exactly 2·SWIPE_YIELD_PX of finger travel under the map above. Committing at an
+   offset below SWIPE_YIELD_PX therefore keeps the entire gesture yield-dominated. At the shipped numbers
+   commit lands at 0.867 of the crossover: 13.3% of headroom, the discipline 2.16 applied to LOCK_V0_MAX.
+
+   Released short of commit, the row returns — and the return is a DRIVEN FLOW, not a recoil. Flow past
+   τ₀ is irreversible; a spring-back would be the material claiming an elasticity it does not have. What
+   returns the row is the same yield law driven the other way, so it plays on the substance's cessation
+   easing and its duration scales with the distance it has to cover. SWIPE_RETURN_MS is that duration at
+   full commit distance, authored and named as authored.
+
+   Reduced motion (L8): the row never translates and the gesture still commits at the same distance — a
+   static frame, never a smaller travel or a slower one. */
+var SWIPE_YIELD_PX = 30;     /* authored: finger travel at which the applied stress reaches τ₀ */
+var SWIPE_COMMIT_PX = 26;    /* authored: row offset that commits; < SWIPE_YIELD_PX by the derivation above */
+var SWIPE_RETURN_MS = 260;   /* authored: the return flow's duration at full commit distance */
+
+function useSwipeYield(onCommit) {
+  const [off, setOff] = React.useState(0);
+  const [ret, setRet] = React.useState(0);          /* ms of return flow in flight; 0 = under the finger */
+  const g = React.useRef(null);
+  const reduce = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } };
+
+  const sub = () => (typeof OCCVM_RHEOLOGY === "undefined" ? null : OCCVM_RHEOLOGY);
+  /* the transmitted travel: 0 below τ₀, d − yield above. Read through shearRate so the gate is the
+     substance's own function rather than a re-typed inequality — L3, one owner per fact. */
+  const flowed = d => {
+    const R = sub(); if (!R) return 0;
+    const m = R.SUBSTANCE, tau = m.tau0 * Math.abs(d) / SWIPE_YIELD_PX;
+    if (!(R.shearRate(m, tau) > 0)) return 0;
+    return Math.sign(d) * Math.abs(d) * (tau - m.tau0) / tau;
+  };
+
+  const down = e => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.target.closest && e.target.closest("button, input, textarea, a")) return;
+    g.current = { id: e.pointerId, x: e.clientX, y: e.clientY, live: false, dead: false };
+    setRet(0);
+  };
+  const move = e => {
+    const s = g.current; if (!s || s.dead || e.pointerId !== s.id) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (!s.live) {
+      /* the page scrolls vertically; a gesture that leaves the dead band downward was never a swipe */
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) { s.dead = true; return; }
+      if (Math.abs(dx) <= SWIPE_YIELD_PX) return;   /* held: below τ₀ nothing moves, and the tap survives */
+      s.live = true;
+      try { e.currentTarget.setPointerCapture(s.id); } catch (err) {}
+    }
+    e.preventDefault();
+    setOff(flowed(dx));
+  };
+  const up = e => {
+    const s = g.current; g.current = null;
+    if (!s || s.dead || !s.live) { setOff(0); return; }
+    const now = flowed(e.clientX - s.x);
+    if (Math.abs(now) >= SWIPE_COMMIT_PX) { setOff(now); onCommit(); return; }
+    setRet(Math.max(60, Math.round(SWIPE_RETURN_MS * Math.abs(now) / SWIPE_COMMIT_PX)));
+    setOff(0);
+  };
+
+  const R = sub();
+  const style = { "--slide": (reduce() ? 0 : off).toFixed(1) + "px" };
+  if (ret && !reduce()) {
+    style.transition = "transform " + ret + "ms";
+    if (R) style.transitionTimingFunction = R.cssEasing(R.SUBSTANCE, 1);
+  }
+  return { style, past: Math.abs(off) >= SWIPE_COMMIT_PX,
+           handlers: { onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerCancel: up } };
+}
+
 /* OCCVM-L8 — the patina control. 28 call sites reach the interaction floor through this one component.
    aria-pressed is emitted only when the caller passes `on` AND has not marked the control `action`: five
    sites write a bare `on` to mean "styled active", and a button that claims to be a pressed toggle
@@ -298,6 +425,11 @@ function TempoPanel({ tempo, setTempo, pacing, onClose }) {
         <div>
           <div className="group">
             <div className="gh">{g.slotsPerBar} slots · {g.beats} beats × {g.subdivision} · bar runs {((g.beatMs * g.beats) / 1000).toFixed(2)}s</div>
+            {/* what the feel does to TIME, stated rather than implied. Until 2.18 swing produced a grid
+                identical to straight and this line could only ever have said "16 slots" either way. */}
+            <div className="gh">{g.feel === "swing"
+              ? `swung ${Math.round(g.swingRatio * 1000) / 10}% — pairs run ${g.longMs.toFixed(0)}ms long, ${g.shortMs.toFixed(0)}ms short · the short side is ${(1000 / g.shortMs).toFixed(1)}/sec for anything landing on it`
+              : `even — every slot runs ${g.meanSlotMs.toFixed(0)}ms (${(1000 / g.meanSlotMs).toFixed(1)}/sec)`}</div>
             {pacing.bars.map(b => (
               <div key={b.i} className="fit">
                 <span className="nm" style={{ flex: "0 0 58px" }}>{b.rate.toFixed(1)}/sec</span>
@@ -308,7 +440,10 @@ function TempoPanel({ tempo, setTempo, pacing, onClose }) {
             ))}
           </div>
           <div className="note">
-            arithmetic, not a measurement. this is how many syllables a second each bar needs to fit the
+            arithmetic, not a measurement. the beat carries the feel — you are writing to it, not swinging
+            the writing — so a swung grid gives uneven room and the per-bar rate below is a mean across it.
+            the short side of a pair is the real constraint and it is stated above. this is how many
+            syllables a second each bar needs to fit the
             grid at this tempo — check it against your own mouth. <b>over grid</b> means the line wants finer
             subdivision than the feel you set, not that it's wrong. where the syllables actually land inside
             a beat is yours; nothing here claims to know it.
@@ -327,7 +462,11 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   const [share, setShare] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
   const [tempoOpen, setTempoOpen] = useState(false);
+  /* the toggle never unmounts, which is why Reading A lives on it rather than inside the panel */
+  const beatPulse = useBeatPulse(tempo);
   const host = useRef(null);
+  const floor = useRef(null);
+  useAmbientFloor(floor);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
   const pacing = useMemo(() => tempo ? E2.tempo(reading, tempo) : null, [reading, tempo]);
   const paceBy = useMemo(() => new Map((pacing ? pacing.bars : []).map(b => [b.i, b])), [pacing]);
@@ -342,7 +481,8 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
     append: () => { const l = draft.split("\n"); if (l.length === 1 && !l[0].trim()) { setEditing(0); return; } l.push(""); setDraft(l.join("\n")); setEditing(l.length - 1); },
   };
   return (
-    <div>
+    <div className="draftface" style={{ "--pulse": beatPulse.toFixed(3) }}>
+      <canvas className="floor" ref={floor} aria-hidden="true" />
       <Shelf {...shelfProps} />
       <div className="row" style={{ marginTop: 0 }}>
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
@@ -351,7 +491,8 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
       <div className="row">
         <Cast on={quarry} patina onClick={() => setQuarry(!quarry)}>quarry</Cast>
         <Cast on={meterOpen} patina onClick={() => setMeterOpen(!meterOpen)}>meter</Cast>
-        <Cast on={tempoOpen} patina onClick={() => setTempoOpen(!tempoOpen)}>{tempo ? tempo.bpm + " bpm" : "tempo"}</Cast>
+        <Cast on={tempoOpen} patina onClick={() => setTempoOpen(!tempoOpen)}
+          style={{ "--pulse": beatPulse.toFixed(3) }}>{tempo ? tempo.bpm + " bpm" : "tempo"}</Cast>
         <Cast on={share} patina onClick={() => setShare(!share)}>share</Cast>
       </div>
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}
@@ -436,7 +577,206 @@ function Check({ eng }) {
   );
 }
 
+/* ---- the ambient floor (OCCVM-L13, 2.22) ------------------------------------------------------
+
+   L13 grants Rhyme a decorative floor on the draft face and withholds it from BTC, and the auditor
+   measures that split by this function's NAME. What follows is the whole of what the law permits and
+   nothing beyond it.
+
+   WHAT IS DERIVED. The merge is coalescence, and P-3's citation pass ran here, at build time, exactly as
+   SPINE.md §10 said it would. Confirmed: in the VISCOUS regime the bridge radius grows LINEARLY in time,
+   r ∝ t (Eggers, Lister & Stone, J. Fluid Mech. 401, 293–310, 1999). The √t everyone reaches for is the
+   INERTIAL law, r_b = D(γa/ρ)^(1/4)·t^(1/2), and a yield-stress tomato matrix is nowhere near it.
+   So the floor merges linearly, and that is not a choice.
+
+   WHAT WAS MEASURED AND DROPPED. ELS carry a logarithmic factor, r_m ~ (γt/πη)·ln[γt/(ηR)]. It is an
+   EARLY-TIME asymptotic, valid for t ≪ t_v = ηR/γ, and −t·ln(t/t_v) turns over at t/t_v = 1/e and then
+   predicts the bridge SHRINKING. A merge rendered to completion runs straight past that, so carrying the
+   log here would be using an asymptotic outside its regime — the class of error 2.8 caught in the 3-D
+   fractal dimension on a planar lattice and 2.10 caught in k and n. Linear, without the correction.
+
+   WHAT IS AUTHORED, AND WHY THE ABSOLUTE RATE CANNOT BE DERIVED. The magnitude of the linear rate is
+   γ/η, and η is the substance's apparent viscosity, which depends on the shear rate the merge itself
+   sets. Measured across a plausible range: γ̇ = 0.01 → η 2,627 Pa·s → 5.8e-5 px/ms; γ̇ = 10 → η 4.99 →
+   3.0e-2 px/ms. The same 24 px bridge takes 417 SECONDS at one end and 0.8 s at the other, and nothing
+   fixes γ̇ independently of the rate it would produce. That is P-4's η(γ̇) arriving as a consumer and
+   showing why it was parked: the arithmetic is right and the input is not determined. Per P-3's own
+   disposition, the rate is authored and named as authored — the LOCK_RELAX_MS treatment.
+
+   The DRIFT is authored too, and L13 already made that call: a yield-stress fluid below τ₀ does not
+   spontaneously drift, so the floor contradicts the substance and the law records that as the owner's
+   aesthetic judgment rather than dressing it as a derivation.
+
+   WHAT THE LAW FORBIDS AND THIS RESPECTS. The floor is a LAYER on the material, never the material
+   deforming at rest — it is its own canvas, painted under the bars, and no surface's own geometry moves.
+   It never draws over a bar: `.bar` carries --heat, a measured value, and L13 bars a floor from any
+   surface carrying one. It takes its colour from the mineral tokens and carries no literal of its own,
+   so an unresolved palette paints nothing rather than painting an invented accent (L6). And it is
+   lawful at zero modulation: nothing gates it, nothing triggers it, no real value scales it. */
+var FLOOR_N = 7;              /* authored: droplets on the face at once */
+var FLOOR_R = [10, 26];       /* authored: the radius band, in px */
+var FLOOR_DRIFT_PX_S = 1.4;   /* authored: L13 names the drift itself as judgment, not derivation */
+var FLOOR_MERGE_PX_S = 2.6;   /* authored MAGNITUDE; the linearity above it is derived and confirmed */
+var FLOOR_ALPHA = 0.05;       /* authored: a floor is read at the edge of vision or it is not a floor */
+var FLOOR_SEED = 0x0CCF1005;  /* fixed, so the field is the same field every session and can be recorded */
+
+/* P-3's confirmed law, on its own so it can be driven rather than read. Linear in t, and the guard
+   proves linearity by doubling rather than by matching the source text: r(2t) = 2·r(t), which √t does
+   not satisfy and which is the one substitution anybody is likely to make here. */
+function bridgeRadius(ms) { return FLOOR_MERGE_PX_S * Math.max(0, ms) / 1000; }
+
+function ambientFloor(canvas, still) {
+  if (!canvas || !canvas.getContext) return function () {};
+  var V = typeof OCCVM_VEINS === "undefined" ? null : OCCVM_VEINS;
+  if (!V || !V.mulberry32) return function () {};
+
+  var ink = (function () {
+    try {
+      var cs = getComputedStyle(document.documentElement);
+      var hi = (cs.getPropertyValue("--vein-hi") || "").trim();
+      var lo = (cs.getPropertyValue("--vein-lo") || "").trim();
+      return /^#[0-9a-f]{6}$/i.test(hi) && /^#[0-9a-f]{6}$/i.test(lo) ? [hi, lo] : null;
+    } catch (e) { return null; }
+  })();
+  if (!ink) return function () {};
+
+  var ctx = canvas.getContext("2d"), rnd = V.mulberry32(FLOOR_SEED >>> 0);
+  var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
+
+  function spawn(seedEdge) {
+    var r = FLOOR_R[0] + rnd() * (FLOOR_R[1] - FLOOR_R[0]);
+    var a = rnd() * Math.PI * 2;
+    return { x: seedEdge ? (rnd() < 0.5 ? -r : w + r) : rnd() * w, y: rnd() * h, r: r,
+             vx: Math.cos(a) * FLOOR_DRIFT_PX_S / 1000, vy: Math.sin(a) * FLOOR_DRIFT_PX_S / 1000 };
+  }
+
+  function size() {
+    var box = canvas.getBoundingClientRect();
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    w = Math.max(1, Math.round(box.width)); h = Math.max(1, Math.round(box.height));
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!drops.length) for (var i = 0; i < FLOOR_N; i++) drops.push(spawn(false));
+    else if (pw && ph && (pw !== w || ph !== h))
+      for (var j = 0; j < drops.length; j++) { drops[j].x *= w / pw; drops[j].y *= h / ph; }
+    pw = w; ph = h;
+  }
+
+  function blob(d, alpha) {
+    var g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
+    g.addColorStop(0, ink[0]); g.addColorStop(1, ink[1]);
+    ctx.globalAlpha = alpha; ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /* the bridge: a band between two centres whose half-width is the bridge radius, growing linearly */
+  function bridge(a, b, rb) {
+    var dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+    ctx.globalAlpha = FLOOR_ALPHA; ctx.fillStyle = ink[1];
+    ctx.beginPath();
+    ctx.moveTo(a.x + nx * rb, a.y + ny * rb); ctx.lineTo(b.x + nx * rb, b.y + ny * rb);
+    ctx.lineTo(b.x - nx * rb, b.y - ny * rb); ctx.lineTo(a.x - nx * rb, a.y - ny * rb);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function step(dt) {
+    var i, j;
+    for (i = 0; i < drops.length; i++) {
+      var d = drops[i];
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      if (d.x < -d.r * 2) d.x = w + d.r; else if (d.x > w + d.r * 2) d.x = -d.r;
+      if (d.y < -d.r * 2) d.y = h + d.r; else if (d.y > h + d.r * 2) d.y = -d.r;
+    }
+    for (i = 0; i < welds.length; i++) {
+      var wd = welds[i];
+      wd.t += dt; wd.rb = bridgeRadius(wd.t);              /* r ∝ t — the derived half */
+      if (wd.rb >= wd.target) {
+        var a = wd.a, b = wd.b, m = a.r * a.r + b.r * b.r;  /* area conserved through the merge */
+        a.x = (a.x * a.r * a.r + b.x * b.r * b.r) / m; a.y = (a.y * a.r * a.r + b.y * b.r * b.r) / m;
+        a.r = Math.sqrt(m); a.merging = false; b.gone = true;
+        welds.splice(i--, 1);
+        drops = drops.filter(function (x) { return !x.gone; });
+        while (drops.length < FLOOR_N) drops.push(spawn(true));
+      }
+    }
+    for (i = 0; i < drops.length; i++) for (j = i + 1; j < drops.length; j++) {
+      var p = drops[i], q = drops[j];
+      if (p.merging || q.merging) continue;
+      if (Math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r) continue;
+      p.merging = q.merging = true;
+      welds.push({ a: p, b: q, t: 0, rb: 0, target: Math.min(p.r, q.r) });
+    }
+  }
+
+  function paint() {
+    ctx.clearRect(0, 0, w, h);
+    for (var i = 0; i < welds.length; i++) bridge(welds[i].a, welds[i].b, welds[i].rb);
+    for (i = 0; i < drops.length; i++) blob(drops[i], FLOOR_ALPHA);
+    ctx.globalAlpha = 1;
+  }
+
+  size();
+  if (still) { paint(); return function () {}; }
+  last = performance.now();
+  var frame = function (t) {
+    var dt = Math.min(100, t - last); last = t;
+    step(dt); paint();
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  /* The face GROWS. `.bars` is nearly empty at mount and gains a row per bar, so a single measurement at
+     mount plus a window-resize listener sizes the floor to whatever the draft happened to be when the
+     component appeared — measured in Chromium at 356×44 px against a face several times that, a floor
+     that every assertion passed and that was the wrong size on screen. A ResizeObserver on the element
+     is the measurement that tracks the thing it measures. */
+  var onResize = function () { size(); };
+  window.addEventListener("resize", onResize);
+  var ro = null;
+  if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(onResize); ro.observe(canvas.parentNode || canvas); }
+  return function () {
+    cancelAnimationFrame(raf);
+    window.removeEventListener("resize", onResize);
+    if (ro) ro.disconnect();
+  };
+}
+
+function useAmbientFloor(ref) {
+  useEffect(() => {
+    let reduce = false;
+    try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    return ambientFloor(ref.current, reduce);
+  }, []);
+}
+
 /* ---- bank ---- */
+/* One removal, one vocabulary. Both paths — the button and the swipe — go through this, because the same
+   irreversible action rendering two different physical vocabularies depending on how it was triggered is
+   the defect 2.16 named while keeping the lock release below the regime crossover. Removing a banked word
+   is as irreversible as removing a draft, so it pinches (OCCVM-L11), exactly as the shelf row does. */
+function BankRow({ w, bank, setBank, overrides, setOverride, open, setPick }) {
+  const key = clean(w), p = E2.pronounce(w);
+  const el = useRef(null);
+  const drop = () => setBank(bank.filter(b => b !== w));
+  const remove = () => {
+    const node = el.current;
+    if (node && typeof OCCVM_YIELD !== "undefined") OCCVM_YIELD.pinch(node, drop);
+    else drop();
+  };
+  const sw = useSwipeYield(remove);
+  return (
+    <div>
+      <div ref={el} className={"bankrow" + (sw.past ? " past" : "")} style={sw.style} {...sw.handlers}>
+        <span className={"wd" + (overrides[key] ? " override" : "")}>{w}</span>
+        <div className={"word" + (open ? " pick" : "")} style={{ flex: 1, alignItems: "flex-end" }}>
+          <button type="button" className="stones occvm-act" aria-expanded={!!open} aria-label={`syllables of ${w}`} onClick={() => setPick(open ? null : key)}>{p.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}</button>
+        </div>
+        <button type="button" className="rm occvm-act" onClick={remove}>remove</button>
+      </div>
+      {open && <Picker word={key} overrides={overrides} setOverride={setOverride} onClose={() => setPick(null)} />}
+    </div>
+  );
+}
+
 function Bank({ bank, setBank, overrides, setOverride, eng }) {
   const [add, setAdd] = useState(""); const [pick, setPick] = useState(null);
   const commit = () => { const w = add.trim(); if (!w) return; if (!bank.some(b => clean(b) === clean(w))) setBank([...bank, w]); setAdd(""); };
@@ -444,23 +784,12 @@ function Bank({ bank, setBank, overrides, setOverride, eng }) {
     <div>
       <input className="cut" value={add} onChange={e => setAdd(e.target.value)} onKeyDown={e => e.key === "Enter" && commit()} placeholder="add a word — names, slang, coinages" autoCapitalize="off" autoCorrect="off" />
       <div className="row"><Cast on action onClick={commit} patina>add</Cast></div>
-      <div className="note">every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears.</div>
+      <div className="note">every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears. a row holds under a light drag and only slides once you push past it — swipe it clear, or tap remove.</div>
       {bank.length === 0 && <div className="empty">nothing banked yet.</div>}
-      {bank.map(w => {
-        const key = clean(w), p = E2.pronounce(w), open = pick === key;
-        return (
-          <div key={w}>
-            <div className="bankrow">
-              <span className={"wd" + (overrides[key] ? " override" : "")}>{w}</span>
-              <div className={"word" + (open ? " pick" : "")} style={{ flex: 1, alignItems: "flex-end" }}>
-                <button type="button" className="stones occvm-act" aria-expanded={!!open} aria-label={`syllables of ${w}`} onClick={() => setPick(open ? null : key)}>{p.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}</button>
-              </div>
-              <button type="button" className="rm occvm-act" onClick={() => setBank(bank.filter(b => b !== w))}>remove</button>
-            </div>
-            {open && <Picker word={key} overrides={overrides} setOverride={setOverride} onClose={() => setPick(null)} />}
-          </div>
-        );
-      })}
+      {bank.map(w => (
+        <BankRow key={w} w={w} bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride}
+          open={pick === clean(w)} setPick={setPick} />
+      ))}
     </div>
   );
 }

@@ -410,12 +410,56 @@ textarea.cut { min-height: 9.5em; }
 .cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--mineral)), color-mix(in srgb, var(--m, var(--mineral)) 55%, black));
   box-shadow: 0 0 0 1px var(--m, var(--mineral)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--mineral)) 45%, transparent), 0 2px 0 #1f1508; }
 .cast.patina.on { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); box-shadow: 0 0 0 1px var(--verdigris) inset, 0 2px 0 #1f1508; }
+/* OCCVM-L13 (2.18) — Reading A. --pulse is written by useBeatPulse and is 0 unless a real tempo is set,
+   so with no tempo this rule resolves to exactly the surface the button already had: the fallback IS the
+   off state, and nothing here can beat under a default nobody chose. The strike lands on the rim rather
+   than the fill, so a pulsing control still reads as the same control. */
+.cast { --pulse: 0; }
+.cast[style*="--pulse"] { box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508,
+  0 0 calc(var(--pulse) * 10px) rgba(255,255,255,calc(var(--pulse) * .30)),
+  inset 0 0 0 1px rgba(255,255,255,calc(var(--pulse) * .22)); }
+@media (prefers-reduced-motion: reduce) { .cast[style*="--pulse"] { box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508; } }
 .label { font-size: 12.5px; color: var(--bone-lo); margin: 14px 0 6px; }
 .note { font-size: 12.5px; line-height: 1.5; color: var(--bone-lo); margin-top: 12px; }
 .note b { font-weight: 400; color: var(--bone); }
 
 /* ---- bars: thin slabs nested in the draft face ---- */
 .bars { position: relative; padding-right: 22px; }
+/* OCCVM-L13 (2.22) — the ambient floor. z-index -1 is what makes it a LAYER rather than the material:
+   it paints inside .bars' own stacking context, above the substrate and beneath every bar, so no surface
+   carrying --heat or an outcome ever has it drawn over. Under reduced motion the canvas keeps its single
+   painted frame — a static frame, which is what L8 asks for, not a subtler floor and not a blank one. */
+/* READING B (2.23) — the whole face carries the beat, not just the tempo control.
+ *
+ * GATED MOTION, NOT A FLOOR. L13 says gated motion "was never prohibited and needs nothing from here",
+ * and this is gated on a real, actively created state: a tempo set on this draft. One L13 clause does
+ * bind it, and is why Reading A was built the way it was — THE GATE IS THE ACTUAL VALUE, NEVER ITS
+ * DISPLAY FALLBACK. `useBeatPulse` takes `tempo`, not TempoPanel's `tempo || {bpm: 90, ...}`, so a draft
+ * with no tempo has a still face rather than one beating at a default nobody chose.
+ *
+ * WHAT IT CLAIMS, AND WHOSE CALL THAT IS. The tool knows one thing here: a number typed into the tempo
+ * panel. No audio, no clock aligned to any track, and under SPINE.md section 11 the performance is never
+ * its. A pulse on the tempo control claims only "this is the number you set"; a pulse across the whole
+ * face makes a larger claim on the same evidence. Built at full scope BY THE OWNER'S DECISION, recorded
+ * as one — the standard L13 already applies to the floor contradicting the substance, and that every
+ * authored duration in this system carries. It is not a derivation and is not dressed as one.
+ *
+ * The class is `.draftface`, not `.face`: `.face` is declared in the stack section above and worn by
+ * NOTHING, so an element taking that name would silently inherit `.face + .edge`'s margin. The orphan is
+ * recorded rather than adopted — D14's shape, one level down in tool-local CSS.
+ *
+ * It paints on the element's own background, under every in-flow child: no bar, no --heat, no measured
+ * value ever has it drawn over. Reduced motion pins --pulse to 0 in the hook, and the query below says
+ * the same thing in the stylesheet so a missed JS path still lands on a still face. */
+.draftface { position: relative;
+  background-image: radial-gradient(150% 95% at 50% 0%,
+    color-mix(in srgb, var(--mineral) calc(var(--pulse, 0) * 9%), transparent) 0%, transparent 72%); }
+@media (prefers-reduced-motion: reduce) { .draftface { background-image: none; } }
+/* It sits behind the WHOLE draft face, not inside the bar list. Measured in Chromium at the narrower
+   placement: the bar cards are opaque, so a floor between them moved 0.81% of pixels at a mean 1.18 L*
+   — painting, and effectively absent. The authored alpha is not the lever (a floor is read at the edge
+   of vision by design); the coverage was. Widened rather than brightened. */
+.floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
   box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 0 rgba(255,255,255,var(--hi-a)), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(0,0,0,.6),
@@ -496,6 +540,12 @@ textarea.cut { min-height: 9.5em; }
 .verdict .kind { font-size: 15px; color: var(--vk, var(--bone)); margin-bottom: 8px; }
 .empty { font-size: 13px; color: var(--bone-lo); margin-top: 12px; line-height: 1.5; }
 .bankrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(255,255,255,.04); }
+/* 2.21 — the swipe test bed. --slide is written by useSwipeYield and is the TRANSMITTED travel, not the
+   finger's: below the substance's yield stress it is exactly 0, which is why the row holds under a thumb
+   and why the remove button and the stones button stay tappable through the whole gesture. touch-action
+   keeps the page's own vertical scroll — the row claims one axis, never both. */
+.bankrow { --slide: 0px; transform: translateX(var(--slide)); touch-action: pan-y; }
+.bankrow.past .rm { color: var(--bone); }
 .bankrow .wd { font-size: 16px; }
 .bankrow .wd.override { color: var(--gilt-a); }
 .bankrow .rm { font-size: 13px; color: var(--bone-lo); padding: 4px 8px; cursor: pointer; }
@@ -525,6 +575,8 @@ textarea.cut { min-height: 9.5em; }
 /* a button is shrink-to-fit, so a flex container that is one collapses its own space-between */
 
 @media (prefers-reduced-motion: reduce) { .slab, .edge { animation: none !important; transition: none !important; } }
+/* L8/L13: a static frame, never a smaller travel. The gesture still commits at the same distance. */
+@media (prefers-reduced-motion: reduce) { .bankrow { transform: none !important; } }
 
 /* scheme letter, engraved at the bar's right edge */
 .scheme { position: absolute; right: -19px; top: 8px; font-size: 13px; color: var(--bone-lo); z-index: 2;

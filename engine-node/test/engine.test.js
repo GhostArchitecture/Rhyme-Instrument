@@ -154,7 +154,10 @@ test("grid(): slot count is beats × subdivision, and feel changes how a beat di
 test("grid(): slot duration tracks bpm", () => {
   assert.equal(E.grid(60, "4/4", "straight").beatMs, 1000);
   assert.equal(E.grid(120, "4/4", "straight").beatMs, 500);
-  assert.equal(E.grid(60, "4/4", "straight").slotMs, 250);
+  /* `slotMs` until now; renamed because under swing NO slot has the mean's duration and the old
+   * name claimed every slot did. These two assertions were its only readers, and a guard on a
+   * quantity that tracked bpm correctly is exactly what kept the uniform-slot claim looking true. */
+  assert.equal(E.grid(60, "4/4", "straight").meanSlotMs, 250);
   assert.ok(E.grid(140, "4/4").beatMs < E.grid(90, "4/4").beatMs);
 });
 
@@ -162,7 +165,106 @@ test("grid(): junk input falls back rather than producing NaN", () => {
   const g = E.grid(undefined, "nonsense", "unknown-feel");
   assert.equal(g.beats, 4);
   assert.equal(g.subdivision, 4);
-  assert.ok(Number.isFinite(g.slotMs) && g.slotMs > 0);
+  assert.ok(Number.isFinite(g.meanSlotMs) && g.meanSlotMs > 0);
+  assert.ok(g.onsets.every(Number.isFinite) && g.onsets.length === g.slotsPerBar);
+});
+
+/* ---- swing is a displacement in TIME, not a label on a straight grid ----------------------------
+ * Until this was written, SUBDIVISION gave straight and swing the same 4 and nothing carried an
+ * onset, so `swing` produced a grid byte-identical to `straight`. Every assertion here fails against
+ * that engine, which is the only reason to trust them. */
+
+test("grid(): swing actually displaces, and straight does not", () => {
+  const s = E.grid(90, "4/4", "straight"), w = E.grid(90, "4/4", "swing");
+  assert.notDeepEqual(w.onsets, s.onsets, "swing must differ from straight in time, not only by name");
+  /* straight is uniform: every gap equal */
+  const gaps = s.onsets.slice(1).map((v, i) => +(v - s.onsets[i]).toFixed(6));
+  assert.equal(new Set(gaps).size, 1, "a straight grid has exactly one gap length");
+});
+
+test("grid(): a swung pair splits 2:1, which is the notated meaning of swing", () => {
+  const w = E.grid(90, "4/4", "swing");
+  const pairMs = w.beatMs / (w.subdivision / 2);
+  assert.ok(Math.abs(w.longMs / (w.longMs + w.shortMs) - 2 / 3) < 1e-9, "long note takes two thirds");
+  assert.ok(Math.abs(w.longMs + w.shortMs - pairMs) < 1e-9, "and the pair still spans one pair");
+  assert.equal(w.swingRatio, 2 / 3);
+  /* the first pair of beat one, measured rather than described */
+  assert.ok(Math.abs(w.onsets[1] - pairMs * 2 / 3) < 1e-9);
+  assert.ok(Math.abs(w.onsets[2] - pairMs) < 1e-9);
+});
+
+test("grid(): swing changes where, never how many or how long the bar is", () => {
+  const s = E.grid(90, "4/4", "straight"), w = E.grid(90, "4/4", "swing");
+  assert.equal(w.slotsPerBar, s.slotsPerBar, "swing must not add or remove slots");
+  assert.equal(w.beatMs * w.beats, s.beatMs * s.beats, "and the bar must run the same length");
+  assert.ok(w.onsets[w.onsets.length - 1] < w.beatMs * w.beats, "no slot may fall outside its bar");
+  assert.deepEqual([...w.onsets].sort((a, b) => a - b), w.onsets, "onsets stay in order");
+});
+
+test("grid(): triplet is uniform and is never silently swung", () => {
+  const t3 = E.grid(90, "4/4", "triplet");
+  assert.equal(t3.subdivision, 3);
+  assert.equal(t3.swingRatio, 0.5, "an odd subdivision has no pairs to swing");
+  assert.equal(t3.longMs, t3.shortMs);
+  const gaps = t3.onsets.slice(1).map((v, i) => +(v - t3.onsets[i]).toFixed(6));
+  assert.equal(new Set(gaps).size, 1);
+});
+
+/* ---- SPINE.md section 11: what this tool models, and what it refuses to -------------------------
+ * The beat is arithmetic and may be described. The PERFORMANCE is not this tool's and never will be:
+ * which slot a syllable lands in, whether a writer leans early or late, what a line does in a mouth.
+ * The engine states the room the beat gives and stops.
+ *
+ * This guard is deliberately narrow. It catches the ONE shape the rule is most likely to be broken by -
+ * a public function handing back an assignment of syllables to onsets - because a broad "does not model
+ * performance" assertion cannot be written and a guard that cannot fail is decoration. It fails the day
+ * the engine's public surface grows one. */
+
+test("the engine never returns a syllable-to-onset assignment — performance is not modelled", () => {
+  const read = E.reading("the quick brown fox jumped over it", { pop: 20 });
+  const t = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "swing" });
+  /* the grid carries onsets - that is the BEAT, arithmetic, and allowed */
+  assert.ok(Array.isArray(t.grid.onsets), "the beat's own onsets are the tool's to describe");
+  /* no per-bar row may carry them, because a bar is written material and placing it is performance */
+  for (const b of t.bars) {
+    for (const [k, v] of Object.entries(b)) {
+      assert.ok(!/onset|placement|lands|pocket|ahead|behind/i.test(k),
+        `pace() row must not carry a placement field, found "${k}"`);
+      assert.ok(!(Array.isArray(v) && v.length === b.syllables),
+        `pace() row field "${k}" is one entry per syllable — that is a placement, not a description`);
+    }
+  }
+  /* and nothing public may be named for it */
+  for (const k of Object.keys(E)) {
+    assert.ok(!/place|perform|pocket|quantize|quantise/i.test(k),
+      `the engine's public surface must not name a performance operation, found "${k}"`);
+  }
+});
+
+/* THE BEAT CARRIES THE FEEL AND THE LINE IS WRITTEN AGAINST IT. 2.18 said swing "changes where, never
+ * how many or how fast" and called that a virtue; it is wrong in the way that matters. Half a swung
+ * bar's slots are short, and a syllable landing there has a third less room than one on the long side.
+ * The bar mean sees none of it, which is the constraint the feel exists to impose. */
+
+test("pace(): a swung beat gives uneven room, and the bar mean hides it", () => {
+  const read = E.reading("the quick brown fox jumped over it", { pop: 20 });
+  const s = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "straight" }).bars[0];
+  const w = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "swing" }).bars[0];
+  assert.equal(s.even, true, "a straight beat's slots are interchangeable");
+  assert.equal(w.even, false, "a swung beat's are not");
+  assert.ok(w.tightMs < s.tightMs, "the short side is tighter than any straight slot");
+  assert.ok(w.tightRate > s.tightRate, "and demands more syllables a second to land on");
+  /* measured at 90bpm: 111.1ms short against 166.7ms even - 9.0/sec against 6.0/sec */
+  assert.ok(Math.abs(w.tightRate - 9) < 0.01 && Math.abs(s.tightRate - 6) < 0.01);
+  assert.equal(w.rate, s.rate, "while the bar mean is identical, which is the point");
+});
+
+test("grid(): pace() is unmoved by feel — swing changes placement, not count or rate", () => {
+  const read = E.reading("the quick brown fox jumped over it", { pop: 20 });
+  const a = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "straight" });
+  const b = E.tempo(read, { bpm: 90, timeSig: "4/4", feel: "swing" });
+  assert.deepEqual(b.bars.map(x => x.rate), a.bars.map(x => x.rate));
+  assert.deepEqual(b.bars.map(x => x.slotDelta), a.bars.map(x => x.slotDelta));
 });
 
 test("tempo(): required syllables-per-second scales with bpm", () => {
