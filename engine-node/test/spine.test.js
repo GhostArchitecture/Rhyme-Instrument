@@ -129,13 +129,29 @@ test("reduced motion is honoured from the spine, system-wide", () => {
 });
 
 /* OCCVM-L10 / roadmap 1.1 — veins are grown, not drawn. */
-test("the vein generator is spliced and the previous one is kept as the fallback", () => {
+test("2.24 — the vein layer is retired from this tool's slabs; the globule field is the substrate", () => {
+  /* Until 2.24 this test pinned veinSVG, its cache and its bezier fallback. Rendered and looked at, what
+     the generator drew here was a 1.3 px crisp trace of a lattice aggregate — a crystal, the vocabulary
+     2.8 claimed to have left — and on a live slab it moved 5.5% of pixels at a mean 0.26 L*. The owner
+     saw crystal fractals; the globule field the roadmap asked for was sitting under one face at 0.42 L*.
+     Now the field is the slab's layer and the three vein functions are deleted, not left declared. */
   const eng = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
-  assert.ok(eng.includes("OCCVM_VEINS.field"), "veinSVG must use the shared generator");
-  assert.match(eng, /function veinSVGLegacy\(/, "the bezier generator stays as the fallback");
-  assert.match(eng, /catch \(e\) \{ svg = veinSVGLegacy/, "growth must be guarded");
-  assert.ok(eng.includes("--vein-density"), "it must read the spine's density token");
-  assert.ok(!/"--vein-habit"/.test(eng), "and not the habit token, retired at 2.8 — a suspension has no direction");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const own = eng.replace(/\/\* ==== OCCVM SPINE [\s\S]*?\/\* ==== END OCCVM [^*]*\*\//g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(!/function veinSVG\b|function veinSVGLegacy\b|VEIN_CACHE/.test(own), "veinSVG, its cache and its fallback are gone");
+  assert.ok(!/veinSVG\(/.test(ui), "and nothing calls them");
+  assert.ok(!/"--veins"/.test(ui), "no slab sets --veins");
+  assert.ok(/var OCCVM_VEINS =/.test(eng), "the generator itself stays spliced: the floor reads its PRNG and the sibling grows from it");
+  /* the slab carries the floor, live on the draft face only — L13's grant is the draft face, so every
+     other face gets the same field as a still frame */
+  assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open\);/, "still unless the open face is the draft");
+  assert.match(ui, /<section key=\{open\} className=\{"slab rise"\} style=\{\{ "--thick": "16px" \}\}>\s*\{\/\*[\s\S]*?\*\/\}\s*<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/,
+    "the canvas is the slab's first child");
+  assert.match(ui, /return ambientFloor\(ref\.current, reduce \|\| !!still\);/, "reduced motion and off-draft both mean a still frame");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  assert.match(css, /\.slab \{\n  --cut-a: \.6; position: relative; isolation: isolate;/, "the slab is its own stacking context");
+  assert.match(css, /\.slab > canvas\.floor \{ position: absolute; z-index: 0; \}/, "so the floor paints above its ground and under its children");
+  assert.ok(!/var\(--veins\)/.test(css), "the vein image is out of the slab's background stack");
 });
 
 test("the aggregate is traced as straight segments, with no curve fitted over it", () => {
@@ -461,7 +477,7 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
 function loadFloor(over) {
   const vm = require("vm");
   const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
-  const code = cut("var FLOOR_N =", "function useAmbientFloor");
+  const code = cut("var FLOOR_PX_PER_DROP =", "function useAmbientFloor");
   const ops = [];
   const ctx2d = new Proxy({}, {
     get(t, k) {
@@ -539,15 +555,15 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
 
   /* a LAYER on the material, never the material deforming at rest: its own canvas, under every bar */
   assert.match(css, /\.floor \{ position: absolute; inset: 0; z-index: -1;/, "it paints beneath the in-flow bars");
-  assert.match(ui, /<canvas className="floor" ref=\{floor\} aria-hidden="true" \/>/, "and it is its own element");
+  assert.match(ui, /<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/, "and it is its own element");
   assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
 
   /* ungated and unmodulated: lawful at zero modulation is what makes L13 a grant rather than the
      gated-motion case, so nothing real may be reaching in here */
   for (const forbidden of ["--heat", "reading", "pacing", "tempo", "bpm", "limit", "drone"])
     assert.ok(!body.includes(forbidden), `the floor reads no measured value: found ${forbidden}`);
-  assert.match(ui, /useAmbientFloor\(floor\);/, "one call site, on the draft face");
-  assert.match(ui, /return ambientFloor\(ref\.current, reduce\);/, "the only inputs are the canvas and the motion setting");
+  assert.equal((ui.match(/useAmbientFloor\(/g) || []).length, 2, "one definition, one call site — on the slab");
+  assert.match(ui, /return ambientFloor\(ref\.current, reduce \|\| !!still\);/, "the only inputs are the canvas and a stillness that is never a measured value");
 });
 
 test("2.22 — the auditor measures the per-tool grant, through the path the runner uses", () => {
@@ -613,10 +629,12 @@ test("2.22b — the floor tracks the face it sits behind, and sits behind the fa
      moves 28.35% at a median 0.42 L*, p99 3.03, max 22.65 — a broad sub-threshold wash with rare
      brighter cores, which is what a floor is. The authored alpha was never the lever; the coverage was,
      and widening beats brightening. */
-  assert.match(css, /\.draftface \{ position: relative;/, "the face is the positioning context");
-  const face = ui.slice(ui.indexOf('<div className="draftface"'), ui.indexOf('<div className="bars"'));
-  assert.match(face, /<canvas className="floor" ref=\{floor\}/, "the canvas is a child of the face, not of the bar list");
+  /* 2.24 moved it up once more: from the draft face to the SLAB, every face, so the field is the
+     substrate layer the roadmap asked for rather than an underlayer on one face */
+  const slab = ui.slice(ui.indexOf('<section key={open} className={"slab rise"}'), ui.indexOf('<button type="button" className="head occvm-act"'));
+  assert.match(slab, /<canvas className="floor" ref=\{floorRef\}/, "the canvas is the slab's, not the bar list's or the face's");
   assert.ok(!/className="bars"[\s\S]{0,120}canvas className="floor"/.test(ui), "and never went back inside .bars");
+  assert.ok(!/className="draftface"[\s\S]{0,80}canvas className="floor"/.test(ui), "nor back onto the face alone");
 });
 
 /* ---- 2.23: Reading B — the whole face carries the beat --------------------------------------- */
@@ -681,4 +699,20 @@ test("2.24 — the bar editor edits the line as typed, not the reading's trimmed
   const eng = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
   assert.match(eng.slice(eng.indexOf("function reading(")), /const text = ln\.trim\(\);/,
     "the reading still trims — that is correct for reading, and is exactly why the editor must not read it");
+});
+
+test("2.24 — three authored weights, each pinned to the measurement that chose it", () => {
+  /* Every one of these shipped at a value that measured invisible on a phone and was reported so by
+     the owner. Re-aimed by measurement, not taste, and pinned here with the table so a later "tune"
+     has to argue with a number: */
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  /* the globule field as the slab's substrate: 0.05 → 0.78 L*, 0.10 → 1.43, 0.16 → 2.20, 0.24 → 3.21,
+     0.32 → 4.20 mean over the moved region of a live lookup slab */
+  assert.match(ui, /^var FLOOR_ALPHA = 0\.24;/m, "the field is seen: 3.21 L* mean, under a beat strike's 4.6");
+  /* Reading B's mix: 9% → 1.66 L*, 25% → 5.05, 40% → 8.36, 55% → 11.65 over the moved region at peak */
+  assert.match(css, /calc\(var\(--pulse, 0\) \* 25%\)/, "the face strikes at the control's measured weight (Reading A: 5.9)");
+  /* the strike window: 0.18 of a beat was ~7 frames at 95 bpm; 0.32 measured 35 of 120 samples non-zero */
+  assert.match(ui, /^var PULSE_STRIKE = 0\.32;/m, "a decay long enough to be a beat rather than a frame");
+  assert.match(ui, /setPhase\(u < PULSE_STRIKE \? 1 - u \/ PULSE_STRIKE : 0\);/, "and the hook reads the named constant");
 });

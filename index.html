@@ -383,14 +383,18 @@ input, textarea { -webkit-appearance: none; appearance: none; }
 
 /* the open slab */
 .slab {
-  --cut-a: .6; position: relative; padding: var(--pad); margin-bottom: 26px; border-radius: 3px 5px 4px 3px; --thick: 16px; --veins: none;
+  --cut-a: .6; position: relative; isolation: isolate; padding: var(--pad); margin-bottom: 26px; border-radius: 3px 5px 4px 3px; --thick: 16px;
+  /* 2.24 — the vein layer is RETIRED from this tool's slabs and the globule field takes its place (the
+     `.floor` canvas below). Measured on a live slab: the veins moved 5.5% of pixels at a mean 0.26 L*,
+     and where they did show they read as a crystal — a 1.3 px crisp trace of a lattice aggregate, which
+     is the vocabulary 2.8 claimed to have left. `isolation: isolate` makes the slab its own stacking
+     context so the canvas paints above this background and beneath every child. */
   background:
     linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
-    var(--veins),
 radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
     radial-gradient(120% 80% at 90% 100%, color-mix(in srgb, var(--mineral-lo) 35%, var(--sub-lo)) 0%, transparent 55%),
     linear-gradient(180deg, var(--sub-hi), var(--sub) 45%, var(--sub-lo));
-  background-blend-mode: screen, normal, normal, normal, normal; background-size: auto, 100% 100%, auto, auto, auto;
+  background-blend-mode: screen, normal, normal, normal; background-size: auto, auto, auto, auto;
   box-shadow:
     var(--occvm-bevel),
     inset calc(var(--lx) * 3px) calc(var(--ly) * 3px) 0 color-mix(in srgb, var(--mineral) 30%, transparent),
@@ -401,6 +405,7 @@ radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
 .motion .slab.rise { animation: rise 380ms cubic-bezier(.2,.8,.2,1); }
 @keyframes rise { from { transform: translateY(18px) scale(.985); opacity: .6; } to { transform: none; opacity: 1; } }
 .slab > * { position: relative; z-index: 1; }
+.slab > canvas.floor { position: absolute; z-index: 0; }   /* the substrate layer: above the slab's ground, under everything on it */
 .slab .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; cursor: pointer; }
 .slab .head h2 { margin: 0; font-family: var(--serif); font-size: 30px; font-weight: 300; line-height: 1; color: var(--bone);
   text-shadow: calc(var(--lx) * -.8px) calc(var(--ly) * -.8px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .9px) calc(var(--ly) * .9px) 0 rgba(0,0,0,.9), 0 0 var(--nglow) rgba(255,230,170,.45); }
@@ -464,16 +469,22 @@ textarea.cut { min-height: 9.5em; }
  *
  * It paints on the element's own background, under every in-flow child: no bar, no --heat, no measured
  * value ever has it drawn over. Reduced motion pins --pulse to 0 in the hook, and the query below says
- * the same thing in the stylesheet so a missed JS path still lands on a still face. */
+ * the same thing in the stylesheet so a missed JS path still lands on a still face.
+ *
+ * AMPLITUDE, RE-AIMED ON THE FIELD REPORT (2.24). Shipped at 9%, measured at a mean 1.00 L* over the face
+ * at peak, and reported by the owner as no visible effect — which is what 1 L* is on a phone. Measured in
+ * one frozen page load at four mixes: 9% → 1.66, 25% → 5.05, 40% → 8.36, 55% → 11.65 L* mean over the
+ * moved region. 25% is chosen because it matches Reading A's measured 5.9 on the control: the face and
+ * the control state the same beat at the same weight. Authored, and named as authored. */
 .draftface { position: relative;
   background-image: radial-gradient(150% 95% at 50% 0%,
-    color-mix(in srgb, var(--mineral) calc(var(--pulse, 0) * 9%), transparent) 0%, transparent 72%); }
+    color-mix(in srgb, var(--mineral) calc(var(--pulse, 0) * 25%), transparent) 0%, transparent 72%); }
 @media (prefers-reduced-motion: reduce) { .draftface { background-image: none; } }
 /* It sits behind the WHOLE draft face, not inside the bar list. Measured in Chromium at the narrower
    placement: the bar cards are opaque, so a floor between them moved 0.81% of pixels at a mean 1.18 L*
    — painting, and effectively absent. The authored alpha is not the lever (a floor is read at the edge
    of vision by design); the coverage was. Widened rather than brightened. */
-.floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+.floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; border-radius: inherit; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
   box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 0 rgba(255,255,255,var(--hi-a)), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(0,0,0,.6),
@@ -2303,7 +2314,7 @@ if (typeof module !== "undefined") module.exports = OCCVM_MINERALS;
 /* ==== END OCCVM minerals.js ==== */
 
 /* ==== OCCVM SPINE veins.js — spliced from occvm/veins.js. do not edit. ==== */
-/* sha256:f96ae350d96b */
+/* sha256:48cbc1c2a565 */
 /* OCCVM 1.1 → 2.8 — the vein generator. One implementation, shared by every conforming tool (OCCVM-L10).
  *
  * Authored in occvm/SPINE.md; spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the
@@ -2589,7 +2600,14 @@ var OCCVM_VEINS = function () {
       seed: o.seed
     });
     var soft = o.soft === undefined ? 1.4 : Math.max(0, o.soft);
-    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " + (o.viewW || 1200) + " " + (o.viewH || Math.round((o.viewW || 1200) * h / w)) + "' preserveAspectRatio='none'>" + "<defs><path id='v' d='" + d + "'/>" + (soft > 0 ? "<filter id='s' x='-3%' y='-3%' width='106%' height='106%'><feGaussianBlur stdDeviation='" + soft + "'/></filter>" : "") + "</defs>" + "<g fill='none' stroke-linecap='round' stroke-linejoin='round'>" + "<use href='#v' stroke='" + (o.lo || "#1c6a45") + "' stroke-width='" + (o.wide || 4.5) + "' opacity='.55'" + (soft > 0 ? " filter='url(#s)'" : "") + "/>" + "<use href='#v' stroke='" + (o.hi || "#3fbf7e") + "' stroke-width='" + (o.fine || 1.3) + "' opacity='.7'/>" + "</g></svg>";
+    /* `wide` and `fine` read `o.x || default` until 2.24, so passing 0 silently restored the default — a
+       caller asking for NO crisp pass got the crisp pass, and every "diffuse" variant measured identical
+       edge energy to the current render because the sharp overlay was still being drawn. Found by
+       measuring rather than by reading. 0 now means none; the crisp pass is the one that reads as a
+       crystal, and a consumer must be able to turn it off. */
+    var wide = o.wide === undefined ? 4.5 : Math.max(0, o.wide);
+    var fine = o.fine === undefined ? 1.3 : Math.max(0, o.fine);
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " + (o.viewW || 1200) + " " + (o.viewH || Math.round((o.viewW || 1200) * h / w)) + "' preserveAspectRatio='none'>" + "<defs><path id='v' d='" + d + "'/>" + (soft > 0 ? "<filter id='s' x='-3%' y='-3%' width='106%' height='106%'><feGaussianBlur stdDeviation='" + soft + "'/></filter>" : "") + "</defs>" + "<g fill='none' stroke-linecap='round' stroke-linejoin='round'>" + "<use href='#v' stroke='" + (o.lo || "#1c6a45") + "' stroke-width='" + wide + "' opacity='.55'" + (soft > 0 ? " filter='url(#s)'" : "") + "/>" + (fine > 0 ? "<use href='#v' stroke='" + (o.hi || "#3fbf7e") + "' stroke-width='" + fine + "' opacity='.7'/>" : "") + "</g></svg>";
     return {
       svg: svg,
       particles: g.particles,
@@ -3796,76 +3814,13 @@ const SESSION = (() => {
    previously carried its own two-entry copy (no ruby: it had never needed a negative mineral), which was
    the "no local exceptions" gap OCCVM-D6 registered against this file. */
 const MINERALS = OCCVM_MINERALS;
-const VEIN_CACHE = new Map();
-function veinSVGLegacy(mineral, face) {
-  /* the pre-1.1 generator: displaced cubic beziers under a turbulence filter. Kept as the fallback
-     OCCVM-L10 requires — if growth fails the slab still gets a vein layer rather than nothing. */
-  const {
-    hi,
-    lo
-  } = MINERALS[mineral] || MINERALS.amethyst;
-  const R = mulberry32(SESSION ^ (face + 1) * 0x9E3779B1);
-  const rnd = (a, b) => a + R() * (b - a);
-  const W = 480,
-    H = 200;
-  let strokes = "";
-  const n = 2 + Math.floor(R() * 3);
-  for (let i = 0; i < n; i++) {
-    let x = rnd(-30, 30),
-      y = rnd(15, H - 15),
-      d = `M${x.toFixed(0)} ${y.toFixed(0)}`;
-    const segs = 3 + Math.floor(R() * 3),
-      amp = rnd(18, 60),
-      dir = R() < .5 ? -1 : 1;
-    for (let k = 0; k < segs; k++) {
-      const nx = x + (W + 60) / segs * rnd(.8, 1.2);
-      const ny = Math.max(6, Math.min(H - 6, y + dir * rnd(-amp, amp * .4) * (k % 2 ? -1 : 1)));
-      d += ` C ${(x + (nx - x) * rnd(.25, .45)).toFixed(0)} ${(y + rnd(-amp, amp)).toFixed(0)}, ${(x + (nx - x) * rnd(.55, .8)).toFixed(0)} ${(ny + rnd(-amp, amp)).toFixed(0)}, ${nx.toFixed(0)} ${ny.toFixed(0)}`;
-      x = nx;
-      y = ny;
-    }
-    strokes += `<path d='${d}' stroke='${lo}' stroke-width='${rnd(2.5, 6.5).toFixed(1)}' opacity='${rnd(.2, .4).toFixed(2)}'/><path d='${d}' stroke='${hi}' stroke-width='${rnd(.9, 2.1).toFixed(1)}' opacity='${rnd(.35, .6).toFixed(2)}'/>`;
-  }
-  return `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}' viewBox='0 0 ${W} ${H}'><g fill='none' stroke-linecap='round'>${strokes}</g></svg>`;
-}
-function veinSVG(mineral, face) {
-  /* OCCVM-L10 — the vein is grown, not drawn. Each face gets its own aggregate from the session seed, so
-     two slabs never carry the same growth and a reload carries the same one back. */
-  const key = mineral + ":" + face;
-  if (VEIN_CACHE.has(key)) return VEIN_CACHE.get(key);
-  const {
-    hi,
-    lo
-  } = MINERALS[mineral] || MINERALS.amethyst;
-  const seed = (SESSION ^ (face + 1) * 0x9E3779B1) >>> 0;
-  const cs = getComputedStyle(document.documentElement);
-  const num = (k, d) => {
-    const v = parseFloat(cs.getPropertyValue(k));
-    return isFinite(v) ? v : d;
-  };
-  let svg;
-  try {
-    /* 2.8 — no habit argument: a suspension has no direction to be anisotropic along, and --vein-habit is
-       retired (SPINE.md L10). density is the volume fraction. */
-    svg = OCCVM_VEINS.field({
-      seed,
-      w: 80,
-      h: 34,
-      viewW: 480,
-      viewH: 200,
-      density: num("--vein-density", 0.3),
-      lo: lo,
-      hi: hi,
-      wide: 5,
-      fine: 1.4
-    }).svg; /* raw hex: encodeURIComponent below escapes them */
-  } catch (e) {
-    svg = veinSVGLegacy(mineral, face);
-  }
-  const url = `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
-  VEIN_CACHE.set(key, url);
-  return url;
-}
+/* 2.24 — veinSVG, VEIN_CACHE and veinSVGLegacy are RETIRED from this tool. The slab's substrate layer
+   is the globule field (30_ui.jsx: ambientFloor on every slab, live on the draft face only). What the vein
+   generator produced here was measured on a live slab at 5.5% of pixels and a mean 0.26 L* — and where it
+   showed, it read as a crystal: a 1.3 px crisp trace of a lattice aggregate, the vocabulary 2.8 claimed
+   to have left. The generator (OCCVM_VEINS, spliced above) stays: the floor reads its PRNG, and BTC still
+   grows its own layer from it. A function consumed by nothing is D12's shape one level up, so the three
+   are deleted rather than left declared. */
 /* ---------- share card: canvas renderer, drawn from reading(), no DOM ---------- */
 const CARD = (() => {
   const FONT = '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif';
@@ -4528,6 +4483,7 @@ function Picker({
    the beats themselves, so a beat pulse reads identically under all three feels and claims nothing about
    the displacement. What the feel actually does is stated numerically in the panel, where it can be read
    rather than inferred from a flash. */
+var PULSE_STRIKE = 0.32; /* authored: the fraction of each beat the strike takes to decay */
 function useBeatPulse(tempo) {
   const [phase, setPhase] = React.useState(0);
   React.useEffect(() => {
@@ -4548,7 +4504,10 @@ function useBeatPulse(tempo) {
     let raf = 0;
     const step = () => {
       const u = (performance.now() - t0) % beatMs / beatMs;
-      setPhase(u < 0.18 ? 1 - u / 0.18 : 0); /* a strike and a decay, not a sine: a beat is an onset */
+      /* a strike and a decay, not a sine: a beat is an onset. The window was 0.18 of the beat — at 95
+         bpm a 114 ms decay, about seven frames — and the owner reported no visible effect. 0.32 keeps the
+         instant attack and gives the decay ~200 ms at that tempo. Authored; PULSE_STRIKE names it. */
+      setPhase(u < PULSE_STRIKE ? 1 - u / PULSE_STRIKE : 0);
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
@@ -5284,8 +5243,6 @@ function Draft({
   /* the toggle never unmounts, which is why Reading A lives on it rather than inside the panel */
   const beatPulse = useBeatPulse(tempo);
   const host = useRef(null);
-  const floor = useRef(null);
-  useAmbientFloor(floor);
   const reading = useMemo(() => E2.reading(draft, {
     pop
   }), [draft, pop, overrides, eng]);
@@ -5336,11 +5293,7 @@ function Draft({
     style: {
       "--pulse": beatPulse.toFixed(3)
     }
-  }, /*#__PURE__*/React.createElement("canvas", {
-    className: "floor",
-    ref: floor,
-    "aria-hidden": "true"
-  }), /*#__PURE__*/React.createElement(Shelf, shelfProps), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(Shelf, shelfProps), /*#__PURE__*/React.createElement("div", {
     className: "row",
     style: {
       marginTop: 0
@@ -5610,11 +5563,21 @@ function Check({
    surface carrying one. It takes its colour from the mineral tokens and carries no literal of its own,
    so an unresolved palette paints nothing rather than painting an invented accent (L6). And it is
    lawful at zero modulation: nothing gates it, nothing triggers it, no real value scales it. */
-var FLOOR_N = 7; /* authored: droplets on the face at once */
-var FLOOR_R = [10, 26]; /* authored: the radius band, in px */
+/* 2.24: the floor is the SUBSTRATE LAYER on every slab now, not an underlayer on one face — see the
+   slab in App. The count therefore follows the area rather than being a fixed seven, so a tall draft
+   and a short lookup face carry the same density. */
+var FLOOR_PX_PER_DROP = 9000; /* authored: one droplet per ~95×95 px of slab */
+var FLOOR_R = [9, 30]; /* authored: the radius band, in px */
 var FLOOR_DRIFT_PX_S = 1.4; /* authored: L13 names the drift itself as judgment, not derivation */
 var FLOOR_MERGE_PX_S = 2.6; /* authored MAGNITUDE; the linearity above it is derived and confirmed */
-var FLOOR_ALPHA = 0.05; /* authored: a floor is read at the edge of vision or it is not a floor */
+/* 2.24: 0.05 shipped as "read at the edge of vision or it is not a floor", measured at a median 0.42 L*,
+   and was an underlayer nobody could see while the crystal veins were what showed. As the SUBSTRATE
+   LAYER it has to be seen. Measured on a live lookup slab, one frozen load, still frame, canvas toggled:
+   0.05 → 0.78 L* mean over the moved 28%; 0.10 → 1.43; 0.16 → 2.20; 0.24 → 3.21; 0.32 → 4.20 (max 24.6,
+   competing with the text). 0.24 is chosen: the globules read as a field under the page, above the
+   1.08 the diffuse vein wash measures in BTC and below the 4.6 a beat strike reaches on the draft face,
+   so the beat still stands out from the ground. Authored, and named as authored. */
+var FLOOR_ALPHA = 0.24;
 var FLOOR_SEED = 0x0CCF1005; /* fixed, so the field is the same field every session and can be recorded */
 
 /* P-3's confirmed law, on its own so it can be driven rather than read. Linear in t, and the guard
@@ -5649,6 +5612,9 @@ function ambientFloor(canvas, still) {
     welds = [],
     raf = 0,
     last = 0;
+  function count() {
+    return Math.max(3, Math.round(w * h / FLOOR_PX_PER_DROP));
+  }
   function spawn(seedEdge) {
     var r = FLOOR_R[0] + rnd() * (FLOOR_R[1] - FLOOR_R[0]);
     var a = rnd() * Math.PI * 2;
@@ -5668,7 +5634,7 @@ function ambientFloor(canvas, still) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (!drops.length) for (var i = 0; i < FLOOR_N; i++) drops.push(spawn(false));else if (pw && ph && (pw !== w || ph !== h)) for (var j = 0; j < drops.length; j++) {
+    if (!drops.length) for (var i = 0; i < count(); i++) drops.push(spawn(false));else if (pw && ph && (pw !== w || ph !== h)) for (var j = 0; j < drops.length; j++) {
       drops[j].x *= w / pw;
       drops[j].y *= h / ph;
     }
@@ -5729,7 +5695,7 @@ function ambientFloor(canvas, still) {
         drops = drops.filter(function (x) {
           return !x.gone;
         });
-        while (drops.length < FLOOR_N) drops.push(spawn(true));
+        while (drops.length < count()) drops.push(spawn(true));
       }
     }
     for (i = 0; i < drops.length; i++) for (j = i + 1; j < drops.length; j++) {
@@ -5787,14 +5753,14 @@ function ambientFloor(canvas, still) {
     if (ro) ro.disconnect();
   };
 }
-function useAmbientFloor(ref) {
+function useAmbientFloor(ref, still, key) {
   useEffect(() => {
     let reduce = false;
     try {
       reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     } catch (e) {}
-    return ambientFloor(ref.current, reduce);
-  }, []);
+    return ambientFloor(ref.current, reduce || !!still);
+  }, [still, key]);
 }
 
 /* ---- bank ---- */
@@ -6302,6 +6268,8 @@ function Tome() {
     })
   })[id];
   const idx = FACES.findIndex(f => f.id === open);
+  const floorRef = useRef(null);
+  useAmbientFloor(floorRef, open !== "draft", open);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("header", {
     className: "binding"
   }, /*#__PURE__*/React.createElement("h1", null, /*#__PURE__*/React.createElement("button", {
@@ -6318,10 +6286,13 @@ function Tome() {
     key: open,
     className: "slab rise",
     style: {
-      "--veins": veinSVG(prefs.mineral, idx),
       "--thick": "16px"
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("canvas", {
+    className: "floor",
+    ref: floorRef,
+    "aria-hidden": "true"
+  }), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "head occvm-act",
     onClick: () => setOpen(null)
@@ -6341,5 +6312,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260909225101 -->
+<!-- build-20260909230010 -->
 </html>

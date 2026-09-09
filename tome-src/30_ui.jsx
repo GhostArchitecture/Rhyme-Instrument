@@ -76,6 +76,7 @@ function Picker({ word, overrides, setOverride, onClose }) {
    the beats themselves, so a beat pulse reads identically under all three feels and claims nothing about
    the displacement. What the feel actually does is stated numerically in the panel, where it can be read
    rather than inferred from a flash. */
+var PULSE_STRIKE = 0.32;   /* authored: the fraction of each beat the strike takes to decay */
 function useBeatPulse(tempo) {
   const [phase, setPhase] = React.useState(0);
   React.useEffect(() => {
@@ -87,7 +88,10 @@ function useBeatPulse(tempo) {
     let raf = 0;
     const step = () => {
       const u = ((performance.now() - t0) % beatMs) / beatMs;
-      setPhase(u < 0.18 ? 1 - u / 0.18 : 0);   /* a strike and a decay, not a sine: a beat is an onset */
+      /* a strike and a decay, not a sine: a beat is an onset. The window was 0.18 of the beat — at 95
+         bpm a 114 ms decay, about seven frames — and the owner reported no visible effect. 0.32 keeps the
+         instant attack and gives the decay ~200 ms at that tempo. Authored; PULSE_STRIKE names it. */
+      setPhase(u < PULSE_STRIKE ? 1 - u / PULSE_STRIKE : 0);
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
@@ -469,8 +473,6 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   /* the toggle never unmounts, which is why Reading A lives on it rather than inside the panel */
   const beatPulse = useBeatPulse(tempo);
   const host = useRef(null);
-  const floor = useRef(null);
-  useAmbientFloor(floor);
   const reading = useMemo(() => E2.reading(draft, { pop }), [draft, pop, overrides, eng]);
   const pacing = useMemo(() => tempo ? E2.tempo(reading, tempo) : null, [reading, tempo]);
   const paceBy = useMemo(() => new Map((pacing ? pacing.bars : []).map(b => [b.i, b])), [pacing]);
@@ -486,7 +488,6 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
   };
   return (
     <div className="draftface" style={{ "--pulse": beatPulse.toFixed(3) }}>
-      <canvas className="floor" ref={floor} aria-hidden="true" />
       <Shelf {...shelfProps} />
       <div className="row" style={{ marginTop: 0 }}>
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
@@ -617,11 +618,21 @@ function Check({ eng }) {
    surface carrying one. It takes its colour from the mineral tokens and carries no literal of its own,
    so an unresolved palette paints nothing rather than painting an invented accent (L6). And it is
    lawful at zero modulation: nothing gates it, nothing triggers it, no real value scales it. */
-var FLOOR_N = 7;              /* authored: droplets on the face at once */
-var FLOOR_R = [10, 26];       /* authored: the radius band, in px */
+/* 2.24: the floor is the SUBSTRATE LAYER on every slab now, not an underlayer on one face — see the
+   slab in App. The count therefore follows the area rather than being a fixed seven, so a tall draft
+   and a short lookup face carry the same density. */
+var FLOOR_PX_PER_DROP = 9000; /* authored: one droplet per ~95×95 px of slab */
+var FLOOR_R = [9, 30];        /* authored: the radius band, in px */
 var FLOOR_DRIFT_PX_S = 1.4;   /* authored: L13 names the drift itself as judgment, not derivation */
 var FLOOR_MERGE_PX_S = 2.6;   /* authored MAGNITUDE; the linearity above it is derived and confirmed */
-var FLOOR_ALPHA = 0.05;       /* authored: a floor is read at the edge of vision or it is not a floor */
+/* 2.24: 0.05 shipped as "read at the edge of vision or it is not a floor", measured at a median 0.42 L*,
+   and was an underlayer nobody could see while the crystal veins were what showed. As the SUBSTRATE
+   LAYER it has to be seen. Measured on a live lookup slab, one frozen load, still frame, canvas toggled:
+   0.05 → 0.78 L* mean over the moved 28%; 0.10 → 1.43; 0.16 → 2.20; 0.24 → 3.21; 0.32 → 4.20 (max 24.6,
+   competing with the text). 0.24 is chosen: the globules read as a field under the page, above the
+   1.08 the diffuse vein wash measures in BTC and below the 4.6 a beat strike reaches on the draft face,
+   so the beat still stands out from the ground. Authored, and named as authored. */
+var FLOOR_ALPHA = 0.24;
 var FLOOR_SEED = 0x0CCF1005;  /* fixed, so the field is the same field every session and can be recorded */
 
 /* P-3's confirmed law, on its own so it can be driven rather than read. Linear in t, and the guard
@@ -647,6 +658,8 @@ function ambientFloor(canvas, still) {
   var ctx = canvas.getContext("2d"), rnd = V.mulberry32(FLOOR_SEED >>> 0);
   var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
 
+  function count() { return Math.max(3, Math.round(w * h / FLOOR_PX_PER_DROP)); }
+
   function spawn(seedEdge) {
     var r = FLOOR_R[0] + rnd() * (FLOOR_R[1] - FLOOR_R[0]);
     var a = rnd() * Math.PI * 2;
@@ -660,7 +673,7 @@ function ambientFloor(canvas, still) {
     w = Math.max(1, Math.round(box.width)); h = Math.max(1, Math.round(box.height));
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (!drops.length) for (var i = 0; i < FLOOR_N; i++) drops.push(spawn(false));
+    if (!drops.length) for (var i = 0; i < count(); i++) drops.push(spawn(false));
     else if (pw && ph && (pw !== w || ph !== h))
       for (var j = 0; j < drops.length; j++) { drops[j].x *= w / pw; drops[j].y *= h / ph; }
     pw = w; ph = h;
@@ -700,7 +713,7 @@ function ambientFloor(canvas, still) {
         a.r = Math.sqrt(m); a.merging = false; b.gone = true;
         welds.splice(i--, 1);
         drops = drops.filter(function (x) { return !x.gone; });
-        while (drops.length < FLOOR_N) drops.push(spawn(true));
+        while (drops.length < count()) drops.push(spawn(true));
       }
     }
     for (i = 0; i < drops.length; i++) for (j = i + 1; j < drops.length; j++) {
@@ -744,12 +757,12 @@ function ambientFloor(canvas, still) {
   };
 }
 
-function useAmbientFloor(ref) {
+function useAmbientFloor(ref, still, key) {
   useEffect(() => {
     let reduce = false;
     try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
-    return ambientFloor(ref.current, reduce);
-  }, []);
+    return ambientFloor(ref.current, reduce || !!still);
+  }, [still, key]);
 }
 
 /* ---- bank ---- */
@@ -948,6 +961,8 @@ function Tome() {
     tune: <Tune prefs={prefs} setPrefs={setPrefs} engStatus={engStatus} migrated={migrated} onExport={exportBackup} onImport={importBackup} />,
   }[id]);
   const idx = FACES.findIndex(f => f.id === open);
+  const floorRef = useRef(null);
+  useAmbientFloor(floorRef, open !== "draft", open);
   return (
     <div>
       <header className="binding">
@@ -957,7 +972,11 @@ function Tome() {
       {!loaded ? <div className="stack note">opening</div> : (
         <div className={"stack" + (open ? " open" : "")}>
           {open && (
-            <section key={open} className={"slab rise"} style={{ "--veins": veinSVG(prefs.mineral, idx), "--thick": "16px" }}>
+            <section key={open} className={"slab rise"} style={{ "--thick": "16px" }}>
+              {/* 2.24 — the globule field is the slab's substrate layer. It MOVES only on the draft face, which
+                  is the whole of L13's grant; every other face gets the same field as a still frame — the
+                  reduced-motion shape, used here as a scope. The vein layer this replaces is retired. */}
+              <canvas className="floor" ref={floorRef} aria-hidden="true" />
               <button type="button" className="head occvm-act" onClick={() => setOpen(null)}><h2>{open}</h2><span className="hint">tap to close</span></button>
               {face(open)}
             </section>

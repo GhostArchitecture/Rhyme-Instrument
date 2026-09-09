@@ -664,7 +664,7 @@ if (typeof module !== "undefined") module.exports = OCCVM_MINERALS;
 /* ==== END OCCVM minerals.js ==== */
 
 /* ==== OCCVM SPINE veins.js — spliced from occvm/veins.js. do not edit. ==== */
-/* sha256:f96ae350d96b */
+/* sha256:48cbc1c2a565 */
 /* OCCVM 1.1 → 2.8 — the vein generator. One implementation, shared by every conforming tool (OCCVM-L10).
  *
  * Authored in occvm/SPINE.md; spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the
@@ -879,14 +879,21 @@ var OCCVM_VEINS = (function () {
     if (g.segs.length < 8) throw new Error("occvm veins: suspension did not aggregate");
     var d = paths(g, { scale: (o.viewW || 1200) / w, seed: o.seed });
     var soft = o.soft === undefined ? 1.4 : Math.max(0, o.soft);
+    /* `wide` and `fine` read `o.x || default` until 2.24, so passing 0 silently restored the default — a
+       caller asking for NO crisp pass got the crisp pass, and every "diffuse" variant measured identical
+       edge energy to the current render because the sharp overlay was still being drawn. Found by
+       measuring rather than by reading. 0 now means none; the crisp pass is the one that reads as a
+       crystal, and a consumer must be able to turn it off. */
+    var wide = o.wide === undefined ? 4.5 : Math.max(0, o.wide);
+    var fine = o.fine === undefined ? 1.3 : Math.max(0, o.fine);
     var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " + (o.viewW || 1200) + " " +
       (o.viewH || Math.round((o.viewW || 1200) * h / w)) + "' preserveAspectRatio='none'>" +
       "<defs><path id='v' d='" + d + "'/>" +
       (soft > 0 ? "<filter id='s' x='-3%' y='-3%' width='106%' height='106%'><feGaussianBlur stdDeviation='" + soft + "'/></filter>" : "") +
       "</defs>" +
       "<g fill='none' stroke-linecap='round' stroke-linejoin='round'>" +
-      "<use href='#v' stroke='" + (o.lo || "#1c6a45") + "' stroke-width='" + (o.wide || 4.5) + "' opacity='.55'" + (soft > 0 ? " filter='url(#s)'" : "") + "/>" +
-      "<use href='#v' stroke='" + (o.hi || "#3fbf7e") + "' stroke-width='" + (o.fine || 1.3) + "' opacity='.7'/>" +
+      "<use href='#v' stroke='" + (o.lo || "#1c6a45") + "' stroke-width='" + wide + "' opacity='.55'" + (soft > 0 ? " filter='url(#s)'" : "") + "/>" +
+      (fine > 0 ? "<use href='#v' stroke='" + (o.hi || "#3fbf7e") + "' stroke-width='" + fine + "' opacity='.7'/>" : "") +
       "</g></svg>";
     return { svg: svg, particles: g.particles, clusters: g.clusters, bonds: g.segs.length / 4 };
   }
@@ -1693,45 +1700,10 @@ const SESSION = (() => { const fresh = () => String((Date.now() ^ (Math.random()
    previously carried its own two-entry copy (no ruby: it had never needed a negative mineral), which was
    the "no local exceptions" gap OCCVM-D6 registered against this file. */
 const MINERALS = OCCVM_MINERALS;
-const VEIN_CACHE = new Map();
-function veinSVGLegacy(mineral, face) {
-  /* the pre-1.1 generator: displaced cubic beziers under a turbulence filter. Kept as the fallback
-     OCCVM-L10 requires — if growth fails the slab still gets a vein layer rather than nothing. */
-  const { hi, lo } = MINERALS[mineral] || MINERALS.amethyst;
-  const R = mulberry32(SESSION ^ ((face + 1) * 0x9E3779B1));
-  const rnd = (a, b) => a + R() * (b - a);
-  const W = 480, H = 200; let strokes = "";
-  const n = 2 + Math.floor(R() * 3);
-  for (let i = 0; i < n; i++) {
-    let x = rnd(-30, 30), y = rnd(15, H - 15), d = `M${x.toFixed(0)} ${y.toFixed(0)}`;
-    const segs = 3 + Math.floor(R() * 3), amp = rnd(18, 60), dir = R() < .5 ? -1 : 1;
-    for (let k = 0; k < segs; k++) {
-      const nx = x + (W + 60) / segs * rnd(.8, 1.2);
-      const ny = Math.max(6, Math.min(H - 6, y + dir * rnd(-amp, amp * .4) * (k % 2 ? -1 : 1)));
-      d += ` C ${(x + (nx - x) * rnd(.25, .45)).toFixed(0)} ${(y + rnd(-amp, amp)).toFixed(0)}, ${(x + (nx - x) * rnd(.55, .8)).toFixed(0)} ${(ny + rnd(-amp, amp)).toFixed(0)}, ${nx.toFixed(0)} ${ny.toFixed(0)}`;
-      x = nx; y = ny;
-    }
-    strokes += `<path d='${d}' stroke='${lo}' stroke-width='${rnd(2.5, 6.5).toFixed(1)}' opacity='${rnd(.2, .4).toFixed(2)}'/><path d='${d}' stroke='${hi}' stroke-width='${rnd(.9, 2.1).toFixed(1)}' opacity='${rnd(.35, .6).toFixed(2)}'/>`;
-  }
-  return `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}' viewBox='0 0 ${W} ${H}'><g fill='none' stroke-linecap='round'>${strokes}</g></svg>`;
-}
-function veinSVG(mineral, face) {
-  /* OCCVM-L10 — the vein is grown, not drawn. Each face gets its own aggregate from the session seed, so
-     two slabs never carry the same growth and a reload carries the same one back. */
-  const key = mineral + ":" + face;
-  if (VEIN_CACHE.has(key)) return VEIN_CACHE.get(key);
-  const { hi, lo } = MINERALS[mineral] || MINERALS.amethyst;
-  const seed = (SESSION ^ ((face + 1) * 0x9E3779B1)) >>> 0;
-  const cs = getComputedStyle(document.documentElement);
-  const num = (k, d) => { const v = parseFloat(cs.getPropertyValue(k)); return isFinite(v) ? v : d; };
-  let svg;
-  try {
-    /* 2.8 — no habit argument: a suspension has no direction to be anisotropic along, and --vein-habit is
-       retired (SPINE.md L10). density is the volume fraction. */
-    svg = OCCVM_VEINS.field({ seed, w: 80, h: 34, viewW: 480, viewH: 200,
-      density: num("--vein-density", 0.3),
-      lo: lo, hi: hi, wide: 5, fine: 1.4 }).svg;   /* raw hex: encodeURIComponent below escapes them */
-  } catch (e) { svg = veinSVGLegacy(mineral, face); }
-  const url = `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
-  VEIN_CACHE.set(key, url); return url;
-}
+/* 2.24 — veinSVG, VEIN_CACHE and veinSVGLegacy are RETIRED from this tool. The slab's substrate layer
+   is the globule field (30_ui.jsx: ambientFloor on every slab, live on the draft face only). What the vein
+   generator produced here was measured on a live slab at 5.5% of pixels and a mean 0.26 L* — and where it
+   showed, it read as a crystal: a 1.3 px crisp trace of a lattice aggregate, the vocabulary 2.8 claimed
+   to have left. The generator (OCCVM_VEINS, spliced above) stays: the floor reads its PRNG, and BTC still
+   grows its own layer from it. A function consumed by nothing is D12's shape one level up, so the three
+   are deleted rather than left declared. */

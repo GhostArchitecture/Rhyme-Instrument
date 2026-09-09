@@ -369,14 +369,18 @@ input, textarea { -webkit-appearance: none; appearance: none; }
 
 /* the open slab */
 .slab {
-  --cut-a: .6; position: relative; padding: var(--pad); margin-bottom: 26px; border-radius: 3px 5px 4px 3px; --thick: 16px; --veins: none;
+  --cut-a: .6; position: relative; isolation: isolate; padding: var(--pad); margin-bottom: 26px; border-radius: 3px 5px 4px 3px; --thick: 16px;
+  /* 2.24 — the vein layer is RETIRED from this tool's slabs and the globule field takes its place (the
+     `.floor` canvas below). Measured on a live slab: the veins moved 5.5% of pixels at a mean 0.26 L*,
+     and where they did show they read as a crystal — a 1.3 px crisp trace of a lattice aggregate, which
+     is the vocabulary 2.8 claimed to have left. `isolation: isolate` makes the slab its own stacking
+     context so the canvas paints above this background and beneath every child. */
   background:
     linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
-    var(--veins),
 radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
     radial-gradient(120% 80% at 90% 100%, color-mix(in srgb, var(--mineral-lo) 35%, var(--sub-lo)) 0%, transparent 55%),
     linear-gradient(180deg, var(--sub-hi), var(--sub) 45%, var(--sub-lo));
-  background-blend-mode: screen, normal, normal, normal, normal; background-size: auto, 100% 100%, auto, auto, auto;
+  background-blend-mode: screen, normal, normal, normal; background-size: auto, auto, auto, auto;
   box-shadow:
     var(--occvm-bevel),
     inset calc(var(--lx) * 3px) calc(var(--ly) * 3px) 0 color-mix(in srgb, var(--mineral) 30%, transparent),
@@ -387,6 +391,7 @@ radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
 .motion .slab.rise { animation: rise 380ms cubic-bezier(.2,.8,.2,1); }
 @keyframes rise { from { transform: translateY(18px) scale(.985); opacity: .6; } to { transform: none; opacity: 1; } }
 .slab > * { position: relative; z-index: 1; }
+.slab > canvas.floor { position: absolute; z-index: 0; }   /* the substrate layer: above the slab's ground, under everything on it */
 .slab .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; cursor: pointer; }
 .slab .head h2 { margin: 0; font-family: var(--serif); font-size: 30px; font-weight: 300; line-height: 1; color: var(--bone);
   text-shadow: calc(var(--lx) * -.8px) calc(var(--ly) * -.8px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .9px) calc(var(--ly) * .9px) 0 rgba(0,0,0,.9), 0 0 var(--nglow) rgba(255,230,170,.45); }
@@ -450,16 +455,22 @@ textarea.cut { min-height: 9.5em; }
  *
  * It paints on the element's own background, under every in-flow child: no bar, no --heat, no measured
  * value ever has it drawn over. Reduced motion pins --pulse to 0 in the hook, and the query below says
- * the same thing in the stylesheet so a missed JS path still lands on a still face. */
+ * the same thing in the stylesheet so a missed JS path still lands on a still face.
+ *
+ * AMPLITUDE, RE-AIMED ON THE FIELD REPORT (2.24). Shipped at 9%, measured at a mean 1.00 L* over the face
+ * at peak, and reported by the owner as no visible effect — which is what 1 L* is on a phone. Measured in
+ * one frozen page load at four mixes: 9% → 1.66, 25% → 5.05, 40% → 8.36, 55% → 11.65 L* mean over the
+ * moved region. 25% is chosen because it matches Reading A's measured 5.9 on the control: the face and
+ * the control state the same beat at the same weight. Authored, and named as authored. */
 .draftface { position: relative;
   background-image: radial-gradient(150% 95% at 50% 0%,
-    color-mix(in srgb, var(--mineral) calc(var(--pulse, 0) * 9%), transparent) 0%, transparent 72%); }
+    color-mix(in srgb, var(--mineral) calc(var(--pulse, 0) * 25%), transparent) 0%, transparent 72%); }
 @media (prefers-reduced-motion: reduce) { .draftface { background-image: none; } }
 /* It sits behind the WHOLE draft face, not inside the bar list. Measured in Chromium at the narrower
    placement: the bar cards are opaque, so a floor between them moved 0.81% of pixels at a mean 1.18 L*
    — painting, and effectively absent. The authored alpha is not the lever (a floor is read at the edge
    of vision by design); the coverage was. Widened rather than brightened. */
-.floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+.floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; border-radius: inherit; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
   box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 0 rgba(255,255,255,var(--hi-a)), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(0,0,0,.6),
