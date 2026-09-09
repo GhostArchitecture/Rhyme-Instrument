@@ -72,7 +72,7 @@
 /* ==== END OCCVM serif.css ==== */
 
 /* ==== OCCVM SPINE spine.css — spliced from occvm/spine.css. do not edit. ==== */
-/* sha256:dcc62320e3c8 */
+/* sha256:a1a74258c14a */
 /* OCCVM 1.0 — the spine. Authored in occvm/SPINE.md; this is its machine-readable half.
  *
  * Spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the spliced copy in a tool: the
@@ -189,6 +189,20 @@
       rgba(255, 255, 255, calc(var(--hi-a, .12) * var(--occvm-gloss))),
     inset calc(var(--lx, 0) * -1 * var(--occvm-meniscus)) calc(var(--ly, 1) * -1 * var(--occvm-meniscus)) var(--occvm-meniscus)
       rgba(0, 0, 0, var(--cut-a, .35));
+
+  /* OCCVM-L2 (2.12) — THE RECESS, the same length at the opposite curvature. A well is not a bevel with
+     the alphas swapped by taste: at a concave corner the meniscus curves the other way, so the same
+     capillary length applies with the sign flipped, and the near wall — the one facing the light — is the
+     one in shadow. That is why an engraved field reads dark where a raised one reads bright, and why
+     hand-writing it per surface produced five slightly different depths in one tool. One primitive, so a
+     recess is as derived as a rim. --well-a is the shadowed near wall, --rim-a the lit far one; a well is
+     read at a shallower amplitude than a bevel by default because a recess returns less light than it
+     occludes. */
+  --occvm-well:
+    inset calc(var(--lx, 0) * var(--occvm-meniscus)) calc(var(--ly, 1) * var(--occvm-meniscus)) var(--occvm-meniscus)
+      rgba(0, 0, 0, var(--well-a, .55)),
+    inset calc(var(--lx, 0) * -1 * var(--occvm-meniscus)) calc(var(--ly, 1) * -1 * var(--occvm-meniscus)) var(--occvm-meniscus)
+      rgba(255, 255, 255, calc(var(--rim-a, .07) * var(--occvm-gloss)));
 
   /* OCCVM-L10 (1.1, re-derived 2.8) — vein habit. density is the VOLUME FRACTION of the suspension: the
      particle count as a fraction of the lattice, the same number it has been since 1.1 under the
@@ -327,7 +341,7 @@ input, textarea { -webkit-appearance: none; appearance: none; }
     repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px),
     linear-gradient(180deg, var(--bronze-a) -30%, var(--bronze-b) 45%, var(--bronze-c) 100%);
   border-bottom: 2px solid var(--verdigris-lo); color: #f2e4c8;
-  box-shadow: 0 1px 0 rgba(255,240,210,.35) inset, 0 -1px 0 var(--verdigris) inset, 0 10px 24px rgba(0,0,0,.6);
+  --hi-a: .35; box-shadow: var(--occvm-bevel), 0 -1px 0 var(--verdigris) inset, 0 10px 24px rgba(0,0,0,.6);
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .binding h1 { margin: 0; font-weight: 400; font-size: 19px; color: #fff3da; text-shadow: 0 1px 0 rgba(255,255,255,.25), 0 -1px 0 rgba(0,0,0,.6); cursor: pointer; }
 .binding .sun { font-size: 12.5px; color: #e6d2ac; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -342,7 +356,7 @@ input, textarea { -webkit-appearance: none; appearance: none; }
 .edge { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 0 14px; height: 58px; border-radius: 2px 3px 3px 2px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
   background: linear-gradient(180deg, var(--sub-hi) 0%, var(--sub) 30%, var(--sub-lo) 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,var(--hi-a)), inset 0 -1px 0 rgba(0,0,0,.7), inset 3px 0 0 var(--mineral-lo), 0 4px 0 -1px var(--edge), 0 6px 14px rgba(0,0,0,.55);
+  --cut-a: .7; box-shadow: var(--occvm-bevel), inset 3px 0 0 var(--mineral-lo), 0 4px 0 -1px var(--edge), 0 6px 14px rgba(0,0,0,.55);
   transition: transform 260ms cubic-bezier(.2,.8,.2,1); }
 .edge::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .5;
   background: repeating-linear-gradient(180deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px); }
@@ -381,9 +395,9 @@ radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
 /* engraved inputs: a cut into the glass */
 .cut { width: 100%; display: block; color: var(--bone); background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.35));
   border: 0; border-radius: 3px; padding: 11px 12px; font-size: var(--text); line-height: 1.5; resize: vertical; outline: none;
-  box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 2px rgba(0,0,0,.9), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(255,255,255,var(--hi-a)), 0 1px 0 rgba(255,255,255,.05);
+  --well-a: .9; box-shadow: var(--occvm-well), 0 1px 0 rgba(255,255,255,.05);
   text-shadow: 0 0 var(--nglow) rgba(255,230,170,.35); }
-.cut:focus { box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 2px rgba(0,0,0,.9), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 60%, transparent), 0 0 12px color-mix(in srgb, var(--mineral) 30%, transparent); }
+.cut:focus { --well-a: .9; box-shadow: var(--occvm-well), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 60%, transparent), 0 0 12px color-mix(in srgb, var(--mineral) 30%, transparent); }
 .cut::placeholder { color: var(--bone-lo); opacity: .6; }
 textarea.cut { min-height: 9.5em; }
 
@@ -391,8 +405,8 @@ textarea.cut { min-height: 9.5em; }
 .row { display: flex; gap: 6px; margin-top: 10px; }
 .row.wrap { flex-wrap: wrap; }
 .cast { flex: 1; min-width: 0; text-align: center; padding: 8px 8px; border-radius: 3px; border: 1px solid #2e2110; color: #f7ecd6; font-size: 13px; cursor: pointer; user-select: none;
-  background: linear-gradient(180deg, #6b5030, #43301a); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 2px 0 #1f1508; -webkit-tap-highlight-color: transparent; }
-.cast:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 1px 0 #1f1508; }
+  background: linear-gradient(180deg, #6b5030, #43301a); --hi-a: .18; --cut-a: .3; box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508; -webkit-tap-highlight-color: transparent; }
+.cast:active { transform: translateY(1px); box-shadow: var(--occvm-bevel), 0 1px 0 #1f1508; }
 .cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--mineral)), color-mix(in srgb, var(--m, var(--mineral)) 55%, black));
   box-shadow: 0 0 0 1px var(--m, var(--mineral)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--mineral)) 45%, transparent), 0 2px 0 #1f1508; }
 .cast.patina.on { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); box-shadow: 0 0 0 1px var(--verdigris) inset, 0 2px 0 #1f1508; }
@@ -438,7 +452,7 @@ textarea.cut { min-height: 9.5em; }
 .mark { flex: 1; min-width: 25px; height: 3px; border-radius: 1px; background: var(--sub-lo);
   box-shadow: inset calc(var(--lx) * .6px) calc(var(--ly) * .6px) 0 rgba(0,0,0,.9), inset calc(var(--lx) * -.6px) calc(var(--ly) * -.6px) 0 rgba(255,255,255,var(--hi-a)), 0 0 4px color-mix(in srgb, var(--c, #888) 45%, transparent); }
 .mark.p1 { height: 5px; background: #08070a; } .mark.p2 { height: 4px; opacity: .85; } .mark.p0 { height: 1px; opacity: .6; }
-.picker { margin: 6px 0 4px; padding: 8px 8px 6px; border-radius: 3px; background: rgba(0,0,0,.35); box-shadow: inset 0 1px 2px rgba(0,0,0,.8), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 40%, transparent); }
+.picker { --well-a: .8; margin: 6px 0 4px; padding: 8px 8px 6px; border-radius: 3px; background: rgba(0,0,0,.35); box-shadow: var(--occvm-well), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 40%, transparent); }
 .picker .who { font-size: 12px; color: var(--bone-lo); margin-bottom: 6px; }
 .picker .who i { color: var(--bone); }
 .picker .stones { flex-wrap: wrap; gap: 5px; cursor: default; }
@@ -478,7 +492,7 @@ textarea.cut { min-height: 9.5em; }
 .inlay.banked::after { content: "in bank"; position: absolute; right: 6px; top: -7px; font-size: 9px; color: var(--verdigris); background: var(--sub-lo); padding: 0 4px; border-radius: 2px; }
 .inlay .x { margin-left: 8px; color: var(--bone-lo); font-size: 12px; }
 .skel { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12.5px; color: var(--bone-lo); flex-wrap: wrap; }
-.verdict { margin-top: 14px; padding: 12px; border-radius: 3px; background: rgba(0,0,0,.35); box-shadow: inset 0 1px 2px rgba(0,0,0,.8), inset 4px 0 0 var(--vk, var(--bone-lo)); }
+.verdict { --well-a: .8; margin-top: 14px; padding: 12px; border-radius: 3px; background: rgba(0,0,0,.35); box-shadow: var(--occvm-well), inset 4px 0 0 var(--vk, var(--bone-lo)); }
 .verdict .kind { font-size: 15px; color: var(--vk, var(--bone)); margin-bottom: 8px; }
 .empty { font-size: 13px; color: var(--bone-lo); margin-top: 12px; line-height: 1.5; }
 .bankrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(255,255,255,.04); }
@@ -518,7 +532,7 @@ textarea.cut { min-height: 9.5em; }
 /* shelf */
 .shelf { margin-bottom: 10px; }
 .shelf .dim, .shelflist .dim { color: var(--bone-lo); font-size: 12px; }
-.shelflist { margin: 8px 0 4px; padding: 4px 10px; border-radius: 3px; background: rgba(0,0,0,.3); box-shadow: inset 0 1px 2px rgba(0,0,0,.8); }
+.shelflist { --well-a: .8; margin: 8px 0 4px; padding: 4px 10px; border-radius: 3px; background: rgba(0,0,0,.3); box-shadow: var(--occvm-well); }
 .shelflist .bankrow.cur .wd { color: var(--gilt-a); }
 .shelflist .wd { cursor: pointer; }
 
@@ -529,7 +543,7 @@ textarea.cut { min-height: 9.5em; }
 .ghost { height: 44px; border-radius: 2px 3px 3px 2px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--bone-lo); cursor: pointer; margin-bottom: 8px;
   background: repeating-linear-gradient(135deg, rgba(255,255,255,.03) 0 4px, transparent 4px 10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 /* share panel */
-.share { margin-top: 10px; padding: 10px; border-radius: 3px; background: rgba(0,0,0,.3); box-shadow: inset 0 1px 2px rgba(0,0,0,.8), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 35%, transparent); }
+.share { --well-a: .8; margin-top: 10px; padding: 10px; border-radius: 3px; background: rgba(0,0,0,.3); box-shadow: var(--occvm-well), inset 0 0 0 1px color-mix(in srgb, var(--mineral) 35%, transparent); }
 .picklist { max-height: 160px; overflow: auto; margin-top: 8px; border-radius: 3px; background: rgba(0,0,0,.35); }
 .picklist .pl { padding: 7px 10px; font-size: 14px; color: var(--bone-lo); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid rgba(255,255,255,.04); }
 .picklist .pl.on { color: var(--gilt-a); background: rgba(255,255,255,.04); }
@@ -544,7 +558,7 @@ textarea.cut { min-height: 9.5em; }
 .fit { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13.5px; }
 .fit .nm { flex: 0 0 92px; color: var(--bone); }
 .fit .syl { flex: 0 0 42px; font-size: 11.5px; color: var(--bone-lo); }
-.fit .track { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.5); }
+.fit .track { --well-a: .5; flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; box-shadow: var(--occvm-well); }
 .fit .fill { display: block; height: 100%; background: var(--vein-hi); border-radius: 4px; }
 .fit.top .nm { color: var(--gilt-a); }
 .fit.top .fill { background: var(--gilt-a); }
