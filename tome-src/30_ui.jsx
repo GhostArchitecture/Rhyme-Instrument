@@ -621,9 +621,10 @@ function Check({ eng }) {
 /* 2.24: the floor is the SUBSTRATE LAYER on every slab now, not an underlayer on one face — see the
    slab in App. The count therefore follows the area rather than being a fixed seven, so a tall draft
    and a short lookup face carry the same density. */
-var FLOOR_PX_PER_DROP = 9000; /* authored: one droplet per ~95×95 px of slab */
-var FLOOR_R = [9, 30];        /* authored: the radius band, in px */
-var FLOOR_DRIFT_PX_S = 1.4;   /* authored: L13 names the drift itself as judgment, not derivation */
+/* 2.25: the field itself — density, radius band, seed stream — is OCCVM_GLOBULES' (occvm/globules.js),
+   the one generator both tools share now that BTC carries the same field as a still frame. What stays
+   here is the LIVE half: drift, merging, the canvas. L13 grants motion to this tool's draft face only,
+   and a shared part must not carry what one tool is withheld. */
 var FLOOR_MERGE_PX_S = 2.6;   /* authored MAGNITUDE; the linearity above it is derived and confirmed */
 /* 2.24: 0.05 shipped as "read at the edge of vision or it is not a floor", measured at a median 0.42 L*,
    and was an underlayer nobody could see while the crystal veins were what showed. As the SUBSTRATE
@@ -642,8 +643,8 @@ function bridgeRadius(ms) { return FLOOR_MERGE_PX_S * Math.max(0, ms) / 1000; }
 
 function ambientFloor(canvas, still) {
   if (!canvas || !canvas.getContext) return function () {};
-  var V = typeof OCCVM_VEINS === "undefined" ? null : OCCVM_VEINS;
-  if (!V || !V.mulberry32) return function () {};
+  /* named, not aliased: the L10 auditor measures the consumer by this call */
+  if (typeof OCCVM_GLOBULES === "undefined" || !OCCVM_GLOBULES.field) return function () {};
 
   var ink = (function () {
     try {
@@ -655,17 +656,11 @@ function ambientFloor(canvas, still) {
   })();
   if (!ink) return function () {};
 
-  var ctx = canvas.getContext("2d"), rnd = V.mulberry32(FLOOR_SEED >>> 0);
+  var ctx = canvas.getContext("2d"), fld = null;
   var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
 
-  function count() { return Math.max(3, Math.round(w * h / FLOOR_PX_PER_DROP)); }
-
-  function spawn(seedEdge) {
-    var r = FLOOR_R[0] + rnd() * (FLOOR_R[1] - FLOOR_R[0]);
-    var a = rnd() * Math.PI * 2;
-    return { x: seedEdge ? (rnd() < 0.5 ? -r : w + r) : rnd() * w, y: rnd() * h, r: r,
-             vx: Math.cos(a) * FLOOR_DRIFT_PX_S / 1000, vy: Math.sin(a) * FLOOR_DRIFT_PX_S / 1000 };
-  }
+  function count() { return fld ? fld.count() : 3; }
+  function spawn(seedEdge) { return fld.spawn(seedEdge); }
 
   function size() {
     var box = canvas.getBoundingClientRect();
@@ -673,7 +668,7 @@ function ambientFloor(canvas, still) {
     w = Math.max(1, Math.round(box.width)); h = Math.max(1, Math.round(box.height));
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (!drops.length) for (var i = 0; i < count(); i++) drops.push(spawn(false));
+    if (!drops.length) { fld = OCCVM_GLOBULES.field({ seed: FLOOR_SEED, w: w, h: h }); drops = fld.drops.slice(); }
     else if (pw && ph && (pw !== w || ph !== h))
       for (var j = 0; j < drops.length; j++) { drops[j].x *= w / pw; drops[j].y *= h / ph; }
     pw = w; ph = h;

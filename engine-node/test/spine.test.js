@@ -141,7 +141,11 @@ test("2.24 — the vein layer is retired from this tool's slabs; the globule fie
   assert.ok(!/function veinSVG\b|function veinSVGLegacy\b|VEIN_CACHE/.test(own), "veinSVG, its cache and its fallback are gone");
   assert.ok(!/veinSVG\(/.test(ui), "and nothing calls them");
   assert.ok(!/"--veins"/.test(ui), "no slab sets --veins");
-  assert.ok(/var OCCVM_VEINS =/.test(eng), "the generator itself stays spliced: the floor reads its PRNG and the sibling grows from it");
+  /* 2.25: BTC took the field too, so the vein generator is spliced NOWHERE — retired from every target,
+     kept in occvm/ as the generator the L10 record cites. The field is one shared part. */
+  assert.ok(/var OCCVM_GLOBULES =/.test(eng), "the globule field is the shared part this tool reads");
+  assert.ok(!/var OCCVM_VEINS =/.test(eng), "and the vein generator no longer ships here");
+  assert.ok(/OCCVM_GLOBULES\.field\(/.test(ui), "the floor takes its drops from the shared field");
   /* the slab carries the floor, live on the draft face only — L13's grant is the draft face, so every
      other face gets the same field as a still frame */
   assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open\);/, "still unless the open face is the draft");
@@ -225,9 +229,11 @@ test("2.8 — yield resolves its curve under the PAGE's load order, with no requ
   vm.runInContext(blk("OCCVM_YIELD"), ctx);
   vm.runInContext(blk("OCCVM_RHEOLOGY"), ctx);
   assert.match(ctx.OCCVM_YIELD.easing(), /^linear\(0, /, "pinch() must be able to reach the substance's curve in a page");
+  /* 2.25: the vein generator no longer ships; the globule field takes its place in this guard, for the
+     same reason — a part must resolve in the page's own order with nothing spliced before it */
   const ctx2 = vm.createContext({ Math, console });
-  vm.runInContext(blk("OCCVM_VEINS"), ctx2);
-  assert.ok(ctx2.OCCVM_VEINS.grow({ w: 20, h: 12, n: 24, seed: 1 }).particles === 24, "veins aggregates with nothing spliced before it");
+  vm.runInContext(blk("OCCVM_GLOBULES"), ctx2);
+  assert.ok(ctx2.OCCVM_GLOBULES.field({ seed: 1, w: 200, h: 120 }).drops.length >= 3, "the field seeds with nothing spliced before it");
 });
 
 test("2.8 — the vein is a suspension that gels: DLCA, measured", () => {
@@ -477,7 +483,7 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
 function loadFloor(over) {
   const vm = require("vm");
   const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
-  const code = cut("var FLOOR_PX_PER_DROP =", "function useAmbientFloor");
+  const code = cut("var FLOOR_MERGE_PX_S =", "function useAmbientFloor");
   const ops = [];
   const ctx2d = new Proxy({}, {
     get(t, k) {
@@ -493,7 +499,7 @@ function loadFloor(over) {
   const frames = [];
   const sandbox = {
     Math, performance: { now: () => 0 },
-    OCCVM_VEINS: require(path.join(ROOT, "occvm", "veins.js")),
+    OCCVM_GLOBULES: require(path.join(ROOT, "occvm", "globules.js")),
     getComputedStyle: () => ({ getPropertyValue: k => (over && k in over ? over[k] : (k === "--vein-hi" ? "#c9a6ff" : k === "--vein-lo" ? "#5a36a8" : "")) }),
     document: { documentElement: {} },
     window: { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {} },
