@@ -201,14 +201,18 @@ function BarCut({ value, onChange, onReturn, onBackspaceEmpty, onDone }) {
     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); onReturn(); } else if (e.key === "Backspace" && !value) { e.preventDefault(); onBackspaceEmpty(); } else if (e.key === "Escape") onDone(); }}
     onBlur={onDone} />;
 }
-function Bar({ bar, reading, overrides, setOverride, pick, setPick, editing, edit, pace }) {
+/* `raw` is the line as typed. `bar.text` is what reading() made of it, and reading() trims — so a
+   controlled input bound to bar.text erases every trailing space on the keystroke that typed it, and the
+   space bar "does not work" from the first character onward. The reading is for reading; the editor edits
+   the draft. Found in the field, not by a guard: no test typed a space into a bar and looked. */
+function Bar({ bar, raw, reading, overrides, setOverride, pick, setPick, editing, edit, pace }) {
   const run = reading.runs.find(r => r.bars.includes(bar.i));
   const flagged = reading.flagged.includes(bar.i);
   const heat = flagged && run ? Math.min(1, (run.bars.indexOf(bar.i) - reading.limit + 1) / Math.max(1, run.len - reading.limit)) : 0;
   return (
     <div className="bar" data-bar={bar.i} data-heat={flagged ? "" : undefined}
       style={{ "--bthick": (5 + bar.syllables * 1.1).toFixed(0) + "px", "--heat": heat.toFixed(2) }}>
-      {editing ? <BarCut value={bar.text} onChange={v => edit.change(bar.i, v)} onReturn={() => edit.next(bar.i)} onBackspaceEmpty={() => edit.remove(bar.i)} onDone={() => edit.done(bar.i)} />
+      {editing ? <BarCut value={raw} onChange={v => edit.change(bar.i, v)} onReturn={() => edit.next(bar.i)} onBackspaceEmpty={() => edit.remove(bar.i)} onDone={() => edit.done(bar.i)} />
       : <button type="button" className="text occvm-act" style={{ margin: 0 }} onClick={() => edit.start(bar.i)} aria-label={`edit bar ${bar.i + 1}`}>
         {bar.field.map((w, i) => <React.Fragment key={i}><span className={"w " + w.source}>{w.word}</span>{i < bar.field.length - 1 ? " " : ""}</React.Fragment>)}
       </button>}
@@ -503,7 +507,7 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
         <div className="bars" ref={host}>
           {lines.map((ln, i) => reading.bars[i]
-            ? <Bar key={i} bar={reading.bars[i]} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} pace={paceBy.get(i)} />
+            ? <Bar key={i} bar={reading.bars[i]} raw={ln} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} pace={paceBy.get(i)} />
             : (editing === i
               ? <div key={i} className="bar" data-bar={i}><BarCut value={ln} onChange={v => edit.change(i, v)} onReturn={() => edit.next(i)} onBackspaceEmpty={() => edit.remove(i)} onDone={() => edit.done(i)} /></div>
               : (lines.length > 1 || ln ? <button type="button" key={i} className="break occvm-act" onClick={() => edit.start(i)} aria-label="edit this break"><span>break</span></button> : null)))}

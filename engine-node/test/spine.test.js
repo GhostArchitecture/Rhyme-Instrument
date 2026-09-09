@@ -666,3 +666,19 @@ test("2.23 — L8: reduced motion gets a still face, from both the hook and the 
   /* measured in Chromium under reducedMotion:"reduce" with a real 95 bpm tempo set: --pulse stayed 0
      across 120 samples and the resolved background-image was `none` */
 });
+
+test("2.24 — the bar editor edits the line as typed, not the reading's trimmed copy of it", () => {
+  /* FOUND IN THE FIELD: "when cutting a bar, after the first character the space bar doesn't work."
+     reading() trims each line before building a bar, and BarCut was a controlled input bound to
+     bar.text — so the space that made "ink " was erased by the same render that reacted to it, on every
+     keystroke, from the first character onward (before a bar exists the fallback branch binds the raw
+     line, which is why it worked until then). Pre-existing, not the roadmap's; no test had ever typed a
+     space into a bar and looked. The editor now binds the raw line and the reading stays a reading. */
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  assert.match(ui, /<Bar key=\{i\} bar=\{reading\.bars\[i\]\} raw=\{ln\}/, "the raw line travels to the bar");
+  assert.match(ui, /\{editing \? <BarCut value=\{raw\}/, "and the editor binds it");
+  assert.ok(!/<BarCut value=\{bar\.text\}/.test(ui), "never the trimmed text again");
+  const eng = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
+  assert.match(eng.slice(eng.indexOf("function reading(")), /const text = ln\.trim\(\);/,
+    "the reading still trims — that is correct for reading, and is exactly why the editor must not read it");
+});

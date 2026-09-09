@@ -4740,8 +4740,13 @@ function BarCut({
     onBlur: onDone
   });
 }
+/* `raw` is the line as typed. `bar.text` is what reading() made of it, and reading() trims — so a
+   controlled input bound to bar.text erases every trailing space on the keystroke that typed it, and the
+   space bar "does not work" from the first character onward. The reading is for reading; the editor edits
+   the draft. Found in the field, not by a guard: no test typed a space into a bar and looked. */
 function Bar({
   bar,
+  raw,
   reading,
   overrides,
   setOverride,
@@ -4763,7 +4768,7 @@ function Bar({
       "--heat": heat.toFixed(2)
     }
   }, editing ? /*#__PURE__*/React.createElement(BarCut, {
-    value: bar.text,
+    value: raw,
     onChange: v => edit.change(bar.i, v),
     onReturn: () => edit.next(bar.i),
     onBackspaceEmpty: () => edit.remove(bar.i),
@@ -5403,6 +5408,7 @@ function Draft({
   }, lines.map((ln, i) => reading.bars[i] ? /*#__PURE__*/React.createElement(Bar, {
     key: i,
     bar: reading.bars[i],
+    raw: ln,
     reading: reading,
     overrides: overrides,
     setOverride: setOverride,
@@ -6335,5 +6341,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260909221939 -->
+<!-- build-20260909225101 -->
 </html>
