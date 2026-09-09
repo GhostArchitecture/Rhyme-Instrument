@@ -519,6 +519,12 @@ textarea.cut { min-height: 9.5em; }
 .verdict .kind { font-size: 15px; color: var(--vk, var(--bone)); margin-bottom: 8px; }
 .empty { font-size: 13px; color: var(--bone-lo); margin-top: 12px; line-height: 1.5; }
 .bankrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(255,255,255,.04); }
+/* 2.21 — the swipe test bed. --slide is written by useSwipeYield and is the TRANSMITTED travel, not the
+   finger's: below the substance's yield stress it is exactly 0, which is why the row holds under a thumb
+   and why the remove button and the stones button stay tappable through the whole gesture. touch-action
+   keeps the page's own vertical scroll — the row claims one axis, never both. */
+.bankrow { --slide: 0px; transform: translateX(var(--slide)); touch-action: pan-y; }
+.bankrow.past .rm { color: var(--bone); }
 .bankrow .wd { font-size: 16px; }
 .bankrow .wd.override { color: var(--gilt-a); }
 .bankrow .rm { font-size: 13px; color: var(--bone-lo); padding: 4px 8px; cursor: pointer; }
@@ -548,6 +554,8 @@ textarea.cut { min-height: 9.5em; }
 /* a button is shrink-to-fit, so a flex container that is one collapses its own space-between */
 
 @media (prefers-reduced-motion: reduce) { .slab, .edge { animation: none !important; transition: none !important; } }
+/* L8/L13: a static frame, never a smaller travel. The gesture still commits at the same distance. */
+@media (prefers-reduced-motion: reduce) { .bankrow { transform: none !important; } }
 
 /* scheme letter, engraved at the bar's right edge */
 .scheme { position: absolute; right: -19px; top: 8px; font-size: 13px; color: var(--bone-lo); z-index: 2;
@@ -3459,6 +3467,14 @@ const E2 = (() => {
     };
   }
   /* ---------- tempo grid ----------
+   * SPINE.md section 11 governs this whole block: THE BEAT IS ARITHMETIC AND MAY BE DESCRIBED; THE
+   * PERFORMANCE IS NOT THIS TOOL'S. BPM, time signature, subdivision and - since 2.18 - where a swung
+   * pair places its two onsets all follow from numbers a person entered, so the tool may state them.
+   * Which slot a syllable actually lands in, whether a writer leans early or late, what a line does in a
+   * mouth: none of that is reachable from a draft and none of it is estimated here. A writer writes to
+   * the beat; this does not write to the writer, and it never synthesises a performance from what is
+   * typed. The guard in engine-node/test/engine.test.js fails the day the public surface grows a
+   * syllable-to-onset map, which is the one shape this rule is most likely to be broken by.
    * Arithmetic, not a model. BPM and time signature give a real slot count per bar; nothing
    * here listens to anything or knows how a line is actually performed.
    *
@@ -4302,6 +4318,7 @@ const CARD = (() => {
     share
   };
 })();
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
 /* ---------- tome UI ---------- */
 const {
   useState,
@@ -4503,6 +4520,129 @@ function useBeatPulse(tempo) {
     return () => cancelAnimationFrame(raf);
   }, [tempo && tempo.bpm]);
   return phase;
+}
+
+/* OCCVM-L11 / 2.21 — the swipe test bed, bank rows only.
+
+   The gesture is the yield criterion rendered directly, with ONE authored anchor. Finger travel maps to
+   applied stress at SWIPE_YIELD_PX — the distance at which the stress reaches the substance's own τ₀ —
+   because SPINE.md §10 P-2 says no derivation carries px into a substance's units and each consumer must
+   name its own anchor. Everything the row then does follows from Herschel-Bulkley and from nothing else:
+
+     τ(d)   = τ₀ · d / SWIPE_YIELD_PX                the authored map, and the only authored step
+     γ̇      = ((τ − τ₀)/k)^(1/n), exactly 0 below τ₀   OCCVM_RHEOLOGY.shearRate
+     offset = d · (τ − τ₀)/τ  =  d − SWIPE_YIELD_PX     the transmitted fraction of the imposed travel
+
+   So the row does not move at all for the first SWIPE_YIELD_PX and tracks the finger 1:1 after it. The
+   dead band is not a tap/swipe heuristic bolted on beside the physics — it IS the yield stress, and it is
+   what keeps tap-to-remove and the stones button live through the whole gesture: inside the band there is
+   no movement to capture and no default to prevent.
+
+   The ceiling is derived, not chosen. The crossover this system has tracked since 2.10 is k·γ̇ⁿ = τ₀,
+   which is τ = 2τ₀ — exactly 2·SWIPE_YIELD_PX of finger travel under the map above. Committing at an
+   offset below SWIPE_YIELD_PX therefore keeps the entire gesture yield-dominated. At the shipped numbers
+   commit lands at 0.867 of the crossover: 13.3% of headroom, the discipline 2.16 applied to LOCK_V0_MAX.
+
+   Released short of commit, the row returns — and the return is a DRIVEN FLOW, not a recoil. Flow past
+   τ₀ is irreversible; a spring-back would be the material claiming an elasticity it does not have. What
+   returns the row is the same yield law driven the other way, so it plays on the substance's cessation
+   easing and its duration scales with the distance it has to cover. SWIPE_RETURN_MS is that duration at
+   full commit distance, authored and named as authored.
+
+   Reduced motion (L8): the row never translates and the gesture still commits at the same distance — a
+   static frame, never a smaller travel or a slower one. */
+var SWIPE_YIELD_PX = 30; /* authored: finger travel at which the applied stress reaches τ₀ */
+var SWIPE_COMMIT_PX = 26; /* authored: row offset that commits; < SWIPE_YIELD_PX by the derivation above */
+var SWIPE_RETURN_MS = 260; /* authored: the return flow's duration at full commit distance */
+
+function useSwipeYield(onCommit) {
+  const [off, setOff] = React.useState(0);
+  const [ret, setRet] = React.useState(0); /* ms of return flow in flight; 0 = under the finger */
+  const g = React.useRef(null);
+  const reduce = () => {
+    try {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {
+      return false;
+    }
+  };
+  const sub = () => typeof OCCVM_RHEOLOGY === "undefined" ? null : OCCVM_RHEOLOGY;
+  /* the transmitted travel: 0 below τ₀, d − yield above. Read through shearRate so the gate is the
+     substance's own function rather than a re-typed inequality — L3, one owner per fact. */
+  const flowed = d => {
+    const R = sub();
+    if (!R) return 0;
+    const m = R.SUBSTANCE,
+      tau = m.tau0 * Math.abs(d) / SWIPE_YIELD_PX;
+    if (!(R.shearRate(m, tau) > 0)) return 0;
+    return Math.sign(d) * Math.abs(d) * (tau - m.tau0) / tau;
+  };
+  const down = e => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.target.closest && e.target.closest("button, input, textarea, a")) return;
+    g.current = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      live: false,
+      dead: false
+    };
+    setRet(0);
+  };
+  const move = e => {
+    const s = g.current;
+    if (!s || s.dead || e.pointerId !== s.id) return;
+    const dx = e.clientX - s.x,
+      dy = e.clientY - s.y;
+    if (!s.live) {
+      /* the page scrolls vertically; a gesture that leaves the dead band downward was never a swipe */
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) {
+        s.dead = true;
+        return;
+      }
+      if (Math.abs(dx) <= SWIPE_YIELD_PX) return; /* held: below τ₀ nothing moves, and the tap survives */
+      s.live = true;
+      try {
+        e.currentTarget.setPointerCapture(s.id);
+      } catch (err) {}
+    }
+    e.preventDefault();
+    setOff(flowed(dx));
+  };
+  const up = e => {
+    const s = g.current;
+    g.current = null;
+    if (!s || s.dead || !s.live) {
+      setOff(0);
+      return;
+    }
+    const now = flowed(e.clientX - s.x);
+    if (Math.abs(now) >= SWIPE_COMMIT_PX) {
+      setOff(now);
+      onCommit();
+      return;
+    }
+    setRet(Math.max(60, Math.round(SWIPE_RETURN_MS * Math.abs(now) / SWIPE_COMMIT_PX)));
+    setOff(0);
+  };
+  const R = sub();
+  const style = {
+    "--slide": (reduce() ? 0 : off).toFixed(1) + "px"
+  };
+  if (ret && !reduce()) {
+    style.transition = "transform " + ret + "ms";
+    if (R) style.transitionTimingFunction = R.cssEasing(R.SUBSTANCE, 1);
+  }
+  return {
+    style,
+    past: Math.abs(off) >= SWIPE_COMMIT_PX,
+    handlers: {
+      onPointerDown: down,
+      onPointerMove: move,
+      onPointerUp: up,
+      onPointerCancel: up
+    }
+  };
 }
 
 /* OCCVM-L8 — the patina control. 28 call sites reach the interaction floor through this one component.
@@ -5383,6 +5523,61 @@ function Check({
 }
 
 /* ---- bank ---- */
+/* One removal, one vocabulary. Both paths — the button and the swipe — go through this, because the same
+   irreversible action rendering two different physical vocabularies depending on how it was triggered is
+   the defect 2.16 named while keeping the lock release below the regime crossover. Removing a banked word
+   is as irreversible as removing a draft, so it pinches (OCCVM-L11), exactly as the shelf row does. */
+function BankRow({
+  w,
+  bank,
+  setBank,
+  overrides,
+  setOverride,
+  open,
+  setPick
+}) {
+  const key = clean(w),
+    p = E2.pronounce(w);
+  const el = useRef(null);
+  const drop = () => setBank(bank.filter(b => b !== w));
+  const remove = () => {
+    const node = el.current;
+    if (node && typeof OCCVM_YIELD !== "undefined") OCCVM_YIELD.pinch(node, drop);else drop();
+  };
+  const sw = useSwipeYield(remove);
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", _extends({
+    ref: el,
+    className: "bankrow" + (sw.past ? " past" : ""),
+    style: sw.style
+  }, sw.handlers), /*#__PURE__*/React.createElement("span", {
+    className: "wd" + (overrides[key] ? " override" : "")
+  }, w), /*#__PURE__*/React.createElement("div", {
+    className: "word" + (open ? " pick" : ""),
+    style: {
+      flex: 1,
+      alignItems: "flex-end"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "stones occvm-act",
+    "aria-expanded": !!open,
+    "aria-label": `syllables of ${w}`,
+    onClick: () => setPick(open ? null : key)
+  }, p.sylls.map((s, k) => /*#__PURE__*/React.createElement(Stone, {
+    key: k,
+    v: s.v,
+    s: s.s
+  })))), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "rm occvm-act",
+    onClick: remove
+  }, "remove")), open && /*#__PURE__*/React.createElement(Picker, {
+    word: key,
+    overrides: overrides,
+    setOverride: setOverride,
+    onClose: () => setPick(null)
+  }));
+}
 function Bank({
   bank,
   setBank,
@@ -5415,45 +5610,18 @@ function Bank({
     patina: true
   }, "add")), /*#__PURE__*/React.createElement("div", {
     className: "note"
-  }, "every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears."), bank.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, "every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears. a row holds under a light drag and only slides once you push past it \u2014 swipe it clear, or tap remove."), bank.length === 0 && /*#__PURE__*/React.createElement("div", {
     className: "empty"
-  }, "nothing banked yet."), bank.map(w => {
-    const key = clean(w),
-      p = E2.pronounce(w),
-      open = pick === key;
-    return /*#__PURE__*/React.createElement("div", {
-      key: w
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "bankrow"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "wd" + (overrides[key] ? " override" : "")
-    }, w), /*#__PURE__*/React.createElement("div", {
-      className: "word" + (open ? " pick" : ""),
-      style: {
-        flex: 1,
-        alignItems: "flex-end"
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      className: "stones occvm-act",
-      "aria-expanded": !!open,
-      "aria-label": `syllables of ${w}`,
-      onClick: () => setPick(open ? null : key)
-    }, p.sylls.map((s, k) => /*#__PURE__*/React.createElement(Stone, {
-      key: k,
-      v: s.v,
-      s: s.s
-    })))), /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      className: "rm occvm-act",
-      onClick: () => setBank(bank.filter(b => b !== w))
-    }, "remove")), open && /*#__PURE__*/React.createElement(Picker, {
-      word: key,
-      overrides: overrides,
-      setOverride: setOverride,
-      onClose: () => setPick(null)
-    }));
-  }));
+  }, "nothing banked yet."), bank.map(w => /*#__PURE__*/React.createElement(BankRow, {
+    key: w,
+    w: w,
+    bank: bank,
+    setBank: setBank,
+    overrides: overrides,
+    setOverride: setOverride,
+    open: pick === clean(w),
+    setPick: setPick
+  })));
 }
 
 /* ---- tune ---- */
@@ -5898,5 +6066,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260909212530 -->
+<!-- build-20260909214145 -->
 </html>

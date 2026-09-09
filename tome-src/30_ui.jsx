@@ -96,6 +96,93 @@ function useBeatPulse(tempo) {
   return phase;
 }
 
+/* OCCVM-L11 / 2.21 — the swipe test bed, bank rows only.
+
+   The gesture is the yield criterion rendered directly, with ONE authored anchor. Finger travel maps to
+   applied stress at SWIPE_YIELD_PX — the distance at which the stress reaches the substance's own τ₀ —
+   because SPINE.md §10 P-2 says no derivation carries px into a substance's units and each consumer must
+   name its own anchor. Everything the row then does follows from Herschel-Bulkley and from nothing else:
+
+     τ(d)   = τ₀ · d / SWIPE_YIELD_PX                the authored map, and the only authored step
+     γ̇      = ((τ − τ₀)/k)^(1/n), exactly 0 below τ₀   OCCVM_RHEOLOGY.shearRate
+     offset = d · (τ − τ₀)/τ  =  d − SWIPE_YIELD_PX     the transmitted fraction of the imposed travel
+
+   So the row does not move at all for the first SWIPE_YIELD_PX and tracks the finger 1:1 after it. The
+   dead band is not a tap/swipe heuristic bolted on beside the physics — it IS the yield stress, and it is
+   what keeps tap-to-remove and the stones button live through the whole gesture: inside the band there is
+   no movement to capture and no default to prevent.
+
+   The ceiling is derived, not chosen. The crossover this system has tracked since 2.10 is k·γ̇ⁿ = τ₀,
+   which is τ = 2τ₀ — exactly 2·SWIPE_YIELD_PX of finger travel under the map above. Committing at an
+   offset below SWIPE_YIELD_PX therefore keeps the entire gesture yield-dominated. At the shipped numbers
+   commit lands at 0.867 of the crossover: 13.3% of headroom, the discipline 2.16 applied to LOCK_V0_MAX.
+
+   Released short of commit, the row returns — and the return is a DRIVEN FLOW, not a recoil. Flow past
+   τ₀ is irreversible; a spring-back would be the material claiming an elasticity it does not have. What
+   returns the row is the same yield law driven the other way, so it plays on the substance's cessation
+   easing and its duration scales with the distance it has to cover. SWIPE_RETURN_MS is that duration at
+   full commit distance, authored and named as authored.
+
+   Reduced motion (L8): the row never translates and the gesture still commits at the same distance — a
+   static frame, never a smaller travel or a slower one. */
+var SWIPE_YIELD_PX = 30;     /* authored: finger travel at which the applied stress reaches τ₀ */
+var SWIPE_COMMIT_PX = 26;    /* authored: row offset that commits; < SWIPE_YIELD_PX by the derivation above */
+var SWIPE_RETURN_MS = 260;   /* authored: the return flow's duration at full commit distance */
+
+function useSwipeYield(onCommit) {
+  const [off, setOff] = React.useState(0);
+  const [ret, setRet] = React.useState(0);          /* ms of return flow in flight; 0 = under the finger */
+  const g = React.useRef(null);
+  const reduce = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } };
+
+  const sub = () => (typeof OCCVM_RHEOLOGY === "undefined" ? null : OCCVM_RHEOLOGY);
+  /* the transmitted travel: 0 below τ₀, d − yield above. Read through shearRate so the gate is the
+     substance's own function rather than a re-typed inequality — L3, one owner per fact. */
+  const flowed = d => {
+    const R = sub(); if (!R) return 0;
+    const m = R.SUBSTANCE, tau = m.tau0 * Math.abs(d) / SWIPE_YIELD_PX;
+    if (!(R.shearRate(m, tau) > 0)) return 0;
+    return Math.sign(d) * Math.abs(d) * (tau - m.tau0) / tau;
+  };
+
+  const down = e => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.target.closest && e.target.closest("button, input, textarea, a")) return;
+    g.current = { id: e.pointerId, x: e.clientX, y: e.clientY, live: false, dead: false };
+    setRet(0);
+  };
+  const move = e => {
+    const s = g.current; if (!s || s.dead || e.pointerId !== s.id) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (!s.live) {
+      /* the page scrolls vertically; a gesture that leaves the dead band downward was never a swipe */
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) { s.dead = true; return; }
+      if (Math.abs(dx) <= SWIPE_YIELD_PX) return;   /* held: below τ₀ nothing moves, and the tap survives */
+      s.live = true;
+      try { e.currentTarget.setPointerCapture(s.id); } catch (err) {}
+    }
+    e.preventDefault();
+    setOff(flowed(dx));
+  };
+  const up = e => {
+    const s = g.current; g.current = null;
+    if (!s || s.dead || !s.live) { setOff(0); return; }
+    const now = flowed(e.clientX - s.x);
+    if (Math.abs(now) >= SWIPE_COMMIT_PX) { setOff(now); onCommit(); return; }
+    setRet(Math.max(60, Math.round(SWIPE_RETURN_MS * Math.abs(now) / SWIPE_COMMIT_PX)));
+    setOff(0);
+  };
+
+  const R = sub();
+  const style = { "--slide": (reduce() ? 0 : off).toFixed(1) + "px" };
+  if (ret && !reduce()) {
+    style.transition = "transform " + ret + "ms";
+    if (R) style.transitionTimingFunction = R.cssEasing(R.SUBSTANCE, 1);
+  }
+  return { style, past: Math.abs(off) >= SWIPE_COMMIT_PX,
+           handlers: { onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerCancel: up } };
+}
+
 /* OCCVM-L8 — the patina control. 28 call sites reach the interaction floor through this one component.
    aria-pressed is emitted only when the caller passes `on` AND has not marked the control `action`: five
    sites write a bare `on` to mean "styled active", and a button that claims to be a pressed toggle
@@ -488,6 +575,34 @@ function Check({ eng }) {
 }
 
 /* ---- bank ---- */
+/* One removal, one vocabulary. Both paths — the button and the swipe — go through this, because the same
+   irreversible action rendering two different physical vocabularies depending on how it was triggered is
+   the defect 2.16 named while keeping the lock release below the regime crossover. Removing a banked word
+   is as irreversible as removing a draft, so it pinches (OCCVM-L11), exactly as the shelf row does. */
+function BankRow({ w, bank, setBank, overrides, setOverride, open, setPick }) {
+  const key = clean(w), p = E2.pronounce(w);
+  const el = useRef(null);
+  const drop = () => setBank(bank.filter(b => b !== w));
+  const remove = () => {
+    const node = el.current;
+    if (node && typeof OCCVM_YIELD !== "undefined") OCCVM_YIELD.pinch(node, drop);
+    else drop();
+  };
+  const sw = useSwipeYield(remove);
+  return (
+    <div>
+      <div ref={el} className={"bankrow" + (sw.past ? " past" : "")} style={sw.style} {...sw.handlers}>
+        <span className={"wd" + (overrides[key] ? " override" : "")}>{w}</span>
+        <div className={"word" + (open ? " pick" : "")} style={{ flex: 1, alignItems: "flex-end" }}>
+          <button type="button" className="stones occvm-act" aria-expanded={!!open} aria-label={`syllables of ${w}`} onClick={() => setPick(open ? null : key)}>{p.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}</button>
+        </div>
+        <button type="button" className="rm occvm-act" onClick={remove}>remove</button>
+      </div>
+      {open && <Picker word={key} overrides={overrides} setOverride={setOverride} onClose={() => setPick(null)} />}
+    </div>
+  );
+}
+
 function Bank({ bank, setBank, overrides, setOverride, eng }) {
   const [add, setAdd] = useState(""); const [pick, setPick] = useState(null);
   const commit = () => { const w = add.trim(); if (!w) return; if (!bank.some(b => clean(b) === clean(w))) setBank([...bank, w]); setAdd(""); };
@@ -495,23 +610,12 @@ function Bank({ bank, setBank, overrides, setOverride, eng }) {
     <div>
       <input className="cut" value={add} onChange={e => setAdd(e.target.value)} onKeyDown={e => e.key === "Enter" && commit()} placeholder="add a word — names, slang, coinages" autoCapitalize="off" autoCorrect="off" />
       <div className="row"><Cast on action onClick={commit} patina>add</Cast></div>
-      <div className="note">every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears.</div>
+      <div className="note">every banked word joins lookup. tap its stones to cut the vowel your mouth uses; the cut carries everywhere the word appears. a row holds under a light drag and only slides once you push past it — swipe it clear, or tap remove.</div>
       {bank.length === 0 && <div className="empty">nothing banked yet.</div>}
-      {bank.map(w => {
-        const key = clean(w), p = E2.pronounce(w), open = pick === key;
-        return (
-          <div key={w}>
-            <div className="bankrow">
-              <span className={"wd" + (overrides[key] ? " override" : "")}>{w}</span>
-              <div className={"word" + (open ? " pick" : "")} style={{ flex: 1, alignItems: "flex-end" }}>
-                <button type="button" className="stones occvm-act" aria-expanded={!!open} aria-label={`syllables of ${w}`} onClick={() => setPick(open ? null : key)}>{p.sylls.map((s, k) => <Stone key={k} v={s.v} s={s.s} />)}</button>
-              </div>
-              <button type="button" className="rm occvm-act" onClick={() => setBank(bank.filter(b => b !== w))}>remove</button>
-            </div>
-            {open && <Picker word={key} overrides={overrides} setOverride={setOverride} onClose={() => setPick(null)} />}
-          </div>
-        );
-      })}
+      {bank.map(w => (
+        <BankRow key={w} w={w} bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride}
+          open={pick === clean(w)} setPick={setPick} />
+      ))}
     </div>
   );
 }

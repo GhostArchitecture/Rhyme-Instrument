@@ -505,6 +505,12 @@ textarea.cut { min-height: 9.5em; }
 .verdict .kind { font-size: 15px; color: var(--vk, var(--bone)); margin-bottom: 8px; }
 .empty { font-size: 13px; color: var(--bone-lo); margin-top: 12px; line-height: 1.5; }
 .bankrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(255,255,255,.04); }
+/* 2.21 — the swipe test bed. --slide is written by useSwipeYield and is the TRANSMITTED travel, not the
+   finger's: below the substance's yield stress it is exactly 0, which is why the row holds under a thumb
+   and why the remove button and the stones button stay tappable through the whole gesture. touch-action
+   keeps the page's own vertical scroll — the row claims one axis, never both. */
+.bankrow { --slide: 0px; transform: translateX(var(--slide)); touch-action: pan-y; }
+.bankrow.past .rm { color: var(--bone); }
 .bankrow .wd { font-size: 16px; }
 .bankrow .wd.override { color: var(--gilt-a); }
 .bankrow .rm { font-size: 13px; color: var(--bone-lo); padding: 4px 8px; cursor: pointer; }
@@ -534,6 +540,8 @@ textarea.cut { min-height: 9.5em; }
 /* a button is shrink-to-fit, so a flex container that is one collapses its own space-between */
 
 @media (prefers-reduced-motion: reduce) { .slab, .edge { animation: none !important; transition: none !important; } }
+/* L8/L13: a static frame, never a smaller travel. The gesture still commits at the same distance. */
+@media (prefers-reduced-motion: reduce) { .bankrow { transform: none !important; } }
 
 /* scheme letter, engraved at the bar's right edge */
 .scheme { position: absolute; right: -19px; top: 8px; font-size: 13px; color: var(--bone-lo); z-index: 2;

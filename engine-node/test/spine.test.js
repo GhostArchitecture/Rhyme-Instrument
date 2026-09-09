@@ -185,8 +185,16 @@ test("2.8 — the shelf yields rather than cleaves, and the vocabulary is pinned
   const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
   assert.match(ui, /OCCVM_YIELD\.pinch\(row, \(\) => removeDraft\(d\.id\)\)/, "removing a draft pinches off");
   assert.ok(!/OCCVM_FRACTURE|\.cleave\(/.test(ui), "no cleave call survives — in a page it would throw");
-  /* the primitive is used for the irreversible action and nothing else: one call site, the removal */
-  assert.equal((ui.match(/OCCVM_YIELD\.pinch/g) || []).length, 1, "yield marks the one irreversible action, not everything");
+  /* The primitive is used for irreversible actions and NOTHING ELSE. This read `=== 1` until 2.21 added
+   * the bank row's swipe removal, and a correct change then failed a correct guard — the same typed-count
+   * defect 2.15 found in the law-count assertions. L11 does not say one action is irreversible; it says
+   * the vocabulary belongs to the ones that are. So the property is what is asserted: every call site's
+   * own callback names a removal. A pinch on a save, a toggle or an open fails; a third real removal
+   * passes without editing this line. */
+  const pinches = [...ui.matchAll(/OCCVM_YIELD\.pinch\(([^;]*?)\)\s*;/g)].map(m => m[1]);
+  assert.ok(pinches.length >= 1, "the yield vocabulary reaches at least one action");
+  for (const args of pinches)
+    assert.match(args, /remove|drop|delete/i, "pinch marks a removal, never a reversible action: " + args.trim());
 });
 
 test("2.8 — yield resolves its curve under the PAGE's load order, with no require", () => {
@@ -351,4 +359,96 @@ test("2.7 — L7: the reading surface and the heads are owned, and are two faces
   assert.ok(/\.slab \.head h2\s*\{[^}]*font-family:\s*var\(--serif\)/.test(own),
     "the heads carry --serif explicitly now that they no longer inherit it from body");
   assert.ok(fs.existsSync(path.join(ROOT, "occvm", "fonts", "OFL-Faustina.txt")), "Faustina's licence ships with it");
+});
+
+/* ---- 2.21: the swipe test bed, on bank rows -------------------------------------------------- */
+
+test("2.21 — the dead band IS the yield stress, derived not authored", () => {
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  const m = R.SUBSTANCE;
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const Y = +(/var SWIPE_YIELD_PX = (\d+(?:\.\d+)?)/.exec(ui) || [])[1];
+  assert.ok(Y > 0, "the one authored anchor is declared and readable");
+
+  /* the map the hook applies, restated here so the identity is checked rather than assumed */
+  const flowed = d => {
+    const tau = m.tau0 * Math.abs(d) / Y;
+    if (!(R.shearRate(m, tau) > 0)) return 0;
+    return Math.sign(d) * Math.abs(d) * (tau - m.tau0) / tau;
+  };
+
+  /* below τ₀ the substance does not flow, so the row does not move — however far the thumb has gone */
+  for (const d of [0, 1, Y / 3, Y / 2, Y * 0.99, Y])
+    assert.equal(flowed(d), 0, `held at ${d}px: below the yield stress nothing moves`);
+  /* above it, the transmitted fraction (τ−τ₀)/τ times the imposed travel is exactly d − Y. That identity
+     is why the gesture reads as an ordinary swipe with a sticky start rather than as a rubber band. */
+  for (const d of [Y + 1, Y + 10, Y * 1.5, Y * 2, Y * 4])
+    assert.ok(Math.abs(flowed(d) - (d - Y)) < 1e-9, `past yield the row tracks the finger 1:1 at ${d}px`);
+  assert.ok(Math.abs(flowed(-(Y + 12)) + 12) < 1e-9, "and it is signed: the material has no preferred direction");
+});
+
+test("2.21 — the commit distance stays inside the yield-dominated regime", () => {
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  const m = R.SUBSTANCE;
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const Y = +(/var SWIPE_YIELD_PX = (\d+(?:\.\d+)?)/.exec(ui) || [])[1];
+  const C = +(/var SWIPE_COMMIT_PX = (\d+(?:\.\d+)?)/.exec(ui) || [])[1];
+
+  /* The crossover k·γ̇ⁿ/τ₀ = 1 is τ = 2τ₀ by definition, which under the hook's map is 2Y of finger
+     travel — i.e. an offset of Y. Measured against the substance rather than asserted, so the day the
+     constants move the guard moves with them. */
+  const crossoverTau = m.tau0 + m.k * Math.pow(R.shearRate(m, 2 * m.tau0), m.n);
+  assert.ok(Math.abs(crossoverTau - 2 * m.tau0) < 1e-6, "the regime crossover sits at exactly twice the yield stress");
+  assert.ok(C < Y, `commit at ${C}px must stay under the crossover offset ${Y}px, or one swipe renders two vocabularies`);
+
+  const tauAtCommit = m.tau0 * (C + Y) / Y;
+  const ratio = (tauAtCommit - m.tau0) / m.tau0;         /* = k·γ̇ⁿ/τ₀ at the moment of commit */
+  assert.ok(ratio < 1, "yield-dominated at commit");
+  assert.ok(ratio > 0.5, "and not so far under the crossover that the ceiling is meaningless");
+  /* the recorded headroom, in the same shape 2.16 recorded LOCK_V0_MAX's 14.4% */
+  assert.ok(Math.abs(ratio - 0.8667) < 0.02, `headroom drifted: ratio ${ratio.toFixed(4)}`);
+});
+
+test("2.21 — tap-to-remove stays live, and one removal has one vocabulary", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+
+  assert.match(ui, /className="rm occvm-act" onClick=\{remove\}/, "the remove button survives the swipe and calls the same removal");
+  assert.match(ui, /className="stones occvm-act"/, "so does the stones button");
+  /* the gesture only claims the pointer AFTER it has yielded; inside the dead band there is nothing to
+     capture and no default to prevent, which is what keeps both buttons tappable through a light drag */
+  const mv = /const move = e => \{[\s\S]*?\n  \};/.exec(ui)[0];
+  assert.ok(mv.indexOf("s.live = true") < mv.indexOf("e.preventDefault()"),
+    "preventDefault and pointer capture both sit past the yield point, never before it");
+  assert.ok(mv.indexOf("setPointerCapture") > mv.indexOf("Math.abs(dx) <= SWIPE_YIELD_PX"),
+    "capture is taken only once the material has yielded");
+  assert.match(mv, /Math\.abs\(dy\) > Math\.abs\(dx\)/, "a vertical gesture is the page's scroll, not a swipe");
+  assert.match(css, /\.bankrow \{ --slide: 0px; transform: translateX\(var\(--slide\)\); touch-action: pan-y; \}/,
+    "the row claims one axis and leaves the page its own");
+});
+
+test("2.21 — L8: reduced motion gets a static frame, and the gesture still commits", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  assert.match(ui, /"--slide": \(reduce\(\) \? 0 : off\)/, "the travel is withheld, not shrunk");
+  assert.match(ui, /if \(ret && !reduce\(\)\)/, "and so is the return flow's transition");
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.bankrow \{ transform: none !important; \} \}/,
+    "the stylesheet says the same thing, so a JS path that missed it still lands on a static frame");
+  /* the commit test reads the flowed offset, which reduce() never touches: the setting removes the
+     animation, never the ability to act. A reduced-motion user swipes the same distance. */
+  const upFn = /const up = e => \{[\s\S]*?\n  \};/.exec(ui)[0];
+  assert.ok(!/reduce\(\)/.test(upFn), "commit is decided by the material, not by a motion preference");
+});
+
+test("2.21 — --slide is registered where §2a-0 says a tool-local token goes", () => {
+  const fs = require("fs");
+  const spine = fs.readFileSync(path.join(ROOT, "occvm", "SPINE.md"), "utf8");
+  const row = /\*\*Tool-local semantics\*\*[^\n]*/.exec(spine)[0];
+  assert.ok(row.includes("--slide"), "the census must be able to find it in §6b's migration table");
+  assert.ok(!/^\s*--slide\s*:/m.test(fs.readFileSync(path.join(ROOT, "occvm", "spine.css"), "utf8")),
+    "and the spine does not declare it: the spine only reads a surface input");
 });
