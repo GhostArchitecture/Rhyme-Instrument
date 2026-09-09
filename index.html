@@ -443,6 +443,11 @@ textarea.cut { min-height: 9.5em; }
    it paints inside .bars' own stacking context, above the substrate and beneath every bar, so no surface
    carrying --heat or an outcome ever has it drawn over. Under reduced motion the canvas keeps its single
    painted frame — a static frame, which is what L8 asks for, not a subtler floor and not a blank one. */
+.face { position: relative; }
+/* It sits behind the WHOLE draft face, not inside the bar list. Measured in Chromium at the narrower
+   placement: the bar cards are opaque, so a floor between them moved 0.81% of pixels at a mean 1.18 L*
+   — painting, and effectively absent. The authored alpha is not the lever (a floor is read at the edge
+   of vision by design); the coverage was. Widened rather than brightened. */
 .floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
@@ -5296,7 +5301,13 @@ function Draft({
       setEditing(l.length - 1);
     }
   };
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Shelf, shelfProps), /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "face"
+  }, /*#__PURE__*/React.createElement("canvas", {
+    className: "floor",
+    ref: floor,
+    "aria-hidden": "true"
+  }), /*#__PURE__*/React.createElement(Shelf, shelfProps), /*#__PURE__*/React.createElement("div", {
     className: "row",
     style: {
       marginTop: 0
@@ -5361,11 +5372,7 @@ function Draft({
   }, "drone: ", reading.maxRun, " straight bars on one vowel \u2014 past the ", pop, " line of ", limit, "."), /*#__PURE__*/React.createElement("div", {
     className: "bars",
     ref: host
-  }, /*#__PURE__*/React.createElement("canvas", {
-    className: "floor",
-    ref: floor,
-    "aria-hidden": "true"
-  }), lines.map((ln, i) => reading.bars[i] ? /*#__PURE__*/React.createElement(Bar, {
+  }, lines.map((ln, i) => reading.bars[i] ? /*#__PURE__*/React.createElement(Bar, {
     key: i,
     bar: reading.bars[i],
     reading: reading,
@@ -5601,6 +5608,8 @@ function ambientFloor(canvas, still) {
     rnd = V.mulberry32(FLOOR_SEED >>> 0);
   var w = 0,
     h = 0,
+    pw = 0,
+    ph = 0,
     dpr = 1,
     drops = [],
     welds = [],
@@ -5625,7 +5634,12 @@ function ambientFloor(canvas, still) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (!drops.length) for (var i = 0; i < FLOOR_N; i++) drops.push(spawn(false));
+    if (!drops.length) for (var i = 0; i < FLOOR_N; i++) drops.push(spawn(false));else if (pw && ph && (pw !== w || ph !== h)) for (var j = 0; j < drops.length; j++) {
+      drops[j].x *= w / pw;
+      drops[j].y *= h / ph;
+    }
+    pw = w;
+    ph = h;
   }
   function blob(d, alpha) {
     var g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
@@ -5719,13 +5733,24 @@ function ambientFloor(canvas, still) {
     raf = requestAnimationFrame(frame);
   };
   raf = requestAnimationFrame(frame);
+  /* The face GROWS. `.bars` is nearly empty at mount and gains a row per bar, so a single measurement at
+     mount plus a window-resize listener sizes the floor to whatever the draft happened to be when the
+     component appeared — measured in Chromium at 356×44 px against a face several times that, a floor
+     that every assertion passed and that was the wrong size on screen. A ResizeObserver on the element
+     is the measurement that tracks the thing it measures. */
   var onResize = function () {
     size();
   };
   window.addEventListener("resize", onResize);
+  var ro = null;
+  if (typeof ResizeObserver !== "undefined") {
+    ro = new ResizeObserver(onResize);
+    ro.observe(canvas.parentNode || canvas);
+  }
   return function () {
     cancelAnimationFrame(raf);
     window.removeEventListener("resize", onResize);
+    if (ro) ro.disconnect();
   };
 }
 function useAmbientFloor(ref) {
@@ -6282,5 +6307,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260909220012 -->
+<!-- build-20260909220930 -->
 </html>

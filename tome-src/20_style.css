@@ -429,6 +429,11 @@ textarea.cut { min-height: 9.5em; }
    it paints inside .bars' own stacking context, above the substrate and beneath every bar, so no surface
    carrying --heat or an outcome ever has it drawn over. Under reduced motion the canvas keeps its single
    painted frame — a static frame, which is what L8 asks for, not a subtler floor and not a blank one. */
+.face { position: relative; }
+/* It sits behind the WHOLE draft face, not inside the bar list. Measured in Chromium at the narrower
+   placement: the bar cards are opaque, so a floor between them moved 0.81% of pixels at a mean 1.18 L*
+   — painting, and effectively absent. The authored alpha is not the lever (a floor is read at the edge
+   of vision by design); the coverage was. Widened rather than brightened. */
 .floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);

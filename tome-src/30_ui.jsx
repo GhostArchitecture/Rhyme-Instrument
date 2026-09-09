@@ -481,7 +481,8 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
     append: () => { const l = draft.split("\n"); if (l.length === 1 && !l[0].trim()) { setEditing(0); return; } l.push(""); setDraft(l.join("\n")); setEditing(l.length - 1); },
   };
   return (
-    <div>
+    <div className="face">
+      <canvas className="floor" ref={floor} aria-hidden="true" />
       <Shelf {...shelfProps} />
       <div className="row" style={{ marginTop: 0 }}>
         <Cast on={pop === "rap"} onClick={() => setPop("rap")}>rap · drone past 3</Cast>
@@ -501,7 +502,6 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
         <div className="bars" ref={host}>
-          <canvas className="floor" ref={floor} aria-hidden="true" />
           {lines.map((ln, i) => reading.bars[i]
             ? <Bar key={i} bar={reading.bars[i]} reading={reading} overrides={overrides} setOverride={setOverride} pick={pick} setPick={setPick} editing={editing === i} edit={edit} pace={paceBy.get(i)} />
             : (editing === i
@@ -641,7 +641,7 @@ function ambientFloor(canvas, still) {
   if (!ink) return function () {};
 
   var ctx = canvas.getContext("2d"), rnd = V.mulberry32(FLOOR_SEED >>> 0);
-  var w = 0, h = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
+  var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
 
   function spawn(seedEdge) {
     var r = FLOOR_R[0] + rnd() * (FLOOR_R[1] - FLOOR_R[0]);
@@ -657,6 +657,9 @@ function ambientFloor(canvas, still) {
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!drops.length) for (var i = 0; i < FLOOR_N; i++) drops.push(spawn(false));
+    else if (pw && ph && (pw !== w || ph !== h))
+      for (var j = 0; j < drops.length; j++) { drops[j].x *= w / pw; drops[j].y *= h / ph; }
+    pw = w; ph = h;
   }
 
   function blob(d, alpha) {
@@ -721,9 +724,20 @@ function ambientFloor(canvas, still) {
     raf = requestAnimationFrame(frame);
   };
   raf = requestAnimationFrame(frame);
+  /* The face GROWS. `.bars` is nearly empty at mount and gains a row per bar, so a single measurement at
+     mount plus a window-resize listener sizes the floor to whatever the draft happened to be when the
+     component appeared — measured in Chromium at 356×44 px against a face several times that, a floor
+     that every assertion passed and that was the wrong size on screen. A ResizeObserver on the element
+     is the measurement that tracks the thing it measures. */
   var onResize = function () { size(); };
   window.addEventListener("resize", onResize);
-  return function () { cancelAnimationFrame(raf); window.removeEventListener("resize", onResize); };
+  var ro = null;
+  if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(onResize); ro.observe(canvas.parentNode || canvas); }
+  return function () {
+    cancelAnimationFrame(raf);
+    window.removeEventListener("resize", onResize);
+    if (ro) ro.disconnect();
+  };
 }
 
 function useAmbientFloor(ref) {

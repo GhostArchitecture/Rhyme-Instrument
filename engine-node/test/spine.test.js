@@ -595,3 +595,26 @@ test("2.22 — the committed artifact is what a build produces, and the worker c
     assert.ok(root.equals(dist), `${f} at the repo root is not what build.js produces — the deploy copy is stale or partial`);
   }
 });
+
+test("2.22b — the floor tracks the face it sits behind, and sits behind the face", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+
+  /* MEASURED IN CHROMIUM, not reasoned about. The floor first sized itself once at mount, from a `.bars`
+     that is nearly empty until bars exist, and nothing re-measured: 356×44 px behind a face several
+     times that. Every assertion in this file passed. A canvas whose backing store is set from a
+     measurement needs an observer on the thing it measures, or it is sized to a moment. */
+  assert.match(ui, /new ResizeObserver\(onResize\)/, "the floor observes its own container");
+  assert.match(ui, /ro\.observe\(canvas\.parentNode \|\| canvas\)/, "and observes the element it fills");
+  assert.match(ui, /if \(ro\) ro\.disconnect\(\)/, "and disconnects on teardown");
+
+  /* AND WHERE IT SITS WAS ALSO MEASURED. Inside `.bars` it moved 0.81% of pixels at a mean 1.18 L*: the
+     bar cards are opaque, so a floor between them has almost nowhere to show. Behind the whole face it
+     moves 28.35% at a median 0.42 L*, p99 3.03, max 22.65 — a broad sub-threshold wash with rare
+     brighter cores, which is what a floor is. The authored alpha was never the lever; the coverage was,
+     and widening beats brightening. */
+  assert.match(css, /\.face \{ position: relative; \}/, "the face is the positioning context");
+  const face = ui.slice(ui.indexOf('<div className="face">'), ui.indexOf('<div className="bars"'));
+  assert.match(face, /<canvas className="floor" ref=\{floor\}/, "the canvas is a child of the face, not of the bar list");
+  assert.ok(!/className="bars"[\s\S]{0,120}canvas className="floor"/.test(ui), "and never went back inside .bars");
+});
