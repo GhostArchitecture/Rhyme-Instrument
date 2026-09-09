@@ -481,7 +481,7 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
     append: () => { const l = draft.split("\n"); if (l.length === 1 && !l[0].trim()) { setEditing(0); return; } l.push(""); setDraft(l.join("\n")); setEditing(l.length - 1); },
   };
   return (
-    <div className="face">
+    <div className="draftface" style={{ "--pulse": beatPulse.toFixed(3) }}>
       <canvas className="floor" ref={floor} aria-hidden="true" />
       <Shelf {...shelfProps} />
       <div className="row" style={{ marginTop: 0 }}>

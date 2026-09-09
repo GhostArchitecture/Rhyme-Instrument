@@ -613,8 +613,56 @@ test("2.22b — the floor tracks the face it sits behind, and sits behind the fa
      moves 28.35% at a median 0.42 L*, p99 3.03, max 22.65 — a broad sub-threshold wash with rare
      brighter cores, which is what a floor is. The authored alpha was never the lever; the coverage was,
      and widening beats brightening. */
-  assert.match(css, /\.face \{ position: relative; \}/, "the face is the positioning context");
-  const face = ui.slice(ui.indexOf('<div className="face">'), ui.indexOf('<div className="bars"'));
+  assert.match(css, /\.draftface \{ position: relative;/, "the face is the positioning context");
+  const face = ui.slice(ui.indexOf('<div className="draftface"'), ui.indexOf('<div className="bars"'));
   assert.match(face, /<canvas className="floor" ref=\{floor\}/, "the canvas is a child of the face, not of the bar list");
   assert.ok(!/className="bars"[\s\S]{0,120}canvas className="floor"/.test(ui), "and never went back inside .bars");
+});
+
+/* ---- 2.23: Reading B — the whole face carries the beat --------------------------------------- */
+
+test("2.23 — the gate is the actual tempo, never the panel's display fallback", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  /* L13's one clause about gated motion, and the reason Reading A was built the way it was. TempoPanel
+     keeps `tempo || {bpm: 90, ...}` so it can render before a tempo exists; if the pulse read THAT, a
+     draft nobody has set a tempo on would beat at 90 forever. Measured in Chromium: with no tempo the
+     face reads --pulse 0.000 and the wash resolves fully transparent; after one +5 the button reads
+     95 bpm and the pulse peaks at 0.993 on 21 of 120 samples — the hook's 18% strike window. */
+  assert.match(ui, /const beatPulse = useBeatPulse\(tempo\);/, "the hook takes the real tempo");
+  assert.ok(!/useBeatPulse\(\s*t\s*\)/.test(ui), "never the panel's local fallback `t`");
+  const panel = ui.slice(ui.indexOf("function TempoPanel"), ui.indexOf("function Draft"));
+  assert.match(panel, /const t = tempo \|\| \{ bpm: 90/, "the fallback still exists, for rendering only");
+  assert.ok(!/useBeatPulse/.test(panel), "and the panel never drives a motion from it");
+});
+
+test("2.23 — the beat reaches the whole face, under everything, and never a measured surface", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  assert.match(ui, /<div className="draftface" style=\{\{ "--pulse": beatPulse\.toFixed\(3\) \}\}>/,
+    "the face carries the phase");
+  assert.match(css, /\.draftface \{ position: relative;\n\s*background-image: radial-gradient/,
+    "and paints it on its own background, which sits under every in-flow child");
+  assert.match(css, /var\(--pulse, 0\)/, "with a fallback of zero, so a missing phase is a still face");
+
+  /* the orphan, recorded rather than adopted: `.face` is declared and worn by nothing, and an element
+     taking that name would silently inherit `.face + .edge`'s margin */
+  assert.match(css, /^\.face \{ position: relative; \}$/m, "the orphan is still declared");
+  assert.ok(!/className="face"/.test(ui), "and still worn by nothing — D14's shape in tool-local CSS");
+
+  /* a bar carries --heat, a measured value; the beat never reaches one */
+  const barRules = css.split("\n").filter(l => /^\.bar[\s.[{:]/.test(l)).join("\n");
+  assert.ok(barRules.length > 0, "there are bar rules to check");
+  assert.ok(!/--pulse/.test(barRules), "no bar reads the beat");
+});
+
+test("2.23 — L8: reduced motion gets a still face, from both the hook and the stylesheet", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const hook = ui.slice(ui.indexOf("function useBeatPulse"), ui.indexOf("return phase;"));
+  assert.match(hook, /prefers-reduced-motion: reduce/, "the hook checks the setting");
+  assert.match(hook, /if \(reduce\) \{ setPhase\(0\); return; \}/, "and stops rather than slowing");
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.draftface \{ background-image: none; \} \}/,
+    "and the stylesheet says it too, so a missed JS path still lands still");
+  /* measured in Chromium under reducedMotion:"reduce" with a real 95 bpm tempo set: --pulse stayed 0
+     across 120 samples and the resolved background-image was `none` */
 });

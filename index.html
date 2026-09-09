@@ -443,7 +443,32 @@ textarea.cut { min-height: 9.5em; }
    it paints inside .bars' own stacking context, above the substrate and beneath every bar, so no surface
    carrying --heat or an outcome ever has it drawn over. Under reduced motion the canvas keeps its single
    painted frame — a static frame, which is what L8 asks for, not a subtler floor and not a blank one. */
-.face { position: relative; }
+/* READING B (2.23) — the whole face carries the beat, not just the tempo control.
+ *
+ * GATED MOTION, NOT A FLOOR. L13 says gated motion "was never prohibited and needs nothing from here",
+ * and this is gated on a real, actively created state: a tempo set on this draft. One L13 clause does
+ * bind it, and is why Reading A was built the way it was — THE GATE IS THE ACTUAL VALUE, NEVER ITS
+ * DISPLAY FALLBACK. `useBeatPulse` takes `tempo`, not TempoPanel's `tempo || {bpm: 90, ...}`, so a draft
+ * with no tempo has a still face rather than one beating at a default nobody chose.
+ *
+ * WHAT IT CLAIMS, AND WHOSE CALL THAT IS. The tool knows one thing here: a number typed into the tempo
+ * panel. No audio, no clock aligned to any track, and under SPINE.md section 11 the performance is never
+ * its. A pulse on the tempo control claims only "this is the number you set"; a pulse across the whole
+ * face makes a larger claim on the same evidence. Built at full scope BY THE OWNER'S DECISION, recorded
+ * as one — the standard L13 already applies to the floor contradicting the substance, and that every
+ * authored duration in this system carries. It is not a derivation and is not dressed as one.
+ *
+ * The class is `.draftface`, not `.face`: `.face` is declared in the stack section above and worn by
+ * NOTHING, so an element taking that name would silently inherit `.face + .edge`'s margin. The orphan is
+ * recorded rather than adopted — D14's shape, one level down in tool-local CSS.
+ *
+ * It paints on the element's own background, under every in-flow child: no bar, no --heat, no measured
+ * value ever has it drawn over. Reduced motion pins --pulse to 0 in the hook, and the query below says
+ * the same thing in the stylesheet so a missed JS path still lands on a still face. */
+.draftface { position: relative;
+  background-image: radial-gradient(150% 95% at 50% 0%,
+    color-mix(in srgb, var(--mineral) calc(var(--pulse, 0) * 9%), transparent) 0%, transparent 72%); }
+@media (prefers-reduced-motion: reduce) { .draftface { background-image: none; } }
 /* It sits behind the WHOLE draft face, not inside the bar list. Measured in Chromium at the narrower
    placement: the bar cards are opaque, so a floor between them moved 0.81% of pixels at a mean 1.18 L*
    — painting, and effectively absent. The authored alpha is not the lever (a floor is read at the edge
@@ -5302,7 +5327,10 @@ function Draft({
     }
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "face"
+    className: "draftface",
+    style: {
+      "--pulse": beatPulse.toFixed(3)
+    }
   }, /*#__PURE__*/React.createElement("canvas", {
     className: "floor",
     ref: floor,
@@ -6307,5 +6335,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260909220930 -->
+<!-- build-20260909221939 -->
 </html>
