@@ -568,17 +568,30 @@ test("2.22 — the auditor measures the per-tool grant, through the path the run
     "and the identical source in the withheld tool diverges — the split is the law's, not the file's");
 });
 
-test("2.22 — the deployed root copies are byte-identical to the build output", () => {
-  /* The guard the existing stamp check could not be: at 2.21 the suite ran BEFORE `node build.js
-     --stamp`, and the copy that followed refreshed index.html and not sw.js, so that commit shipped a
-     page at build-20260909214145 against a cache named tome-build-20260909212530 — a service worker
-     serving the previous cache under a name the new page no longer matches. Every assertion had passed,
-     because they had all run against the previous state. A stamp check cannot catch that: it reads
-     whatever is on disk when it runs. This one does not depend on ordering — a half-copied artifact is
-     a difference between two files, whenever it is looked at. */
+test("2.22 — the committed artifact is what a build produces, and the worker came with it", () => {
+  /* THE DEFECT. 2.21 shipped an index.html at build-20260909214145 against an sw.js naming
+     tome-build-20260909212530: the suite ran BEFORE `build.js --stamp`, and the copy that followed
+     refreshed the page and not the worker. The stamp assertion above would have caught it — it was not
+     missing, it ran against the previous state. So the hole is ORDERING, and no assertion placed after
+     a stale copy can close it.
+
+     TWO WRONG INSTRUMENTS, BOTH RECORDED. The first compared the repo root against dist/ with nothing
+     guaranteeing dist/ existed; it is not committed, so on a fresh checkout CI failed on the guard
+     rather than on the code — 101 of 102, the one failure mine. The second added `pretest` that built
+     AND copied dist/ over the root. That is worse than useless: it would have LAUNDERED the drift, on
+     CI as well, repairing a stale committed artifact in the working tree and then passing every
+     comparison downstream of it — a gate that repairs what it is meant to detect.
+
+     WHAT IS IN FORCE. `pretest` builds and does not copy, so dist/ always exists and is always fresh;
+     the copy into the repo root stays a deliberate act. Then this comparison is exact and cannot be
+     satisfied by accident: a committed artifact that is not what a build produces fails, whatever order
+     anything ran in. */
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.equal(pkg.scripts.pretest, "node build.js", "pretest builds and must never copy — a gate may not repair its own subject");
+
   for (const f of ["index.html", "sw.js", "manifest.json"]) {
     const root = fs.readFileSync(path.join(ROOT, f));
     const dist = fs.readFileSync(path.join(ROOT, "dist", f));
-    assert.ok(root.equals(dist), `${f} at the repo root differs from dist/${f} — the deploy copy is partial`);
+    assert.ok(root.equals(dist), `${f} at the repo root is not what build.js produces — the deploy copy is stale or partial`);
   }
 });

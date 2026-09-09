@@ -4,7 +4,8 @@
   "description": "No-bundler, browser-only rhyme-writing tool. See tome-src/ for source, build.js to assemble, engine-node/ for the headless-testable engine.",
   "scripts": {
     "build": "node build.js",
-    "test": "node --test"
+    "test": "node --test",
+    "pretest": "node build.js"
   },
   "engines": {
     "node": ">=18"
