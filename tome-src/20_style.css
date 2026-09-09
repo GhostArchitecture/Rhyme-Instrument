@@ -354,7 +354,8 @@ input, textarea { -webkit-appearance: none; appearance: none; }
 .stack.open .edge .name { font-size: 18px; }
 
 /* the open slab */
-.slab { position: relative; padding: var(--pad); margin-bottom: 26px; border-radius: 3px 5px 4px 3px; --thick: 16px; --veins: none;
+.slab {
+  --cut-a: .6; position: relative; padding: var(--pad); margin-bottom: 26px; border-radius: 3px 5px 4px 3px; --thick: 16px; --veins: none;
   background:
     linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
     var(--veins),
@@ -363,9 +364,8 @@ radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
     linear-gradient(180deg, var(--sub-hi), var(--sub) 45%, var(--sub-lo));
   background-blend-mode: screen, normal, normal, normal, normal; background-size: auto, 100% 100%, auto, auto, auto;
   box-shadow:
-    inset calc(var(--lx) * 1.5px) calc(var(--ly) * 1.5px) 0 rgba(255,255,255,var(--hi-a)),
+    var(--occvm-bevel),
     inset calc(var(--lx) * 3px) calc(var(--ly) * 3px) 0 color-mix(in srgb, var(--mineral) 30%, transparent),
-    inset calc(var(--lx) * -2px) calc(var(--ly) * -2px) 0 rgba(0,0,0,.6),
     0 var(--thick) 0 -1px var(--edge), 0 calc(var(--thick) + 1px) 0 -1px rgba(255,255,255,.04),
     calc(var(--lx) * -1 * var(--rake)) calc(var(--ly) * -1 * var(--rake) + var(--thick)) calc(var(--rake) * 1.4) rgba(0,0,0,var(--shade-a)); }
 .slab::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .18;
