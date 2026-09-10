@@ -601,12 +601,28 @@ function Check({ eng }) {
    period it ran before heat existed. Heat is passed through a ref-setter rather than into the effect's
    dependency list, because re-running the effect would tear the canvas down and reseed the field every
    time the writing changed — a floor that reshuffles as you type is not a floor. */
+/* 2.37 — THE GROUND'S OWN WEIGHT, named here rather than left to the part's default. 0.24 was chosen
+   at 2.24 against a SLAB-sized canvas, and on a full page ground it is roughly twice what the sibling
+   carries. The criterion is that the two tools' page grounds carry the field at the same measured
+   weight, because since 2.37 they run the same law on the same kind of surface and a difference would
+   need a reason neither tool has.
+   MEASURED ON ONE INSTRUMENT, both tools, same viewport, same instant, the floor canvas the only thing
+   toggled: the sibling's ground reads 3.440 mean L* over 6.64% of the frame. This tool reads 3.024 at
+   0.10, 3.325 at 0.11 and 3.741 at 0.12 — so 0.11, 3.3% off the sibling against 8.8% the other way.
+   THE FIRST READING OF THIS WAS TAKEN AGAINST A BROKEN PAGE and said 0.12 matched to 0.2%: every slab
+   and the binding had NO BACKGROUND AT ALL (the atan2 defect this release found), so the field showed
+   through the whole frame and the moved region was not the ground. The number moved when the page was
+   repaired; the criterion did not. Coverage stays far apart — 11.5% here against 6.6% there — and that
+   is a property of the two layouts, not of the weight: this tool's column covers much less of its page.
+   The alpha matches the per-pixel weight and is not asked to match the coverage. */
+const GROUND_ALPHA = 0.11;
+
 function useAmbientFloor(ref, still, key, heat) {
   const stopRef = useRef(null);
   useEffect(() => {
     let reduce = false;
     try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
-    stopRef.current = OCCVM_FLOOR.ambientFloor(ref.current, reduce || !!still, heat);
+    stopRef.current = OCCVM_FLOOR.ambientFloor(ref.current, reduce || !!still, heat, { alpha: GROUND_ALPHA });
     return stopRef.current;
   }, [still, key]);
   useEffect(() => { if (stopRef.current && stopRef.current.setHeat) stopRef.current.setHeat(heat); }, [heat]);
@@ -826,9 +842,18 @@ function Tome() {
      it, never decides what it means, and still runs when it is 0. */
   const floorHeat = quick && quick.limit && quick.maxRun > quick.limit
     ? Math.min(1, (quick.maxRun - quick.limit) / Math.max(1, quick.limit)) : 0;
-  useAmbientFloor(floorRef, open !== "draft", open, floorHeat);
+  /* 2.37 — THE FLOOR IS THE PAGE GROUND'S, NOT A SLAB'S. It ran inside whichever slab was open and
+     only moved on the draft face; now it is one fixed layer under the whole page and the slabs are
+     glass over it, which is what the sibling has done since 2.34. `still` is reduced motion alone —
+     the face that happens to be open is no longer a gate, because L13's grant on a page ground is
+     unconditional and the per-face scoping only existed to keep the field off the other slabs.
+     The key is dropped with it: the effect no longer tears down and reseeds when a face opens. */
+  useAmbientFloor(floorRef, false, "ground", floorHeat);
   return (
     <div>
+      {/* mounted AHEAD of the content column, fixed, so no rearrangement inside a slab can carry it
+          into one — the same bound law-audit.js measures on the sibling */}
+      <canvas id="occvm-floor" ref={floorRef} aria-hidden="true" />
       <header className="binding">
         <h1><button type="button" className="occvm-act" onClick={() => setOpen(null)}>rhyme instrument</button></h1>
         {sun && <div className="sun"><b>{sun.time}</b> · sun {sun.elev >= 0 ? sun.elev.toFixed(0) + "°" : "set"} · {sun.dir}</div>}
@@ -837,10 +862,6 @@ function Tome() {
         <div className={"stack" + (open ? " open" : "")}>
           {open && (
             <section key={open} className={"slab rise"} style={{ "--thick": "16px" }}>
-              {/* 2.24 — the globule field is the slab's substrate layer. It MOVES only on the draft face, which
-                  is the whole of L13's grant; every other face gets the same field as a still frame — the
-                  reduced-motion shape, used here as a scope. The vein layer this replaces is retired. */}
-              <canvas className="floor" ref={floorRef} aria-hidden="true" />
               <button type="button" className="head occvm-act" onClick={() => setOpen(null)}><h2>{open}</h2><span className="hint">tap to close</span></button>
               {face(open)}
             </section>

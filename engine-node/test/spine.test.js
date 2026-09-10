@@ -152,17 +152,42 @@ test("2.24 — the vein layer is retired from this tool's slabs; the globule fie
   assert.ok(/var OCCVM_GLOBULES =/.test(eng), "the globule field is the shared part this tool reads");
   assert.ok(!/var OCCVM_VEINS =/.test(eng), "and the vein generator no longer ships here");
   assert.ok(/OCCVM_GLOBULES\.field\(/.test(floorSrc), "the floor takes its drops from the shared field");
-  /* the slab carries the floor, live on the draft face only — L13's grant is the draft face, so every
-     other face gets the same field as a still frame */
-  assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open, floorHeat\);/,
-    "still unless the open face is the draft — L13's grant is the draft face (heat joined at 2.28 step 6)");
-  assert.match(ui, /<section key=\{open\} className=\{"slab rise"\} style=\{\{ "--thick": "16px" \}\}>\s*\{\/\*[\s\S]*?\*\/\}\s*<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/,
-    "the canvas is the slab's first child");
-  assert.match(ui, /OCCVM_FLOOR\.ambientFloor\(ref\.current, reduce \|\| !!still, heat\)/,
-    "reduced motion and off-draft both mean a still frame (heat joined at 2.28 step 6)");
+  /* 2.37 RETIRES THE TWO CLAUSES THAT PINNED THE FLOOR TO A SLAB, and the reason is that the field
+     stopped being a property of the open face and became one of the page. They read
+     `useAmbientFloor(floorRef, open !== "draft", …)` and "the canvas is the slab's first child" —
+     both true of an architecture where the field was drawn INSIDE whichever slab was open, reseeded
+     when a face changed, stopped at that slab's edge, and left every closed face with none. The
+     sibling has drawn it once on the page ground since 2.34; this tool now does the same, so what
+     replaces them is the ground placement and the unconditional grant. */
+  assert.match(ui, /useAmbientFloor\(floorRef, false, "ground", floorHeat\);/,
+    "always live: on a page ground L13's grant is unconditional, and reduced motion is the hook's own job");
+  assert.match(ui, /<canvas id="occvm-floor" ref=\{floorRef\} aria-hidden="true" \/>/,
+    "one fixed canvas, and it is the page ground's");
+  assert.ok(!/className="floor"/.test(ui), "no per-slab copy of the field survives");
+  assert.match(ui, /OCCVM_FLOOR\.ambientFloor\(ref\.current, reduce \|\| !!still, heat, \{ alpha: GROUND_ALPHA \}\)/,
+    "reduced motion still means a still frame — L8 is not repealed by moving the floor (2.37)");
+  /* the weight is the TOOL's, named here rather than left to the part's default, because 0.24 was
+     chosen against a slab-sized canvas and is roughly twice what the sibling carries on a page ground.
+     The criterion is that the two grounds carry the field at the same measured weight, since 2.37 puts
+     both tools on one law and one kind of surface. Measured on one instrument with the floor canvas
+     the only thing toggled: the sibling reads 3.440 mean L*, this tool 3.024 at 0.10, 3.325 at 0.11,
+     3.741 at 0.12. The digit is pinned rather than the sentence because a value chosen by measurement
+     should not be edited without taking the measurement again. */
+  assert.match(ui, /^const GROUND_ALPHA = 0\.11;$/m, "the ground names its own weight");
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   assert.match(css, /\.slab \{\n  --cut-a: \.6; position: relative; isolation: isolate;/, "the slab is its own stacking context");
-  assert.match(css, /\.slab > canvas\.floor \{ position: absolute; z-index: 0; \}/, "so the floor paints above its ground and under its children");
+  /* the clause here pinned `.slab > canvas.floor`, the per-slab canvas, and it is retired with that
+     canvas. What the slab has to be now is the opposite of a container for the field: it has to let
+     the one field through, which is a partial fill plus the frost, gated so that a browser missing
+     either renders the pre-2.37 picture rather than a slab with no substrate at all. */
+  assert.ok(!/canvas\.floor/.test(css), "no rule places a canvas inside a slab any more");
+  const flat = css.replace(/\n\s*/g, " ");
+  assert.match(flat, /\.slab \{[^}]*color-mix\(in srgb, var\(--sub-hi\) var\(--tile-fill\), transparent\)/,
+    "the slab shows the one field through a partial fill");
+  assert.match(flat, /\.slab \{[^}]*backdrop-filter: blur\(var\(--occvm-meniscus\)\)/,
+    "frosted at the substance's own capillary length, the length the isosurface is cut at");
+  assert.match(flat, /@supports \(\(background: color-mix[^{]*backdrop-filter[^{]*\{ \.slab \{/,
+    "and the fill is an enhancement requiring both, never the base declaration");
   assert.ok(!/var\(--veins\)/.test(css), "the vein image is out of the slab's background stack");
 });
 
@@ -614,10 +639,17 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   const body = floorSrc;   /* 2.31: the part IS the body */
 
-  /* a LAYER on the material, never the material deforming at rest: its own canvas, under every bar */
-  assert.match(css, /\.floor \{ position: absolute; inset: 0; z-index: -1;/, "it paints beneath the in-flow bars");
-  assert.match(ui, /<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/, "and it is its own element");
+  /* a LAYER on the material, never the material deforming at rest: its own canvas, under everything.
+     2.37 moves it from inside a slab to the page ground, so the two placement clauses here are
+     restated rather than retired — the property was always "a layer of its own, beneath the content",
+     and it is only the layer's address that changed. `the floor touches no bar` is untouched and
+     matters MORE now: with the slabs translucent, the one surface that must still stop the field is
+     the one carrying --heat. */
+  assert.match(css, /#occvm-floor \{ position: fixed; inset: 0; z-index: 0;/, "it is a fixed layer under the page");
+  assert.match(ui, /<canvas id="occvm-floor" ref=\{floorRef\} aria-hidden="true" \/>/, "and it is its own element");
   assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
+  assert.ok(!/\.bar \{[^}]*backdrop-filter/.test(css.replace(/\n\s*/g, " ")),
+    "and a bar is never glass — a measured value does not get the ground behind it");
 
   /* 2.28 step 6 RETIRES TWO CLAUSES OF THIS GUARD, deliberately, and neither is a loosening of L13 —
      both were STRICTER THAN THE LAW THEY GUARD. L13 says, and said before this floor existed: "a real
@@ -1066,12 +1098,18 @@ test("2.22b — the floor tracks the face it sits behind, and sits behind the fa
      moves 28.35% at a median 0.42 L*, p99 3.03, max 22.65 — a broad sub-threshold wash with rare
      brighter cores, which is what a floor is. The authored alpha was never the lever; the coverage was,
      and widening beats brightening. */
-  /* 2.24 moved it up once more: from the draft face to the SLAB, every face, so the field is the
-     substrate layer the roadmap asked for rather than an underlayer on one face */
-  const slab = ui.slice(ui.indexOf('<section key={open} className={"slab rise"}'), ui.indexOf('<button type="button" className="head occvm-act"'));
-  assert.match(slab, /<canvas className="floor" ref=\{floorRef\}/, "the canvas is the slab's, not the bar list's or the face's");
-  assert.ok(!/className="bars"[\s\S]{0,120}canvas className="floor"/.test(ui), "and never went back inside .bars");
-  assert.ok(!/className="draftface"[\s\S]{0,80}canvas className="floor"/.test(ui), "nor back onto the face alone");
+  /* 2.24 moved it up once more, from the draft face to the SLAB; 2.37 moves it off the slabs entirely.
+     That is the fourth placement in this file's history and every one of them was chosen by measuring
+     what reached the eye — bars 0.81% of pixels, the face 28.35%, the slab, and now the page ground,
+     where the slabs stop hiding it because they became glass instead of walls. The clause that read
+     "the canvas is the slab's" is retired with the architecture; what replaces it is the property
+     that made the move worth making — the field is mounted ONCE, ahead of the content, and no
+     surface paints a second copy. */
+  assert.equal((ui.match(/OCCVM_FLOOR\.ambientFloor\(/g) || []).length, 1, "one floor, one call site");
+  assert.equal((ui.match(/id="occvm-floor"/g) || []).length, 1, "mounted exactly once");
+  assert.ok(ui.indexOf('id="occvm-floor"') < ui.indexOf('className="binding"'),
+    "and ahead of the content column, so no rearrangement inside a slab can carry it into one");
+  assert.ok(!/className="floor"/.test(ui), "no per-slab, per-face or per-bar copy survives");
 });
 
 /* ---- 2.23: Reading B — the whole face carries the beat --------------------------------------- */
@@ -1169,4 +1207,50 @@ test("2.36 — the safe area is read once into a token, so an inset can actually
   assert.match(bare, /padding-top:\s*max\(12px,\s*var\(--safe-top\)\)/, "the binding reads the token");
   assert.match(bare.replace(/\s+/g, " "), /body::after \{[^}]*height: var\(--safe-top\)/,
     "an opaque band exactly the inset tall covers whatever scrolls under the status bar");
+});
+
+test("2.37 — a trig function already returns an angle, and multiplying it by one is a dropped declaration", () => {
+  /* FOUND BY DRIVING THE DEPLOYED BUILD, not by reading the source. `.slab`'s computed
+     background-image was `none` on build-20260910171532, and so were `.binding`'s and
+     `.text .w.override`'s. The cause is one expression written four times:
+
+         linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), …)
+
+     CSS `atan2()` RETURNS AN ANGLE. Multiplying an angle by `1rad` is angle x angle, which is a type
+     error — and because the expression contains var(), it is invalid AT COMPUTED-VALUE TIME, so the
+     property does not fall back to an earlier cascade entry the way a parse error would. It computes
+     to its INITIAL value. `background-image: none`. Silently, on four surfaces, with no console
+     message and every source-text assertion still passing.
+
+     What it cost, on the live build: the open face had NO SUBSTRATE — the globule field ran straight
+     through it and its controls floated on the page ground. That is the "globules read as large
+     discrete blobs on the draft face" the owner reported from a phone at 2.36, which was recorded
+     there as a question of scale. It was not scale. The binding lost its bronze the same way, and
+     `.text .w.override` — `color: transparent` over a `background-clip: text` gradient — painted
+     NOTHING AT ALL, so an override word in a draft was invisible.
+
+     The guard is narrow on purpose and is not the general fix. The general property is "no
+     declaration computes to its initial value by accident", and that is only visible in a browser;
+     the golden recorder is where it belongs and it is not built here. This catches the class that
+     actually shipped: an angle-valued trig function multiplied by a unit. Comments are stripped
+     first — a guard that reads its own prose has now been the bug four releases running. */
+  const raw = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const css = raw.replace(/\/\*[\s\S]*?\*\//g, " ");
+  const ANGLE_FN = /\b(atan2|atan|asin|acos)\s*\(/g;
+  const offenders = [];
+  let m;
+  while ((m = ANGLE_FN.exec(css))) {
+    let i = m.index + m[0].length, depth = 1;
+    while (i < css.length && depth > 0) { if (css[i] === "(") depth++; else if (css[i] === ")") depth--; i++; }
+    const after = css.slice(i, i + 24);
+    if (/^\s*\*\s*[\d.]*\s*(deg|rad|grad|turn)\b/.test(after)) offenders.push(m[1] + "(…)" + after.trim().slice(0, 12));
+  }
+  assert.deepEqual(offenders, [],
+    `${offenders.length} angle-valued trig result(s) multiplied by an angle unit — the whole declaration is dropped: ${offenders.join(", ")}`);
+  /* and the four sites are still there, doing the thing they were written to do: a gradient whose
+     axis is the light's own bearing, turned 90deg, which is what 25_card.js computes in JS as
+     Math.atan2(L.ly, L.lx) + Math.PI / 2. The count is asserted so the repair cannot be undone by
+     deleting the layer instead of fixing it. */
+  const fixed = css.match(/atan2\(var\(--ly\), var\(--lx\)\) \+ 90deg/g) || [];
+  assert.equal(fixed.length, 4, `expected the four light-bearing gradients, found ${fixed.length}`);
 });
