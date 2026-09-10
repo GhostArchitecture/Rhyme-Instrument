@@ -993,8 +993,95 @@ test("2.28 steps 4+5 — the coil decides where, tau0 decides what, driven not r
     "sharing a phase is not enough: two lobes of different radius compute different heights from it");
   assert.ok(!/a\.r = OCCVM_GLOBULES\.merged\(a\.r, b\.r\);[\s\S]{0,80}locked/.test(body),
     "an arrested pair does NOT become one drop: the lobes remain, which is what a frozen dumbbell is");
-  assert.match(body, /p\.merging \|\| q\.merging \|\| p\.locked \|\| q\.locked/,
-    "and a locked pair never welds again — the bridge would have to beat a stress that already stopped it");
+  /* 2.39 — ONE ASSERTION RETIRED HERE, AND RETIRING ONE IS THE MOVE THIS PROJECT DISTRUSTS MOST, SO
+     IT IS NAMED. It read:
+         assert.match(body, /p\.merging \|\| q\.merging \|\| p\.locked \|\| q\.locked/,
+           "and a locked pair never welds again — the bridge would have to beat a stress that
+            already stopped it");
+     The sentence is true of the FROZEN BRIDGE and the code drew it wider than that. A third drop
+     touching the body elsewhere opens a NEW bridge with its own capillary drive γ/R; the arrested
+     one is not in its way. Retired because what it pinned is wrong, not because it was inconvenient,
+     and what replaces it is strictly narrower — the two exclusions that ARE structural. */
+  assert.match(body, /if \(p\.lockedTo \|\| q\.lockedTo\) continue;/,
+    "a follower is an interior lobe, not a free surface a drop can land on");
+  assert.match(body, /if \(p\.locked && q\.locked\) continue;/,
+    "a body accretes a free drop and never another body — the placement is one level deep");
+  assert.match(body, /var lead = q\.locked \? q : p, join = q\.locked \? p : q;/,
+    "and the body leads, or the arrest branch makes an existing leader somebody's follower");
+  assert.ok(!/p\.locked \|\| q\.locked\) continue/.test(body),
+    "the blanket exclusion is gone, not merely supplemented");
+});
+
+test("2.39 — a peanut may rejoin at the coil, and the rigid body stays one level deep", () => {
+  /* Driven, because the failure this replaces was invisible to every regex: the shipped coil fired
+     ten welds on a phone and then stopped forever, with 20 of 37 drops locked out permanently.
+     Read off the canvas, not off the source. */
+  const { sandbox, canvas, frames, made, ops } = loadFloor();
+  sandbox.ambientFloor(canvas, false);
+  let t = 0;
+  for (let i = 0; i < 40000 && frames.length; i++) { t += 90; frames[frames.length - 1](t); }
+
+  /* Every drop is one `arc` per frame. A body of k lobes bonded rigidly holds k−1 constant
+     separations; the shipped ceiling before 2.39 was a PAIR, so a run that ever shows three lobes
+     locked together is the accretion this release opened, and cannot be faked by proximity. */
+  /* 2.33's lesson, and the first draft of THIS guard walked straight into it: the arcs land on the
+     BUFFER, not the display context — the drops are drawn opaque offscreen and the display takes one
+     filtered composite. Reading `ops` here counts zero arcs and the guard reports a field of one
+     lobe from correct code, which is what it did. `made[0]` is the buffer. */
+  const arcsOf = () => { const buf = made.length ? made[0]._ops : ops; const before = buf.length;
+    t += 90; frames[frames.length - 1](t);
+    return buf.slice(before).filter(o => o[0] === "arc").map(o => [o[1], o[2], o[3]]); };
+  const snaps = []; for (let i = 0; i < 6; i++) snaps.push(arcsOf());
+  const n = snaps[0].length;
+  assert.ok(snaps.every(f => f.length === n), "the lobe count is stable across the sampled frames");
+
+  /* group by constant pairwise separation: the observable signature of one rigid object */
+  const sep = (f, i, j) => Math.hypot(f[i][0] - f[j][0], f[i][1] - f[j][1]);
+  const bonded = new Map();
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const s0 = sep(snaps[0], i, j);
+    if (snaps.every(f => Math.abs(sep(f, i, j) - s0) < 1e-6)) {
+      if (!bonded.has(i)) bonded.set(i, new Set([i]));
+      bonded.get(i).add(j);
+      if (bonded.has(j)) for (const m of bonded.get(j)) bonded.get(i).add(m);
+    }
+  }
+  /* AND A RIGID BODY IS RIGID THROUGHOUT, not merely pairwise. Every lobe holds a constant
+     separation from EVERY other lobe of the same body — that is what "a frozen bridge does not
+     stretch" means once a body has more than two lobes, and it is the property a two-level chain
+     breaks: the follower pass makes ONE sweep over `drops`, so a grand-follower placed before its
+     parent reads a stale position and its distance to the leader wanders. Asserted as the physics
+     rather than as the absence of a chain, because the chain is not observable from a canvas.
+     STATED LIMIT, because a guard's reach should not be assumed from its intent: this did NOT bite
+     when the leader ordering was removed. Driven both ways at this field size, the two-level chain
+     that appears then happens to place its grand-follower after its parent in `drops`, so nothing
+     goes stale and every separation stays constant. The ordering is therefore held by the source
+     assertion above and by that alone — a proxy, named as one — and this clause is kept because the
+     rigidity it states is the real physics and would catch the same defect under a different order. */
+  for (const g of bonded.values()) {
+    const idx = [...g];
+    for (let a = 0; a < idx.length; a++) for (let b = a + 1; b < idx.length; b++) {
+      const s0 = sep(snaps[0], idx[a], idx[b]);
+      assert.ok(snaps.every(f => Math.abs(sep(f, idx[a], idx[b]) - s0) < 1e-6),
+        `lobes ${idx[a]} and ${idx[b]} are in one body and their separation moves — the body is not rigid`);
+    }
+  }
+
+  const biggest = Math.max(1, ...[...bonded.values()].map(g => g.size));
+  assert.ok(biggest >= 3,
+    `a body reached ${biggest} lobes; before 2.39 the ceiling was 2, because a locked lobe was ` +
+    "excluded from every future weld — so anything above 2 IS the peanut rejoining");
+
+  /* AND THE VESSEL STILL HOLDS. A body with more lobes has wider extents, and 2.38's containment
+     clamps the BODY rather than the lobe — so more lobes is exactly the case that could break it.
+     Driven over the same run: no rim past the glass, at all, ever. */
+  const w = canvas.getBoundingClientRect().width;
+  let over = 0, worst = 0;
+  for (const f of snaps) for (const [x, , r] of f) {
+    const o = Math.max(0, r - x, (x + r) - w);
+    if (o > 1e-3) { over++; worst = Math.max(worst, o); }
+  }
+  assert.equal(over, 0, `containment survives accretion — worst overhang ${worst.toFixed(3)} px`);
 });
 
 test("2.28 step 5 — the arrested bridge height follows the Bingham number, with the right limits", () => {
