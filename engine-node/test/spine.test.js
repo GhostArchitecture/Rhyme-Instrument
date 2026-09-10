@@ -501,15 +501,17 @@ function loadFloor(over) {
   const ctx2d = new Proxy({}, {
     get(t, k) {
       if (k === "createRadialGradient") return () => ({ addColorStop() {} });
-      if (k === "setTransform" || k === "clearRect" || k === "beginPath" || k === "arc" ||
-          k === "fill" || k === "moveTo" || k === "lineTo" || k === "closePath")
-        return (...a) => ops.push([k, ...a]);
+      /* 2.33 — record EVERY operation, not a whitelist. The whitelist predated the buffer and had no
+         drawImage in it, so the moment the filtered path actually ran here it threw "drawImage is not
+         a function" — a harness shaping the code's behaviour instead of observing it. */
+      if (typeof k === "string" && !(k in t)) return (...a) => { ops.push([k, ...a]); };
       return t[k];
     },
     set(t, k, v) { ops.push(["set:" + String(k), v]); t[k] = v; return true; }
   });
   const canvas = { width: 0, height: 0, getContext: () => ctx2d, getBoundingClientRect: () => ({ width: 320, height: 480 }) };
   const frames = [];
+  const made = [];
   const sandbox = {
     Math, performance: { now: () => 0 },
     OCCVM_GLOBULES: require(path.join(ROOT, "occvm", "globules.js")),
@@ -518,7 +520,34 @@ function loadFloor(over) {
        be testing the degradation rather than the code. */
     OCCVM_RHEOLOGY: require(path.join(ROOT, "occvm", "rheology.js")),
     getComputedStyle: () => ({ getPropertyValue: k => (over && k in over ? over[k] : (k === "--vein-hi" ? "#c9a6ff" : k === "--vein-lo" ? "#5a36a8" : "")) }),
-    document: { documentElement: {} },
+    /* 2.33 — the sandbox now carries createElement, getElementById and a body, because without them
+       the floor's filtered path could not run AT ALL here: buf creation threw inside its own
+       try/catch, `filtered` fell to false, and every assertion about the metaball path was a regex
+       over source text while the harness drove the unthresholded fallback. A guard that cannot reach
+       the branch it guards is 2.22's "verified against its fixture instead of its call path" again.
+       Each canvas gets its OWN recording context, so the buffer and the display can be told apart. */
+    document: {
+      documentElement: {},
+      getElementById: () => null,
+      body: { appendChild() {} },
+      createElement: (tag) => {
+        if (String(tag).toLowerCase() !== "canvas")
+          return { setAttribute() {}, style: {}, set innerHTML(v) {}, appendChild() {} };
+        const own = [];
+        const c2 = new Proxy({}, {
+          get(t, k) {
+            if (k === "_ops") return own;
+            if (k === "createRadialGradient") return () => ({ addColorStop() {} });
+            if (typeof k === "string") return (...a) => own.push([k, ...a]);
+            return t[k];
+          },
+          set(t, k, v) { own.push(["set:" + String(k), v]); t[k] = v; return true; }
+        });
+        const cv2 = { width: 0, height: 0, getContext: () => c2, _ops: own };
+        made.push(cv2);
+        return cv2;
+      },
+    },
     window: { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {} },
     requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
     cancelAnimationFrame() {}
@@ -531,7 +560,7 @@ function loadFloor(over) {
   sandbox.ambientFloor = sandbox.OCCVM_FLOOR.ambientFloor;
   sandbox.cyclePos = sandbox.OCCVM_FLOOR.cyclePos;
   sandbox.bridgeRadius = sandbox.OCCVM_FLOOR.bridgeRadius;
-  return { sandbox, canvas, ops, frames };
+  return { sandbox, canvas, ops, frames, made };
 }
 
 test("2.22 — P-3: the bridge grows LINEARLY in time, which is the viscous law and not the inertial one", () => {
@@ -572,7 +601,10 @@ test("2.22 — L8: reduced motion gets one painted frame and no animation at all
   const still = loadFloor();
   const stop = still.sandbox.ambientFloor(still.canvas, true);
   assert.equal(still.frames.length, 0, "reduced motion requests no frame: a static frame, not a slower floor");
-  assert.ok(still.ops.some(o => o[0] === "arc"), "and it is a frame, not a blank canvas");
+  assert.ok((still.made.length ? still.made[0]._ops : still.ops).some(o => o[0] === "arc"),
+    "and it is a frame, not a blank canvas");
+  assert.ok(still.ops.some(o => o[0] === "drawImage"),
+    "and the frame reached the display through one filtered composite");
   assert.equal(typeof stop, "function");
 });
 
@@ -683,11 +715,53 @@ test("2.28 — the metaball floor: one filter, and the weight outside it", () =>
      already had in its <g opacity>. Both halves pinned, so neither can drift back. */
   assert.match(body, /blob\(bctx, drops\[i\], 1\)/,
     "the field is drawn OPAQUE through the filter — anything less is below the iso-level and vanishes");
-  assert.match(body, /ctx\.globalAlpha = alpha;[\s\S]{0,200}ctx\.drawImage\(buf, 0, 0\)/,
-    "and the weight is applied to the composited buffer, after the threshold");
   assert.ok(!/bctx\.globalAlpha = alpha/.test(body),
     "the buffer must never carry the weight: that is the erasure");
   assert.ok(G.ISO === 0.5, "Blinn's half-density surface, which is what makes 0.24 fatal and 1 correct");
+
+  /* 2.33 — DRIVEN, because the regex that used to sit here pinned a SHAPE and the shape was wrong.
+     `ctx.filter` filters every DRAWING OPERATION separately, so N fills through a set filter is N
+     independent blur-and-threshold passes composited afterwards. That is not a metaball field: fields
+     cannot add if each is thresholded before the addition. Measured in Chromium on two r=24 discs,
+     alpha at the midpoint between them:
+
+         gap        0px   2px   4px   6px   8px
+         per draw     0     0     0     0     0      <- what shipped from 2.28
+         one pass   255   255   255   255     0      <- and what BTC's still SVG always did
+
+     The canvas NEVER joined, at any separation, including touching. 2.28 wrote that "two approaching
+     drops join with no merge code at all" and that one gooFilter "serves BTC's still data-URI SVG and
+     Rhyme's live canvas ... so the live floor and every still frame cut at the same level". The first
+     was false and the second was false; an SVG <g filter> wraps the RENDERED GROUP, which is the summed
+     field by construction, so only the canvas was wrong. Fixed by filtering the composite, which is
+     also 3,278x cheaper — 196.67 ms/frame against 0.06 for the unfiltered pass at 390x844 with 37
+     drops, and the page went 5.0 fps to 54.
+     Pinned as counts off the driven op streams rather than as source text, so the shape may change
+     again and the property cannot. */
+  {
+    const F = loadFloor();
+    F.sandbox.OCCVM_FLOOR.ambientFloor(F.canvas, true, 0, { alpha: 0.24 });
+    const buf = F.made[0] && F.made[0]._ops, iso = F.made[1] && F.made[1]._ops;
+    assert.ok(buf && iso, "the filtered path ran: a buffer and an isosurface canvas were made");
+    const arcs = buf.filter(o => o[0] === "arc").length;
+    assert.ok(arcs > 2, `the drops are drawn to the buffer (${arcs} arcs)`);
+    const bufFilters = buf.filter(o => o[0] === "set:filter" && /url\(#/.test(String(o[1]))).length;
+    assert.equal(bufFilters, 0, "the buffer draws the field with NO filter set — it is the summed field");
+    const isoFilters = iso.filter(o => o[0] === "set:filter" && /url\(#/.test(String(o[1]))).length;
+    assert.equal(isoFilters, 1,
+      "and the filter runs exactly ONCE, over that whole field — not once per drop, which never joins");
+    assert.ok(iso.some(o => o[0] === "drawImage"), "the one filtered operation is the composite itself");
+    /* the weight lands on the DISPLAY, after the threshold. Reading the spec instead of driving it got
+       this wrong while writing this very change: globalAlpha on a filtered drawImage applies BEFORE
+       the filter, which re-created 2.28's erasure exactly — one r=25 drop at alpha 0.2 gave max alpha
+       0 over 0 non-zero pixels. Hence two buffers. Measured after: 51 over 1,804, which is 0.2 of 255
+       over identical coverage. */
+    const wIdx = F.ops.findIndex(o => o[0] === "set:globalAlpha" && o[1] === 0.24);
+    const dIdx = F.ops.findIndex(o => o[0] === "drawImage");
+    assert.ok(wIdx >= 0 && dIdx > wIdx, "the display sets the weight and then composites the isosurface");
+    assert.equal(iso.filter(o => o[0] === "set:globalAlpha" && o[1] !== 1).length, 0,
+      "and the isosurface canvas never carries a weight of its own");
+  }
 
   /* ONE FILTER DEFINITION for the live canvas and every still frame */
   assert.match(body, /OCCVM_GLOBULES\.gooFilter\(\{ id: id \}\)/,
@@ -800,7 +874,7 @@ test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the
 
 test("2.28 steps 4+5 — the coil decides where, tau0 decides what, driven not read", () => {
   const G = require(path.join(ROOT, "occvm", "globules.js"));
-  const { sandbox, canvas, frames, ops } = loadFloor();
+  const { sandbox, canvas, frames, ops, made } = loadFloor();
   sandbox.ambientFloor(canvas, false);
 
   /* pump the SHIPPED floor through many cycles. The period is ~2h/1.4 s on a 480px face, so a real
@@ -817,9 +891,15 @@ test("2.28 steps 4+5 — the coil decides where, tau0 decides what, driven not r
      drops that merely passed near each other. Sampled over the last few frames of the run. */
   const framesOfArcs = [];
   for (let k = 0; k < 6; k++) {
-    const before = ops.length;
+    /* 2.33 — the arcs land on the BUFFER, not the display context: the drops are drawn opaque to an
+       offscreen canvas and the display takes one filtered composite. Reading `ops` here counted zero
+       arcs the moment the filtered path became reachable, which is the same class as the whitelist
+       above — the guard was reading the canvas the code stopped drawing on. `made[0]` is the buffer,
+       created on the first paint. */
+    const bufOps = made.length ? made[0]._ops : ops;
+    const before = bufOps.length;
     t += 90; frames[frames.length - 1](t);
-    framesOfArcs.push(ops.slice(before).filter(o => o[0] === "arc").map(o => ({ x: o[1], y: o[2], r: o[3] })));
+    framesOfArcs.push(bufOps.slice(before).filter(o => o[0] === "arc").map(o => ({ x: o[1], y: o[2], r: o[3] })));
   }
   const n0 = framesOfArcs[0].length;
   assert.ok(n0 > 3, `the field is populated (${n0} drops)`);
