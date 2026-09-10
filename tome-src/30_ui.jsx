@@ -656,6 +656,29 @@ function ambientFloor(canvas, still) {
   })();
   if (!ink) return function () {};
 
+  /* 2.28 — METABALL RENDERING, the build plan's own first recommendation and the same threshold BTC's
+     still frame uses. `OCCVM_GLOBULES.gooFilter` is the one definition; here it goes into a hidden
+     <svg> in the document and the canvas names it, so the live floor and every still slab cut their
+     isosurface at the same level. What it buys is not the silhouette — it is that overlapping fields
+     ADD, so two approaching drops join with no merge code at all. The explicit bridge quad this
+     replaced was geometry standing in for physics, and worse, it could only ever draw a merge that
+     completes; a field-based join is arrested by stopping the approach, which is the only way the
+     frozen dumbbell of the plan's §2 can be rendered without a second special case. */
+  var gooId = (function () {
+    try {
+      var id = "occvm-goo";
+      if (!document.getElementById(id)) {
+        var host = document.createElement("div");
+        host.setAttribute("aria-hidden", "true");
+        host.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
+        host.innerHTML = "<svg xmlns='http://www.w3.org/2000/svg'><defs>" +
+          OCCVM_GLOBULES.gooFilter({ id: id }) + "</defs></svg>";
+        document.body.appendChild(host);
+      }
+      return id;
+    } catch (e) { return null; }
+  })();
+
   var ctx = canvas.getContext("2d"), fld = null;
   var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
 
@@ -674,21 +697,11 @@ function ambientFloor(canvas, still) {
     pw = w; ph = h;
   }
 
-  function blob(d, alpha) {
-    var g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
+  function blob(c2, d, alpha) {
+    var g = c2.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
     g.addColorStop(0, ink[0]); g.addColorStop(1, ink[1]);
-    ctx.globalAlpha = alpha; ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
-  }
-
-  /* the bridge: a band between two centres whose half-width is the bridge radius, growing linearly */
-  function bridge(a, b, rb) {
-    var dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
-    ctx.globalAlpha = FLOOR_ALPHA; ctx.fillStyle = ink[1];
-    ctx.beginPath();
-    ctx.moveTo(a.x + nx * rb, a.y + ny * rb); ctx.lineTo(b.x + nx * rb, b.y + ny * rb);
-    ctx.lineTo(b.x - nx * rb, b.y - ny * rb); ctx.lineTo(a.x - nx * rb, a.y - ny * rb);
-    ctx.closePath(); ctx.fill();
+    c2.globalAlpha = alpha; c2.fillStyle = g;
+    c2.beginPath(); c2.arc(d.x, d.y, d.r, 0, Math.PI * 2); c2.fill();
   }
 
   function step(dt) {
@@ -703,9 +716,14 @@ function ambientFloor(canvas, still) {
       var wd = welds[i];
       wd.t += dt; wd.rb = bridgeRadius(wd.t);              /* r ∝ t — the derived half */
       if (wd.rb >= wd.target) {
-        var a = wd.a, b = wd.b, m = a.r * a.r + b.r * b.r;  /* area conserved through the merge */
-        a.x = (a.x * a.r * a.r + b.x * b.r * b.r) / m; a.y = (a.y * a.r * a.r + b.y * b.r * b.r) / m;
-        a.r = Math.sqrt(m); a.merging = false; b.gone = true;
+        /* 2.28 — the conservation convention is the SHARED part's, not this file's. It shipped here as
+           area (r² = r₁² + r₂²); occvm/globules.js decides volume (r³ = r₁³ + r₂³) and records why, and
+           the arrest boundaries are computed against that choice, so two conventions would put the
+           renderer and the physics on different drops. Centres weight by the same power. */
+        var a = wd.a, b = wd.b, P = OCCVM_GLOBULES.MERGE_POWER;
+        var wa = Math.pow(a.r, P), wb = Math.pow(b.r, P), m = wa + wb;
+        a.x = (a.x * wa + b.x * wb) / m; a.y = (a.y * wa + b.y * wb) / m;
+        a.r = OCCVM_GLOBULES.merged(a.r, b.r); a.merging = false; b.gone = true;
         welds.splice(i--, 1);
         drops = drops.filter(function (x) { return !x.gone; });
         while (drops.length < count()) drops.push(spawn(true));
@@ -720,10 +738,42 @@ function ambientFloor(canvas, still) {
     }
   }
 
+  /* THE WEIGHT GOES OUTSIDE THE FILTER, and getting that wrong erases the floor completely.
+     The isosurface cuts at alpha 0.5 (Blinn). Drawing the blobs AT `FLOOR_ALPHA` = 0.24 puts the whole
+     field below the cut, so the threshold deletes it: measured in Chromium on a 25 px disc, filtered at
+     alpha 0.24 gives max alpha 0 over 0 non-zero pixels, against 255 over 1,804 at alpha 1. The first
+     version of this shipped that way and the screenshot did not show it — the slab it was measured on
+     has the floor behind opaque controls, so "looks the same" and "is gone" were the same picture.
+     Caught by probing the pixels rather than by looking.
+     BTC's still frame never had the bug because its `<g opacity>` wraps the FILTERED group; the canvas
+     needs the same shape, so the field is drawn opaque on an offscreen buffer, thresholded there, and
+     composited at the weight. One extra canvas, no extra field. */
+  var buf = null, bctx = null;
   function paint() {
     ctx.clearRect(0, 0, w, h);
-    for (var i = 0; i < welds.length; i++) bridge(welds[i].a, welds[i].b, welds[i].rb);
-    for (i = 0; i < drops.length; i++) blob(drops[i], FLOOR_ALPHA);
+    var i, filtered = false;
+    if (gooId) {
+      try {
+        if (!buf) { buf = document.createElement("canvas"); bctx = buf.getContext("2d"); }
+        if (buf.width !== canvas.width || buf.height !== canvas.height) { buf.width = canvas.width; buf.height = canvas.height; }
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        bctx.clearRect(0, 0, w, h);
+        bctx.filter = "url(#" + gooId + ")";
+        filtered = bctx.filter !== "none";
+      } catch (e) { filtered = false; }
+    }
+    if (filtered) {
+      for (i = 0; i < drops.length; i++) blob(bctx, drops[i], 1);
+      bctx.filter = "none"; bctx.globalAlpha = 1;
+      ctx.globalAlpha = FLOOR_ALPHA;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(buf, 0, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else {
+      /* no SVG-filter support on a 2D context: the unthresholded field, which is what shipped at 2.25.
+         A degradation, never a blank — the same rule L8 applies to reduced motion. */
+      for (i = 0; i < drops.length; i++) blob(ctx, drops[i], FLOOR_ALPHA);
+    }
     ctx.globalAlpha = 1;
   }
 

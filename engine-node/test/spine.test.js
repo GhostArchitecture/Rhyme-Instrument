@@ -572,6 +572,70 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
   assert.match(ui, /return ambientFloor\(ref\.current, reduce \|\| !!still\);/, "the only inputs are the canvas and a stillness that is never a measured value");
 });
 
+test("2.28 — the metaball floor: one filter, and the weight outside it", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+
+  /* THE DEFECT THIS RELEASE SHIPPED AND CAUGHT. The isosurface cuts at alpha 0.5 (Blinn), so drawing
+     the field AT the display weight of 0.24 puts all of it under the cut and the filter deletes it —
+     measured in Chromium on a 25px disc: filtered at alpha 0.24 gives max alpha 0 over 0 non-zero
+     pixels, against 255 over 1,804 at alpha 1. The screenshot did not show it, because on the slab it
+     was taken from the floor sits behind opaque controls: "looks the same" and "is gone" were the same
+     picture. The weight must composite OUTSIDE the filtered buffer, which is the shape BTC's still SVG
+     already had in its <g opacity>. Both halves pinned, so neither can drift back. */
+  assert.match(body, /blob\(bctx, drops\[i\], 1\)/,
+    "the field is drawn OPAQUE through the filter — anything less is below the iso-level and vanishes");
+  assert.match(body, /ctx\.globalAlpha = FLOOR_ALPHA;[\s\S]{0,200}ctx\.drawImage\(buf, 0, 0\)/,
+    "and the weight is applied to the composited buffer, after the threshold");
+  assert.ok(!/bctx\.globalAlpha = FLOOR_ALPHA/.test(body),
+    "the buffer must never carry the weight: that is the erasure");
+  assert.ok(G.ISO === 0.5, "Blinn's half-density surface, which is what makes 0.24 fatal and 1 correct");
+
+  /* ONE FILTER DEFINITION for the live canvas and every still frame */
+  assert.match(body, /OCCVM_GLOBULES\.gooFilter\(\{ id: id \}\)/,
+    "the filter comes from the shared part, not from markup typed here");
+  assert.match(body, /ctx\.filter = "url\(#" \+ gooId|bctx\.filter = "url\(#" \+ gooId/,
+    "and the canvas names that same filter");
+
+  /* THE BRIDGE QUAD IS GONE, and that is the point of the technique rather than a tidy-up: overlapping
+     fields add, so a join renders with no geometry standing in for physics — and an ARRESTED join is
+     rendered by stopping the approach, which an explicit bridge could never express. */
+  assert.ok(!/function bridge\(/.test(ui), "no hand-drawn bridge survives");
+  assert.ok(!/bridge\(welds\[i\]/.test(body), "and nothing calls one");
+
+  /* A DEGRADATION, NEVER A BLANK — the same rule L8 applies to reduced motion. */
+  assert.match(body, /blob\(ctx, drops\[i\], FLOOR_ALPHA\)/,
+    "without SVG-filter support on a 2D context the unthresholded 2.25 field still paints");
+
+  /* merge conservation has ONE owner and it is not this file */
+  assert.match(body, /OCCVM_GLOBULES\.merged\(a\.r, b\.r\)/, "the radius comes from the shared convention");
+  assert.match(body, /OCCVM_GLOBULES\.MERGE_POWER/, "and the centre weights by the same power");
+  assert.ok(!/Math\.sqrt\(m\)/.test(body), "the old area convention is gone rather than left beside it");
+  assert.equal(G.MERGE_POWER, 3, "volume, decided and recorded in occvm/globules.js");
+});
+
+test("2.28 — the arrest model: two lengths, three regimes, and the substance picks", () => {
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  const L = G.arrestLengths();
+  /* γ/τ₀ IS the capillary length, because 2.10 fixed τ₀ by the puddle-height identity. Asserted from
+     the formulas so it survives a change to γ or ρ. */
+  assert.ok(Math.abs(L.complete - R.radiusPx(R.SUBSTANCE)) < 0.01, "γ/τ₀ = √(γ/ρg), by construction");
+  assert.equal(R.SUBSTANCE.tau0Dynamic, 4.41, "the dynamic intercept is a constant, not a comment");
+  assert.ok(L.joined > L.complete, "static and dynamic bracket rather than compete");
+  assert.equal(G.arrestRegime(2, 2), "completes");
+  assert.equal(G.arrestRegime(9, 9), "dumbbell");
+  assert.equal(G.arrestRegime(30, 30), "joined");
+  /* the shipped band produces no completed merge at all, and the band was not moved to fake one */
+  const rnd = G.mulberry32(20260910); let c = 0;
+  for (let i = 0; i < 20000; i++)
+    if (G.arrestRegime(G.R[0] + rnd() * (G.R[1] - G.R[0]), G.R[0] + rnd() * (G.R[1] - G.R[0])) === "completes") c++;
+  assert.equal(c, 0, "a merged radius never beats its larger parent, so the band cannot reach completion");
+  assert.deepEqual(G.R, [9, 30], "and the band stays where 2.25 measured it");
+});
+
 test("2.22 — the auditor measures the per-tool grant, through the path the runner uses", () => {
   const LA = require(path.join(ROOT, "occvm", "tools", "law-audit.js"));
   const L13 = LA.LAWS.find(l => l.id === "L13");
