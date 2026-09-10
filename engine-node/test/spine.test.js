@@ -645,7 +645,18 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
      and it is only the layer's address that changed. `the floor touches no bar` is untouched and
      matters MORE now: with the slabs translucent, the one surface that must still stop the field is
      the one carrying --heat. */
-  assert.match(css, /#occvm-floor \{ position: fixed; inset: 0; z-index: 0;/, "it is a fixed layer under the page");
+  /* 2.38 restates this once more, and again it is the address rather than the property. `inset: 0`
+     said "the whole viewport", which made the vessel's wall a description instead of an edge: the
+     part bounds every drop to the canvas it is handed, so on any screen wider than the column the
+     field ran past #root on both sides, contained by nothing. Invisible at phone width, where the
+     column fills the viewport and the two coincide. What is asserted now is what actually matters —
+     fixed, beneath the content, and EXACTLY AS WIDE AS THE COLUMN, from the one token both read. */
+  assert.match(css, /#occvm-floor \{ position: fixed; top: 0; bottom: 0;/, "it is a fixed layer under the page");
+  assert.match(css, /#occvm-floor[^}]*width: min\(100%, var\(--column\)\)/,
+    "and it is the vessel: the canvas spans the column, so the wall is a real edge");
+  assert.match(css, /#root \{ max-width: var\(--column\)/,
+    "the column reads the same token, so the glass and the layout cannot drift apart (L3)");
+  assert.equal((css.match(/--column: \d+px/g) || []).length, 1, "and the width has exactly one owner");
   assert.match(ui, /<canvas id="occvm-floor" ref=\{floorRef\} aria-hidden="true" \/>/, "and it is its own element");
   assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
   assert.ok(!/\.bar \{[^}]*backdrop-filter/.test(css.replace(/\n\s*/g, " ")),
@@ -1253,4 +1264,38 @@ test("2.37 — a trig function already returns an angle, and multiplying it by o
      deleting the layer instead of fixing it. */
   const fixed = css.match(/atan2\(var\(--ly\), var\(--lx\)\) \+ 90deg/g) || [];
   assert.equal(fixed.length, 4, `expected the four light-bearing gradients, found ${fixed.length}`);
+});
+
+test("2.38 — the shared parts are copied between the repositories by hand, and now that is checked", () => {
+  /* occvm/ is the spine, and L3 says one fact has one owner. A part carried in two repositories is
+     one fact written twice the moment the copies differ, and until 2.38 nothing compared them —
+     while every other duplication in this system had a gate: SPINE.md byte-identical, the React
+     vendor byte-identical to the sibling's, all three splicers re-splice-and-diff.
+     IT WAS ALREADY DRIFTING. `glass.js` here was the PRE-CORRECTION copy, authoring `#ffffff` as the
+     rim colour, where the sibling resolves `--bone` at call time and paints nothing without it. That
+     correction is written up in the sibling's 2.32 entry as done; it landed there and never arrived
+     here, in two commits sharing a message. It stayed invisible because glass.js is spliced nowhere
+     in this tool, so no measure ever read it — and a dormant divergence is still one.
+     THIS GUARD ONLY FIRES WHERE BOTH REPOSITORIES ARE CHECKED OUT, which is a development machine
+     and not CI: each repo's runner clones one. It is named rather than implied, because a guard that
+     silently never runs is worse than no guard. The mirror of this lives in the sibling's
+     test/occvm.js, so whichever side somebody is working from carries the same check. */
+  const there = path.join(ROOT, "..", "Btc-terminal", "occvm");
+  if (!fs.existsSync(there)) {
+    console.log("  skipped (not passed): the sibling repository is absent, so part parity is unchecked");
+    return;
+  }
+  const here = path.join(ROOT, "occvm");
+  /* the sibling's alone by design: the numeric face ships only where mono is rendered (1.3). */
+  const SIBLING_ONLY = ["mono.css", "mono.head.css"];
+  const pick = d => fs.readdirSync(d).filter(f => /\.(js|css)$/.test(f));
+  const mine = pick(here), theirs = new Set(pick(there));
+  const shared = mine.filter(f => theirs.has(f));
+  assert.ok(shared.length >= 8, `there is a real set to compare (${shared.length} shared parts)`);
+  const drifted = shared.filter(f =>
+    !fs.readFileSync(path.join(here, f)).equals(fs.readFileSync(path.join(there, f))));
+  assert.deepEqual(drifted, [], `shared parts must be byte-identical in both repositories: ${drifted.join(", ")}`);
+  /* and nothing this tool carries may go missing from the sibling except the named exceptions */
+  const orphan = mine.filter(f => !theirs.has(f) && SIBLING_ONLY.indexOf(f) < 0);
+  assert.deepEqual(orphan, [], `parts here that the sibling lacks: ${orphan.join(", ")}`);
 });

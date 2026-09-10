@@ -152,9 +152,22 @@
 
   /* the two edges of one box, as a CSS gradient a surface can wear. One definition, so the reference
      surface and any tool that later adopts it cut the same profile. */
+  /* THE COLOUR IS THE LIGHT'S, NOT THE VESSEL'S, and it is resolved rather than authored. 2.4's
+     finding: a specular return on a dielectric carries the SOURCE's colour, which is why 2.11's
+     bevel highlight goes warm bone to white. So the rim is the system's own ink lightened toward the
+     source, read from `--bone` at call time — and if that token does not resolve the rim paints
+     NOTHING rather than an invented white. That is L6's rule applied to a highlight, and it is the
+     same refusal floor.js makes when the palette is absent. */
+  function rimColor() {
+    try {
+      var v = (getComputedStyle(document.documentElement).getPropertyValue("--bone") || "").trim();
+      return /^#[0-9a-f]{3,6}$/i.test(v) ? v : null;
+    } catch (e) { return null; }
+  }
   function rimGradient(o) {
     o = o || {};
-    var col = o.color || "#ffffff", gain = typeof o.gain === "number" ? o.gain : 1;
+    var col = o.color || rimColor(), gain = typeof o.gain === "number" ? o.gain : 1;
+    if (!col) return "none";
     var s = rimStops(o.tol), parts = [], i;
     for (i = s.length - 1; i >= 0; i--) parts.push(rgba(col, s[i].a * gain) + " " + pct(s[i].x));
     for (i = 1; i < s.length; i++) parts.push(rgba(col, s[i].a * gain) + " " + pct(1 - s[i].x));
@@ -174,7 +187,7 @@
     inner: inner,
     U_RIM: U_RIM, U_MAX: U_MAX, ALPHA_TOL: ALPHA_TOL,
     rimBandFraction: rimBandFraction, shiftRangePx: shiftRangePx, floorPx: floorPx,
-    rimStops: rimStops, rimGradient: rimGradient,
+    rimStops: rimStops, rimGradient: rimGradient, rimColor: rimColor,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 if (typeof module !== "undefined" && module.exports) module.exports = OCCVM_GLASS;
