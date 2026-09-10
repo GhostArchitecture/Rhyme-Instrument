@@ -645,7 +645,18 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
      and it is only the layer's address that changed. `the floor touches no bar` is untouched and
      matters MORE now: with the slabs translucent, the one surface that must still stop the field is
      the one carrying --heat. */
-  assert.match(css, /#occvm-floor \{ position: fixed; inset: 0; z-index: 0;/, "it is a fixed layer under the page");
+  /* 2.38 restates this once more, and again it is the address rather than the property. `inset: 0`
+     said "the whole viewport", which made the vessel's wall a description instead of an edge: the
+     part bounds every drop to the canvas it is handed, so on any screen wider than the column the
+     field ran past #root on both sides, contained by nothing. Invisible at phone width, where the
+     column fills the viewport and the two coincide. What is asserted now is what actually matters —
+     fixed, beneath the content, and EXACTLY AS WIDE AS THE COLUMN, from the one token both read. */
+  assert.match(css, /#occvm-floor \{ position: fixed; top: 0; bottom: 0;/, "it is a fixed layer under the page");
+  assert.match(css, /#occvm-floor[^}]*width: min\(100%, var\(--column\)\)/,
+    "and it is the vessel: the canvas spans the column, so the wall is a real edge");
+  assert.match(css, /#root \{ max-width: var\(--column\)/,
+    "the column reads the same token, so the glass and the layout cannot drift apart (L3)");
+  assert.equal((css.match(/--column: \d+px/g) || []).length, 1, "and the width has exactly one owner");
   assert.match(ui, /<canvas id="occvm-floor" ref=\{floorRef\} aria-hidden="true" \/>/, "and it is its own element");
   assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
   assert.ok(!/\.bar \{[^}]*backdrop-filter/.test(css.replace(/\n\s*/g, " ")),

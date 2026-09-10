@@ -326,6 +326,8 @@
      viewport collided with the system clock on a real phone. */
   /* 2.37 — how much of a slab's own substrate survives; the rest is the page ground behind it, seen
      through the frost. Same token and same criterion as the sibling (SPINE.md 6b). */
+  --column: 720px;   /* 2.38: the content column, and therefore the vessel — read by #root and by
+                        the floor canvas, so the glass and the layout cannot disagree */
   --tile-fill: 38%;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -346,7 +348,7 @@ html, body { margin: 0; background: #09080d; color: var(--bone); font-family: va
 body::after { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top);
   background: #100e16; z-index: 90; pointer-events: none; }
 body { min-height: 100vh; background-image: radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--pigment) 18%, transparent) 0%, transparent 60%), linear-gradient(180deg, #100e16, #09080d 40%); }
-#root { max-width: 720px; margin: 0 auto; padding: 0 0 max(24px, var(--safe-bottom)); }
+#root { max-width: var(--column); margin: 0 auto; padding: 0 0 max(24px, var(--safe-bottom)); }
 input, textarea, button { font: inherit; }
 input, textarea { -webkit-appearance: none; appearance: none; }
 
@@ -524,7 +526,13 @@ textarea.cut { min-height: 9.5em; }
     backdrop-filter: blur(var(--occvm-meniscus)) saturate(1.2); }
 }
 
-#occvm-floor { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; display: block; }
+/* 2.38 — THE CANVAS IS THE VESSEL. occvm/floor.js bounds every drop to the canvas it was handed, so
+   whatever this element spans IS the glass. Spanning the viewport made that claim false on any screen
+   wider than the column: #root is --column centred, and the field ran past it on both sides contained
+   by nothing. Invisible at phone width, where the two coincide. One token, read by both, so the glass
+   and the layout cannot drift apart (L3). */
+#occvm-floor { position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: min(100%, var(--column)); height: 100%; z-index: 0; pointer-events: none; display: block; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
   box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 0 rgba(255,255,255,var(--hi-a)), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(0,0,0,.6),
