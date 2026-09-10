@@ -1254,3 +1254,37 @@ test("2.37 — a trig function already returns an angle, and multiplying it by o
   const fixed = css.match(/atan2\(var\(--ly\), var\(--lx\)\) \+ 90deg/g) || [];
   assert.equal(fixed.length, 4, `expected the four light-bearing gradients, found ${fixed.length}`);
 });
+
+test("2.38 — the shared parts are copied between the repositories by hand, and now that is checked", () => {
+  /* occvm/ is the spine, and L3 says one fact has one owner. A part carried in two repositories is
+     one fact written twice the moment the copies differ, and until 2.38 nothing compared them —
+     while every other duplication in this system had a gate: SPINE.md byte-identical, the React
+     vendor byte-identical to the sibling's, all three splicers re-splice-and-diff.
+     IT WAS ALREADY DRIFTING. `glass.js` here was the PRE-CORRECTION copy, authoring `#ffffff` as the
+     rim colour, where the sibling resolves `--bone` at call time and paints nothing without it. That
+     correction is written up in the sibling's 2.32 entry as done; it landed there and never arrived
+     here, in two commits sharing a message. It stayed invisible because glass.js is spliced nowhere
+     in this tool, so no measure ever read it — and a dormant divergence is still one.
+     THIS GUARD ONLY FIRES WHERE BOTH REPOSITORIES ARE CHECKED OUT, which is a development machine
+     and not CI: each repo's runner clones one. It is named rather than implied, because a guard that
+     silently never runs is worse than no guard. The mirror of this lives in the sibling's
+     test/occvm.js, so whichever side somebody is working from carries the same check. */
+  const there = path.join(ROOT, "..", "Btc-terminal", "occvm");
+  if (!fs.existsSync(there)) {
+    console.log("  skipped (not passed): the sibling repository is absent, so part parity is unchecked");
+    return;
+  }
+  const here = path.join(ROOT, "occvm");
+  /* the sibling's alone by design: the numeric face ships only where mono is rendered (1.3). */
+  const SIBLING_ONLY = ["mono.css", "mono.head.css"];
+  const pick = d => fs.readdirSync(d).filter(f => /\.(js|css)$/.test(f));
+  const mine = pick(here), theirs = new Set(pick(there));
+  const shared = mine.filter(f => theirs.has(f));
+  assert.ok(shared.length >= 8, `there is a real set to compare (${shared.length} shared parts)`);
+  const drifted = shared.filter(f =>
+    !fs.readFileSync(path.join(here, f)).equals(fs.readFileSync(path.join(there, f))));
+  assert.deepEqual(drifted, [], `shared parts must be byte-identical in both repositories: ${drifted.join(", ")}`);
+  /* and nothing this tool carries may go missing from the sibling except the named exceptions */
+  const orphan = mine.filter(f => !theirs.has(f) && SIBLING_ONLY.indexOf(f) < 0);
+  assert.deepEqual(orphan, [], `parts here that the sibling lacks: ${orphan.join(", ")}`);
+});
