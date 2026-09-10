@@ -670,6 +670,31 @@ var FLOOR_SEED = 0x0CCF1005;  /* fixed, so the field is the same field every ses
 var FLOOR_RISE_PX_S = 1.4;    /* authored: see above — the substance's own answer here is zero */
 var FLOOR_DWELL = 0.18;       /* authored: the share of each half-cycle spent attached at an end */
 
+/* The substance's cessation curve, sampled ONCE: `easing` integrates 4,000 steps and the curve is a
+   property of the substance, not of the frame, so calling it per drop per frame would be the wrong
+   price. Linear interpolation between samples. At module scope with cyclePos because neither is a
+   function of a canvas — a pure curve a harness can drive, rather than a closure it has to infer. */
+var FLOOR_EASE = (function () {
+  try { return OCCVM_RHEOLOGY.easing(OCCVM_RHEOLOGY.SUBSTANCE, 1, 33); } catch (e) { return null; }
+})();
+function floorEase(x) {
+  if (!FLOOR_EASE) return Math.max(0, Math.min(1, x));       /* no substance spliced: straight ramp */
+  var t = Math.max(0, Math.min(1, x)) * (FLOOR_EASE.length - 1), i = Math.floor(t), f = t - i;
+  return i >= FLOOR_EASE.length - 1 ? FLOOR_EASE[FLOOR_EASE.length - 1]
+       : FLOOR_EASE[i] + (FLOOR_EASE[i + 1] - FLOOR_EASE[i]) * f;
+}
+/* one drop's height in its cycle: 0 at the bottom of the travel, 1 at the top — rise, attach, sink,
+   rest, with the turn at each end on the substance's own cessation curve rather than an invented ease.
+   It is exactly 0 only while resting at the bottom, which is what lets it BE the coil predicate as
+   well as the position: no authored coil height, because step 3 already put one there. */
+function cyclePos(u) {
+  var half = 0.5, move = half * (1 - FLOOR_DWELL);
+  if (u < move) return floorEase(u / move);                      /* rising  */
+  if (u < half) return 1;                                        /* attached at the top */
+  if (u < half + move) return 1 - floorEase((u - half) / move);  /* sinking */
+  return 0;                                                      /* resting at the bottom */
+}
+
 /* P-3's confirmed law, on its own so it can be driven rather than read. Linear in t, and the guard
    proves linearity by doubling rather than by matching the source text: r(2t) = 2·r(t), which √t does
    not satisfy and which is the one substitution anybody is likely to make here. */
@@ -738,25 +763,11 @@ function ambientFloor(canvas, still) {
     c2.beginPath(); c2.arc(d.x, d.y, d.r, 0, Math.PI * 2); c2.fill();
   }
 
-  /* one drop's height at time t: rise, dwell, sink, dwell, on the substance's cessation curve at each
-     turn. Returns 0 at the bottom of the travel and 1 at the top. */
-  /* the substance's cessation curve, sampled ONCE. `easing` integrates 4,000 steps to build it, so
-     calling it per drop per frame would be the wrong price for a curve that never changes; it is a
-     property of the substance, not of the frame. Linear interpolation between samples. */
-  var EASE = (function () {
-    try { return OCCVM_RHEOLOGY.easing(OCCVM_RHEOLOGY.SUBSTANCE, 1, 33); } catch (e) { return null; }
-  })();
-  function ease(x) {
-    if (!EASE) return Math.max(0, Math.min(1, x));              /* no substance spliced: straight ramp */
-    var t = Math.max(0, Math.min(1, x)) * (EASE.length - 1), i = Math.floor(t), f = t - i;
-    return i >= EASE.length - 1 ? EASE[EASE.length - 1] : EASE[i] + (EASE[i + 1] - EASE[i]) * f;
-  }
-  function cyclePos(u) {
-    var half = 0.5, move = half * (1 - FLOOR_DWELL);
-    if (u < move) return ease(u / move);                       /* rising  */
-    if (u < half) return 1;                                    /* attached at the top */
-    if (u < half + move) return 1 - ease((u - half) / move);   /* sinking */
-    return 0;                                                  /* resting at the bottom */
+  /* at the coil = resting at the bottom of the cycle, which cyclePos returns exactly 0 for. It reads
+     this instance's own clock, so unlike cyclePos it is not a pure curve and stays inside. */
+  function atCoil(d, period) {
+    if (d.phase === undefined) return true;
+    return cyclePos(((clock / period) + d.phase) % 1) === 0;
   }
 
   function step(dt) {
@@ -770,18 +781,44 @@ function ambientFloor(canvas, still) {
       d.x += d.vx * dt;                                        /* the lateral wander a real lamp shows */
       if (d.x < -d.r * 2) d.x = w + d.r; else if (d.x > w + d.r * 2) d.x = -d.r;
       if (d.merging) continue;                                 /* a welding pair is driven by the weld */
+      if (d.lockedTo) continue;                                /* a follower lobe is placed below */
       var u = ((clock / period) + (d.phase === undefined ? 0 : d.phase)) % 1;
       d.y = (h - d.r) - cyclePos(u) * (h - 2 * d.r);
+    }
+    /* the follower lobes, after every leader has moved: a frozen bridge holds its offset exactly */
+    for (i = 0; i < drops.length; i++) {
+      var f = drops[i];
+      if (f.lockedTo) { f.x = f.lockedTo.x + f.dx; f.y = f.lockedTo.y + f.dy; }
     }
     for (i = 0; i < welds.length; i++) {
       var wd = welds[i];
       wd.t += dt; wd.rb = bridgeRadius(wd.t);              /* r ∝ t — the derived half */
       if (wd.rb >= wd.target) {
+        var a = wd.a, b = wd.b;
+        if (wd.arrests) {
+          /* 2.28 step 5 — IT FREEZES. The bridge reached the height the Bingham number allows and the
+             yield stress holds it there: "the effect of the yield stress evident only in its final
+             arrested shape". The pair does NOT become one drop. It stays two lobes locked at the
+             separation they froze at, which is what a frozen dumbbell IS, and it answers the build
+             plan's open accumulation question without inventing a rule: an arrested pair is one stuck
+             object, so it drifts off on the cycle rather than piling up at the coil. It also cannot
+             grow without bound — a pair that has arrested is done, and a third arrival would need the
+             bridge to grow again against a yield stress that already stopped it. */
+          a.locked = b.locked = true; a.merging = b.merging = false;
+          /* ONE RIGID OBJECT, not two drops that agree to move alike. The first draft gave the follower
+             the leader's phase and let it compute its own height — and because that height depends on
+             the drop's own radius, two lobes of different size drifted apart over the cycle. A frozen
+             bridge does not stretch: the follower's position is the leader's plus the offset they froze
+             at, and nothing else. */
+          b.lockedTo = a; b.dx = b.x - a.x; b.dy = b.y - a.y;
+          welds.splice(i--, 1);
+          continue;
+        }
         /* 2.28 — the conservation convention is the SHARED part's, not this file's. It shipped here as
            area (r² = r₁² + r₂²); occvm/globules.js decides volume (r³ = r₁³ + r₂³) and records why, and
            the arrest boundaries are computed against that choice, so two conventions would put the
            renderer and the physics on different drops. Centres weight by the same power. */
-        var a = wd.a, b = wd.b, P = OCCVM_GLOBULES.MERGE_POWER;
+        var P = OCCVM_GLOBULES.MERGE_POWER;
         var wa = Math.pow(a.r, P), wb = Math.pow(b.r, P), m = wa + wb;
         a.x = (a.x * wa + b.x * wb) / m; a.y = (a.y * wa + b.y * wb) / m;
         a.r = OCCVM_GLOBULES.merged(a.r, b.r); a.merging = false; b.gone = true;
@@ -790,12 +827,26 @@ function ambientFloor(canvas, still) {
         while (drops.length < count()) drops.push(spawn(true));
       }
     }
+    /* 2.28 step 4 — RECOMBINATION HAPPENS AT THE COIL, not wherever two globules touch.
+       A real lava lamp carries a metallic wire coil at the base acting as a surface-tension breaker,
+       recombining cooled wax after it descends; free-floating pairwise merging anywhere on screen is
+       the easier build and is not what the object does. The coil determines WHERE globules meet; τ₀
+       determines WHAT the meeting produces.
+       The coil needs no geometry and no authored height here, because step 3 already put one at the
+       bottom: a drop is at the coil exactly when it is in the bottom dwell of its cycle. Two drops can
+       only begin a weld while both are resting there, which is also when a real lamp's wax pools. */
     for (i = 0; i < drops.length; i++) for (j = i + 1; j < drops.length; j++) {
       var p = drops[i], q = drops[j];
-      if (p.merging || q.merging) continue;
+      if (p.merging || q.merging || p.locked || q.locked) continue;
+      if (!atCoil(p, period) || !atCoil(q, period)) continue;
       if (Math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r) continue;
+      /* the substance decides the outcome BEFORE the bridge starts growing, from the radii alone —
+         so the same weld renders a completion or a freeze without a branch appearing mid-merge */
+      var reg = OCCVM_GLOBULES.arrestRegime(p.r, q.r);
+      var lobe = Math.min(p.r, q.r);
       p.merging = q.merging = true;
-      welds.push({ a: p, b: q, t: 0, rb: 0, target: Math.min(p.r, q.r) });
+      welds.push({ a: p, b: q, t: 0, rb: 0, arrests: reg !== "completes",
+                   target: lobe * OCCVM_GLOBULES.arrestedBridge(p.r, q.r) });
     }
   }
 

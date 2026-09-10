@@ -483,7 +483,7 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
 function loadFloor(over) {
   const vm = require("vm");
   const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
-  const code = cut("var FLOOR_MERGE_PX_S =", "function useAmbientFloor");
+  const code = cut("var FLOOR_MERGE_PX_S =", "function useAmbientFloor");   /* cyclePos and floorEase are module-scope: pure curves, drivable */
   const ops = [];
   const ctx2d = new Proxy({}, {
     get(t, k) {
@@ -500,6 +500,10 @@ function loadFloor(over) {
   const sandbox = {
     Math, performance: { now: () => 0 },
     OCCVM_GLOBULES: require(path.join(ROOT, "occvm", "globules.js")),
+    /* 2.28 — the floor reads the substance's cessation curve for the turn at each end of the cycle.
+       Without it in the sandbox the fallback straight ramp is what gets driven, and the harness would
+       be testing the degradation rather than the code. */
+    OCCVM_RHEOLOGY: require(path.join(ROOT, "occvm", "rheology.js")),
     getComputedStyle: () => ({ getPropertyValue: k => (over && k in over ? over[k] : (k === "--vein-hi" ? "#c9a6ff" : k === "--vein-lo" ? "#5a36a8" : "")) }),
     document: { documentElement: {} },
     window: { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {} },
@@ -652,9 +656,11 @@ test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the
   /* THE TURN IS THE SUBSTANCE'S OWN CURVE, not an invented ease. One-sided and recorded as such: this
      system owns exactly one curve for coming irreversibly to rest and none for setting off, so the
      arrival is derived and the departure inherits it rather than a time-reversal being invented. */
-  assert.match(body, /OCCVM_RHEOLOGY\.easing\(OCCVM_RHEOLOGY\.SUBSTANCE, 1, 33\)/,
+  /* module scope, beside cyclePos: neither is a function of a canvas, so the harness drives the curve
+     itself rather than inferring it from a closure */
+  assert.match(ui, /OCCVM_RHEOLOGY\.easing\(OCCVM_RHEOLOGY\.SUBSTANCE, 1, 33\)/,
     "the cessation curve, sampled once — it is a property of the substance, not of the frame");
-  assert.ok(!/cubic-bezier|easeInOut|\* \* \(3 - 2 \*/.test(body), "no invented easing sits beside it");
+  assert.ok(!/cubic-bezier|easeInOut|\* \* \(3 - 2 \*/.test(ui), "no invented easing sits beside it");
   assert.ok(pos(0.1) > 0.1 * (1 / move), "and the curve is not a straight ramp");
 
   /* ONE AUTHORED NUMBER FOR THE PACE, and the period follows from it and the surface */
@@ -670,6 +676,100 @@ test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the
   /* the random-direction drift 2.22 shipped is GONE, not left beside the cycle */
   assert.ok(!/d\.y \+= d\.vy \* dt/.test(body),
     "the old model had no bottom, no top and no turnaround; it is replaced rather than supplemented");
+});
+
+test("2.28 steps 4+5 — the coil decides where, tau0 decides what, driven not read", () => {
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  const { sandbox, canvas, frames, ops } = loadFloor();
+  sandbox.ambientFloor(canvas, false);
+
+  /* pump the SHIPPED floor through many cycles. The period is ~2h/1.4 s on a 480px face, so a real
+     look at the page would take fifteen minutes; the frame callback takes its own clock, so the same
+     code runs at any speed. Driving the call path rather than a replica is the 2.22 lesson. */
+  let t = 0;
+  for (let i = 0; i < 40000 && frames.length; i++) { t += 90; frames[frames.length - 1](t); }
+
+  assert.ok(frames.length > 1, "the floor kept animating across the whole run");
+
+  /* WHAT THE RUN ACTUALLY PRODUCED, read off the canvas rather than off the source. Every drop is one
+     `arc`; a pair that has arrested holds a CONSTANT separation frame after frame while both move,
+     which is the observable signature of one stuck object with two lobes and cannot be faked by two
+     drops that merely passed near each other. Sampled over the last few frames of the run. */
+  const framesOfArcs = [];
+  for (let k = 0; k < 6; k++) {
+    const before = ops.length;
+    t += 90; frames[frames.length - 1](t);
+    framesOfArcs.push(ops.slice(before).filter(o => o[0] === "arc").map(o => ({ x: o[1], y: o[2], r: o[3] })));
+  }
+  const n0 = framesOfArcs[0].length;
+  assert.ok(n0 > 3, `the field is populated (${n0} drops)`);
+  assert.ok(framesOfArcs.every(f => f.length === n0),
+    "the count is stable across frames — an arrested pair stays two lobes rather than vanishing into one");
+
+  let lockedPairs = 0;
+  for (let a = 0; a < n0; a++) for (let b = a + 1; b < n0; b++) {
+    const sep = f => Math.hypot(f[a].x - f[b].x, f[a].y - f[b].y);
+    const s0 = sep(framesOfArcs[0]);
+    if (s0 > framesOfArcs[0][a].r + framesOfArcs[0][b].r) continue;      /* not touching */
+    if (framesOfArcs.every(f => Math.abs(sep(f) - s0) < 1e-6)) lockedPairs++;
+  }
+  assert.ok(lockedPairs > 0,
+    `the substance says ~96% of merges arrest, and the floor produced ${lockedPairs} frozen pair(s) — ` +
+    "a run with none would mean the arrest branch never fires");
+
+  /* THE COIL: a weld may only begin while BOTH drops rest at the bottom of the cycle. Driven on the
+     shipped predicate rather than asserted from the source. */
+  const ui = require("fs").readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  assert.match(body, /if \(!atCoil\(p, period\) \|\| !atCoil\(q, period\)\) continue;/,
+    "recombination happens at the coil, not wherever two globules touch");
+  assert.match(body, /return cyclePos\(\(\(clock \/ period\) \+ d\.phase\) % 1\) === 0;/,
+    "and the coil is the bottom dwell step 3 already put there — no authored coil height");
+  assert.ok(sandbox.cyclePos(0.99) === 0 && sandbox.cyclePos(0.25) > 0,
+    "the predicate's own basis: cyclePos is exactly 0 only while resting at the bottom");
+
+  /* THE SUBSTANCE DECIDES BEFORE THE BRIDGE GROWS, from the radii alone, so no branch appears
+     mid-merge and the same weld renders either outcome. */
+  assert.match(body, /var reg = OCCVM_GLOBULES\.arrestRegime\(p\.r, q\.r\);/);
+  assert.match(body, /arrests: reg !== "completes"/);
+  assert.match(body, /target: lobe \* OCCVM_GLOBULES\.arrestedBridge\(p\.r, q\.r\)/,
+    "and the bridge stops at the height the Bingham number allows");
+
+  /* THE ARRESTED PAIR IS ONE STUCK OBJECT — which answers the plan's open accumulation question
+     without inventing a rule, and is self-limiting: a pair that has arrested is done. */
+  assert.match(body, /a\.locked = b\.locked = true;/);
+  /* ONE RIGID OBJECT, not two drops that agree to move alike. The first draft gave the follower the
+     leader's phase and let it compute its own height — and because that height depends on the drop's
+     own radius, two lobes of different size drifted apart over the cycle and the arrest was invisible
+     in the render. A frozen bridge does not stretch. */
+  assert.match(body, /b\.lockedTo = a; b\.dx = b\.x - a\.x; b\.dy = b\.y - a\.y;/,
+    "the follower holds the offset it froze at");
+  assert.match(body, /if \(f\.lockedTo\) \{ f\.x = f\.lockedTo\.x \+ f\.dx; f\.y = f\.lockedTo\.y \+ f\.dy; \}/,
+    "and is placed from the leader every frame, never from its own cycle");
+  assert.ok(!/b\.phase = a\.phase/.test(body),
+    "sharing a phase is not enough: two lobes of different radius compute different heights from it");
+  assert.ok(!/a\.r = OCCVM_GLOBULES\.merged\(a\.r, b\.r\);[\s\S]{0,80}locked/.test(body),
+    "an arrested pair does NOT become one drop: the lobes remain, which is what a frozen dumbbell is");
+  assert.match(body, /p\.merging \|\| q\.merging \|\| p\.locked \|\| q\.locked/,
+    "and a locked pair never welds again — the bridge would have to beat a stress that already stopped it");
+});
+
+test("2.28 step 5 — the arrested bridge height follows the Bingham number, with the right limits", () => {
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  /* the falloff is authored; its two LIMITS are not, and they are what makes the regimes meet
+     without a seam: the bridge reaches a full lobe exactly where Bi reaches 1, which is the same
+     group that defines completion. */
+  assert.equal(G.arrestedBridge(2, 2), 1, "below Bi = 1 the bridge closes completely");
+  assert.ok(Math.abs(G.bingham(2, 2)) < 1, "and that pair is genuinely below the boundary");
+  const at = (a, b) => +G.arrestedBridge(a, b).toFixed(3);
+  assert.ok(at(9, 9) > at(15, 15) && at(15, 15) > at(30, 30),
+    "a bigger pair freezes with a thinner waist, monotonically");
+  assert.ok(at(9, 9) > 0.6 && at(30, 30) < 0.2, `measured ${at(9, 9)} .. ${at(30, 30)}`);
+  /* the seam: approach Bi = 1 from both sides and the bridge fraction is continuous at 1 */
+  const lp = G.arrestLengths().complete;
+  const justUnder = lp * 0.999 / Math.cbrt(2), justOver = lp * 1.001 / Math.cbrt(2);
+  assert.ok(Math.abs(G.arrestedBridge(justUnder, justUnder) - G.arrestedBridge(justOver, justOver)) < 0.01,
+    "the completion boundary and the bridge falloff are the same boundary");
 });
 
 test("2.28 — the arrest model: two lengths, three regimes, and the substance picks", () => {
