@@ -636,6 +636,40 @@ var FLOOR_MERGE_PX_S = 2.6;   /* authored MAGNITUDE; the linearity above it is d
 var FLOOR_ALPHA = 0.24;
 var FLOOR_SEED = 0x0CCF1005;  /* fixed, so the field is the same field every session and can be recorded */
 
+/* ---- 2.28 step 3: the buoyancy cycle ------------------------------------------------------------
+ * The build plan's finding that reshapes this: a lava lamp is not one substance getting restless, it
+ * is TWO IMMISCIBLE PHASES IN A HEAT-DRIVEN DENSITY RACE. The wax sits very slightly denser at rest;
+ * heat expands it more than the carrier; past a crossover it becomes buoyant, rises, cools, becomes
+ * dense again, sinks. **The motion is buoyancy. Rheology governs shape and merging, not drive** — which
+ * is why the drift that shipped at 2.22 (a random constant direction per drop) was the wrong model
+ * rather than a coarse one: it had no bottom, no top, and no turnaround.
+ *
+ * WHAT IS ADOPTED FROM THE SOURCE IS THE SHAPE. Gyüre & Jánosi, "Basics of lava-lamp convection",
+ * Phys. Rev. E 80, 046307 (2009), a real two-fluid lab analog: warm blobs rise from the bottom, ATTACH
+ * at the top surface, then sink again — rise, dwell, sink, dwell. They identify two modes, one
+ * heat-transport limited and one **viscosity-limited with constant periodicity**; the constant-period
+ * mode is the one taken, so every drop shares one period and differs only in phase, which is the
+ * field's own seeded number rather than a fresh random per session.
+ *
+ * WHAT IS AUTHORED IS THE SPEED, AND THE SUBSTANCE SAYS THE SPEED IS ZERO. occvm/globules.js measures
+ * it: at the density contrast the 30 px ceiling implies, the buoyant stress on a globule is 1.509 Pa at
+ * r = 9 and 5.031 Pa at r = 30, against τ₀ = 21.15 — **14× short at the smallest drop in the field,
+ * 4.2× at the largest**, and a globule would need a 126 px radius before buoyancy could move it at all.
+ * That is not a reason to abandon the floor; L13 grants it and records the cost. It is a reason to
+ * state the number rather than to reach for a derivation that returns zero, and to keep the pace this
+ * floor already had rather than inventing a new one alongside a new model.
+ *
+ * FLOOR_RISE_PX_S is therefore 1.4 — the same magnitude `OCCVM_GLOBULES.DRIFT_PX_S` has carried since
+ * 2.22, now vertical and cyclic instead of random. The period FOLLOWS from it and the surface's own
+ * height rather than being a second authored number: a drop crosses the face at that speed, so a tall
+ * face cycles slowly and a short one quickly, which is what a taller vessel does.
+ *
+ * The turn at each end rides the substance's OWN cessation curve (OCCVM_RHEOLOGY.easing, derived at
+ * 2.8 with its hard stop), not an invented ease: a blob arriving at the top surface decelerates to
+ * rest, and this system already owns exactly one curve for coming to rest irreversibly. */
+var FLOOR_RISE_PX_S = 1.4;    /* authored: see above — the substance's own answer here is zero */
+var FLOOR_DWELL = 0.18;       /* authored: the share of each half-cycle spent attached at an end */
+
 /* P-3's confirmed law, on its own so it can be driven rather than read. Linear in t, and the guard
    proves linearity by doubling rather than by matching the source text: r(2t) = 2·r(t), which √t does
    not satisfy and which is the one substitution anybody is likely to make here. */
@@ -680,7 +714,7 @@ function ambientFloor(canvas, still) {
   })();
 
   var ctx = canvas.getContext("2d"), fld = null;
-  var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
+  var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0, clock = 0;
 
   function count() { return fld ? fld.count() : 3; }
   function spawn(seedEdge) { return fld.spawn(seedEdge); }
@@ -704,13 +738,40 @@ function ambientFloor(canvas, still) {
     c2.beginPath(); c2.arc(d.x, d.y, d.r, 0, Math.PI * 2); c2.fill();
   }
 
+  /* one drop's height at time t: rise, dwell, sink, dwell, on the substance's cessation curve at each
+     turn. Returns 0 at the bottom of the travel and 1 at the top. */
+  /* the substance's cessation curve, sampled ONCE. `easing` integrates 4,000 steps to build it, so
+     calling it per drop per frame would be the wrong price for a curve that never changes; it is a
+     property of the substance, not of the frame. Linear interpolation between samples. */
+  var EASE = (function () {
+    try { return OCCVM_RHEOLOGY.easing(OCCVM_RHEOLOGY.SUBSTANCE, 1, 33); } catch (e) { return null; }
+  })();
+  function ease(x) {
+    if (!EASE) return Math.max(0, Math.min(1, x));              /* no substance spliced: straight ramp */
+    var t = Math.max(0, Math.min(1, x)) * (EASE.length - 1), i = Math.floor(t), f = t - i;
+    return i >= EASE.length - 1 ? EASE[EASE.length - 1] : EASE[i] + (EASE[i + 1] - EASE[i]) * f;
+  }
+  function cyclePos(u) {
+    var half = 0.5, move = half * (1 - FLOOR_DWELL);
+    if (u < move) return ease(u / move);                       /* rising  */
+    if (u < half) return 1;                                    /* attached at the top */
+    if (u < half + move) return 1 - ease((u - half) / move);   /* sinking */
+    return 0;                                                  /* resting at the bottom */
+  }
+
   function step(dt) {
     var i, j;
+    /* 2.28 — the cycle's period follows from the authored speed and the surface's own height, so the
+       floor keeps its pace on a face of any size rather than carrying a second authored constant. */
+    var travel = Math.max(1, h), period = 2 * (travel / FLOOR_RISE_PX_S) * 1000 / (1 - FLOOR_DWELL);
+    clock += dt;
     for (i = 0; i < drops.length; i++) {
       var d = drops[i];
-      d.x += d.vx * dt; d.y += d.vy * dt;
+      d.x += d.vx * dt;                                        /* the lateral wander a real lamp shows */
       if (d.x < -d.r * 2) d.x = w + d.r; else if (d.x > w + d.r * 2) d.x = -d.r;
-      if (d.y < -d.r * 2) d.y = h + d.r; else if (d.y > h + d.r * 2) d.y = -d.r;
+      if (d.merging) continue;                                 /* a welding pair is driven by the weld */
+      var u = ((clock / period) + (d.phase === undefined ? 0 : d.phase)) % 1;
+      d.y = (h - d.r) - cyclePos(u) * (h - 2 * d.r);
     }
     for (i = 0; i < welds.length; i++) {
       var wd = welds[i];

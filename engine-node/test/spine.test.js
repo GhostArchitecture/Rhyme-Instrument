@@ -616,6 +616,62 @@ test("2.28 — the metaball floor: one filter, and the weight outside it", () =>
   assert.equal(G.MERGE_POWER, 3, "volume, decided and recorded in occvm/globules.js");
 });
 
+test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the substance says zero", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+
+  /* THE SUBSTANCE'S OWN ANSWER, measured rather than asserted. L13 records the floor's cost as a
+     sentence; this is the number behind it, and it is what makes the authored speed honest rather than
+     lazy: there is no derivation to reach for, because the derivation returns zero at every radius the
+     field contains. */
+  for (const r of [G.R[0], 20, G.R[1]])
+    assert.equal(G.risesAt(r), false, `a ${r}px globule cannot rise: buoyancy is below the yield stress`);
+  assert.ok(G.buoyantStress(G.R[1]) < R.SUBSTANCE.tau0 / 4,
+    "and it is not marginal — the largest globule in the field is over 4x short");
+  assert.ok(G.risesAt(126) === false && G.risesAt(130) === true,
+    "the radius at which buoyancy could move anything is ~126px, four times the ceiling");
+
+  /* THE CYCLE'S SHAPE: rise, attach, sink, rest — Gyüre & Jánosi's process, driven rather than read */
+  const half = 0.5, DW = 0.18, move = half * (1 - DW);
+  const E = R.easing(R.SUBSTANCE, 1, 33);
+  const ease = x => { const t = Math.max(0, Math.min(1, x)) * (E.length - 1), i = Math.floor(t), f = t - i;
+    return i >= E.length - 1 ? E[E.length - 1] : E[i] + (E[i + 1] - E[i]) * f; };
+  const pos = u => u < move ? ease(u / move) : u < half ? 1
+    : u < half + move ? 1 - ease((u - half) / move) : 0;
+  const traj = []; for (let i = 0; i <= 60; i++) traj.push(pos(i / 60));
+  assert.equal(traj[0], 0, "starts at the bottom");
+  assert.equal(Math.max(...traj), 1, "reaches the top");
+  const rise = traj.slice(0, 25), sink = traj.slice(32, 56);
+  assert.ok(rise.every((v, i) => i === 0 || v >= rise[i - 1]), "the rise is monotone");
+  assert.ok(sink.every((v, i) => i === 0 || v <= sink[i - 1]), "the sink is monotone");
+  assert.ok(pos(0.45) === 1 && pos(0.95) === 0, "and it dwells at both ends rather than turning on a point");
+
+  /* THE TURN IS THE SUBSTANCE'S OWN CURVE, not an invented ease. One-sided and recorded as such: this
+     system owns exactly one curve for coming irreversibly to rest and none for setting off, so the
+     arrival is derived and the departure inherits it rather than a time-reversal being invented. */
+  assert.match(body, /OCCVM_RHEOLOGY\.easing\(OCCVM_RHEOLOGY\.SUBSTANCE, 1, 33\)/,
+    "the cessation curve, sampled once — it is a property of the substance, not of the frame");
+  assert.ok(!/cubic-bezier|easeInOut|\* \* \(3 - 2 \*/.test(body), "no invented easing sits beside it");
+  assert.ok(pos(0.1) > 0.1 * (1 / move), "and the curve is not a straight ramp");
+
+  /* ONE AUTHORED NUMBER FOR THE PACE, and the period follows from it and the surface */
+  assert.match(ui, /^var FLOOR_RISE_PX_S = 1\.4;/m, "the pace 2.22 already had, now vertical and cyclic");
+  assert.match(body, /period = 2 \* \(travel \/ FLOOR_RISE_PX_S\)/,
+    "the period is derived from the speed and the height, not authored beside them");
+
+  /* THE PHASE IS THE FIELD'S, so the floor is the same floor every session and can be recorded */
+  assert.ok(G.field({ seed: 1, w: 400, h: 300 }).drops.every(d => typeof d.phase === "number" && d.phase >= 0 && d.phase < 1),
+    "every drop carries a seeded phase");
+  assert.ok(!/Math\.random/.test(body), "and nothing in the floor reaches for a fresh random");
+
+  /* the random-direction drift 2.22 shipped is GONE, not left beside the cycle */
+  assert.ok(!/d\.y \+= d\.vy \* dt/.test(body),
+    "the old model had no bottom, no top and no turnaround; it is replaced rather than supplemented");
+});
+
 test("2.28 — the arrest model: two lengths, three regimes, and the substance picks", () => {
   const G = require(path.join(ROOT, "occvm", "globules.js"));
   const R = require(path.join(ROOT, "occvm", "rheology.js"));
