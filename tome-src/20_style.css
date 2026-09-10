@@ -324,6 +324,9 @@
   /* 2.36 — the safe area read once into properties so a harness can drive it; see SPINE.md 6b. The
      binding had the inset inline and nothing else did, so a panel header that reached the top of the
      viewport collided with the system clock on a real phone. */
+  /* 2.37 — how much of a slab's own substrate survives; the rest is the page ground behind it, seen
+     through the frost. Same token and same criterion as the sibling (SPINE.md 6b). */
+  --tile-fill: 38%;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --pigment: #8d5cf0; --pigment-lo: #4a2a8c; --vein-hi: #c9a6ff; --vein-lo: #5a36a8;
@@ -349,7 +352,7 @@ input, textarea { -webkit-appearance: none; appearance: none; }
 
 /* ---- binding: raw bronze, verdigris in the seams ---- */
 .binding { position: sticky; top: 0; z-index: 30; padding: 12px var(--pad) 10px; padding-top: max(12px, var(--safe-top));
-  background: linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,235,190,calc(.18 * var(--elev))) 0%, transparent 40%, rgba(0,0,0,.25) 100%),
+  background: linear-gradient(calc(atan2(var(--ly), var(--lx)) + 90deg), rgba(255,235,190,calc(.18 * var(--elev))) 0%, transparent 40%, rgba(0,0,0,.25) 100%),
     repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px),
     linear-gradient(180deg, var(--bronze-a) -30%, var(--bronze-b) 45%, var(--bronze-c) 100%);
   border-bottom: 2px solid var(--verdigris-lo); color: #f2e4c8;
@@ -388,7 +391,7 @@ input, textarea { -webkit-appearance: none; appearance: none; }
      is the vocabulary 2.8 claimed to have left. `isolation: isolate` makes the slab its own stacking
      context so the canvas paints above this background and beneath every child. */
   background:
-    linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
+    linear-gradient(calc(atan2(var(--ly), var(--lx)) + 90deg), rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
 radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
     radial-gradient(120% 80% at 90% 100%, color-mix(in srgb, var(--pigment-lo) 35%, var(--sub-lo)) 0%, transparent 55%),
     linear-gradient(180deg, var(--sub-hi), var(--sub) 45%, var(--sub-lo));
@@ -403,7 +406,6 @@ radial-gradient(140% 90% at 20% 0%, var(--sub-hi) 0%, transparent 55%),
 .motion .slab.rise { animation: rise 380ms cubic-bezier(.2,.8,.2,1); }
 @keyframes rise { from { transform: translateY(18px) scale(.985); opacity: .6; } to { transform: none; opacity: 1; } }
 .slab > * { position: relative; z-index: 1; }
-.slab > canvas.floor { position: absolute; z-index: 0; }   /* the substrate layer: above the slab's ground, under everything on it */
 .slab .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; cursor: pointer; }
 .slab .head h2 { margin: 0; font-family: var(--serif); font-size: 30px; font-weight: 300; line-height: 1; color: var(--bone);
   text-shadow: calc(var(--lx) * -.8px) calc(var(--ly) * -.8px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .9px) calc(var(--ly) * .9px) 0 rgba(0,0,0,.9), 0 0 var(--nglow) rgba(255,230,170,.45); }
@@ -424,8 +426,16 @@ textarea.cut { min-height: 9.5em; }
 .cast { flex: 1; min-width: 0; text-align: center; padding: 8px 8px; border-radius: 3px; border: 1px solid #2e2110; color: #f7ecd6; font-size: 13px; cursor: pointer; user-select: none;
   background: linear-gradient(180deg, #6b5030, #43301a); --hi-a: .18; --cut-a: .3; box-shadow: var(--occvm-bevel), 0 2px 0 #1f1508; -webkit-tap-highlight-color: transparent; }
 .cast:active { transform: translateY(1px); box-shadow: var(--occvm-bevel), 0 1px 0 #1f1508; }
-.cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--pigment)), color-mix(in srgb, var(--m, var(--pigment)) 55%, black));
-  box-shadow: 0 0 0 1px var(--m, var(--pigment)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--pigment)) 45%, transparent), 0 2px 0 #1f1508; }
+/* 2.37 — A DECORATIVE ACCENT MUST NOT CARRY STATE. This defaulted to --pigment, the palette's
+   decorative colour, so "selected" was painted in the one role L6 leaves free of meaning — and a
+   palette change would then change what selected LOOKS like through a channel the law does not
+   govern. L6 names four roles and one of them is exactly this case: verdigris-adjacent is active.
+   The sibling has painted its own on-state from --verdigris all along (`button[aria-pressed="true"],
+   button.sel`), so this is the two tools agreeing rather than a new opinion, and `.cast.patina.on`
+   directly below already used it. The --m override stays: a button that names its own colour, like
+   the palette swatches offering a palette, is not a state. */
+.cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--verdigris)), color-mix(in srgb, var(--m, var(--verdigris)) 55%, black));
+  box-shadow: 0 0 0 1px var(--m, var(--verdigris)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--verdigris)) 45%, transparent), 0 2px 0 #1f1508; }
 .cast.patina.on { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); box-shadow: 0 0 0 1px var(--verdigris) inset, 0 2px 0 #1f1508; }
 /* OCCVM-L13 (2.18) — Reading A. --pulse is written by useBeatPulse and is 0 unless a real tempo is set,
    so with no tempo this rule resolves to exactly the surface the button already had: the fallback IS the
@@ -478,11 +488,43 @@ textarea.cut { min-height: 9.5em; }
   background-image: radial-gradient(150% 95% at 50% 0%,
     color-mix(in srgb, var(--pigment) calc(var(--pulse, 0) * 25%), transparent) 0%, transparent 72%); }
 @media (prefers-reduced-motion: reduce) { .draftface { background-image: none; } }
-/* It sits behind the WHOLE draft face, not inside the bar list. Measured in Chromium at the narrower
-   placement: the bar cards are opaque, so a floor between them moved 0.81% of pixels at a mean 1.18 L*
-   — painting, and effectively absent. The authored alpha is not the lever (a floor is read at the edge
-   of vision by design); the coverage was. Widened rather than brightened. */
-.floor { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; border-radius: inherit; }
+/* 2.37 — ONE FIELD, ON THE PAGE GROUND, and the slabs are glass over it. It used to sit inside
+   whichever slab was open, which meant the field was a property of the open face rather than of the
+   page: it reseeded when a face changed, it stopped at the slab's edge, and every closed face had
+   none. Fixed and full-viewport it is the same layer the sibling grants, under the content column and
+   over the body's own ground. The bars keep an opaque substrate — they carry --heat, a measured
+   value, and L13 does not let a floor under one of those. */
+/* 2.37 — THE SLABS AND THE CLOSED FACES BECOME THE GLASS. The partial fill is an ENHANCEMENT, never
+   the base: color-mix is four years younger than backdrop-filter, so writing it into the base rule
+   would hand a browser with the frost and without the mix an invalid background and a surface with no
+   substrate at all. Both are required together, because a partial fill with no frost shows the ground
+   through every slab unblurred — sharp globules under running text, which is the one thing the frost
+   is for. Either missing and this tool renders exactly its pre-2.37 picture.
+   The blur is the substance's own capillary length, the same length the metaball isosurface is cut
+   at, so the frost and the field are at one scale. .bar is deliberately absent: it carries --heat. */
+@supports ((background: color-mix(in srgb, red 50%, transparent)) and (backdrop-filter: blur(2px))) or
+          ((background: color-mix(in srgb, red 50%, transparent)) and (-webkit-backdrop-filter: blur(2px))) {
+  .slab {
+    background:
+      linear-gradient(calc(atan2(var(--ly), var(--lx)) + 90deg), rgba(255,255,255,calc(.16 * var(--elev))) 0%, rgba(255,255,255,calc(.05 * var(--elev))) 22%, transparent 46%, rgba(0,0,0,calc(.30 * var(--elev))) 100%),
+      radial-gradient(140% 90% at 20% 0%, color-mix(in srgb, var(--sub-hi) var(--tile-fill), transparent) 0%, transparent 55%),
+      radial-gradient(120% 80% at 90% 100%, color-mix(in srgb, color-mix(in srgb, var(--pigment-lo) 35%, var(--sub-lo)) var(--tile-fill), transparent) 0%, transparent 55%),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--sub-hi) var(--tile-fill), transparent),
+        color-mix(in srgb, var(--sub)    var(--tile-fill), transparent) 45%,
+        color-mix(in srgb, var(--sub-lo) var(--tile-fill), transparent));
+    -webkit-backdrop-filter: blur(var(--occvm-meniscus)) saturate(1.2);
+    backdrop-filter: blur(var(--occvm-meniscus)) saturate(1.2); }
+  .edge {
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--sub-hi) var(--tile-fill), transparent) 0%,
+      color-mix(in srgb, var(--sub)    var(--tile-fill), transparent) 30%,
+      color-mix(in srgb, var(--sub-lo) var(--tile-fill), transparent) 100%);
+    -webkit-backdrop-filter: blur(var(--occvm-meniscus)) saturate(1.2);
+    backdrop-filter: blur(var(--occvm-meniscus)) saturate(1.2); }
+}
+
+#occvm-floor { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; display: block; }
 .bar { position: relative; padding: 10px 10px 9px; margin-bottom: calc(var(--bthick, 10px) + 8px); border-radius: 2px 3px 3px 2px; --bthick: 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--sub-hi) 80%, black) 0%, var(--sub-lo) 100%);
   box-shadow: inset calc(var(--lx) * 1px) calc(var(--ly) * 1px) 0 rgba(255,255,255,var(--hi-a)), inset calc(var(--lx) * -1px) calc(var(--ly) * -1px) 0 rgba(0,0,0,.6),
@@ -495,7 +537,7 @@ textarea.cut { min-height: 9.5em; }
   text-shadow: calc(var(--lx) * -.8px) calc(var(--ly) * -.8px) 0 rgba(255,255,255,var(--cut-a)), calc(var(--lx) * .9px) calc(var(--ly) * .9px) 0 rgba(0,0,0,.9), 0 0 var(--nglow) rgba(255,230,170,.45); }
 .text .w { white-space: nowrap; }
 .text .w.override { color: transparent; text-shadow: none;
-  background: linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), var(--gilt-c) 0%, var(--gilt-b) 35%, var(--gilt-a) 55%, var(--gilt-b) 75%, var(--gilt-c) 100%);
+  background: linear-gradient(calc(atan2(var(--ly), var(--lx)) + 90deg), var(--gilt-c) 0%, var(--gilt-b) 35%, var(--gilt-a) 55%, var(--gilt-b) 75%, var(--gilt-c) 100%);
   -webkit-background-clip: text; background-clip: text; filter: drop-shadow(calc(var(--lxpx) * -1) calc(var(--lypx) * -1) 0 rgba(0,0,0,.8)) drop-shadow(0 0 var(--nglow) rgba(255,215,120,.7)); }
 .text .w.rule { color: #9b9284; font-style: italic; }
 .field { display: flex; flex-wrap: wrap; gap: 7px 5px; margin-top: 9px; align-items: flex-end; }
