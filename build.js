@@ -81,23 +81,54 @@ fs.writeFileSync(path.join(ENODE, "rule_g2p_v1.js"),
  * was serving — the check every deploy procedure in the sibling BTC repo depends on
  * (grep -o 'build-[0-9]\{14\}'), and the ledger law the OCCVM roadmap states.
  *
- * Minting is deliberate: `node build.js --stamp` mints a new one, a plain `node build.js` preserves
- * whatever the committed index.html already carries. That keeps CI's byte-identical regeneration check
+ * Minting was deliberate and manual: `node build.js --stamp` minted, a plain `node build.js` preserved
+ * whatever the committed index.html already carried. That keeps CI's byte-identical regeneration check
  * strict — a timestamp minted on every run would make the diff spurious and teach everyone to ignore it
  * (2.0 migration process, section 0b rule 4).
+ *
+ * 2.30 — IT NOW MINTS WHEN THE CONTENT CHANGED, and that is a defect fix rather than a convenience.
+ * Preserve-unless-asked is right for iteration and wrong at the one boundary it cannot see: a deploy.
+ * Measured on this repository — `build-20260910054846` was minted at 2.27 and then carried, unchanged,
+ * through 2.28 and its steps 3, 4+5 and 6, because every build after the first was a plain one. The
+ * host served four releases of content under one stamp. That is not a cosmetic slip: verifying a deploy
+ * by stamp is the whole procedure the sibling repo's section 1 step 4 states, and a stamp that does not
+ * move with the content makes that check answer yes to a question it never asked.
+ *
+ * The rule that replaces "remember the flag" is the condition itself: compare this build's output
+ * against the committed artifact WITH BOTH STAMPS MASKED. Identical content keeps its stamp, so the
+ * regeneration diff stays byte-clean and CI stays strict; changed content mints, so a stamp always
+ * identifies what it stamps. `--stamp` still forces one, and `--keep-stamp` forces the old behaviour
+ * for the case this cannot know about — re-cutting an identical artifact deliberately.
  */
+const STAMP_RE = /build-\d{14}/g;
 const STAMP = (() => {
   const mint = () => "build-" + new Date().toISOString().replace(/\D/g, "").slice(0, 14);
   if (process.argv.includes("--stamp")) return mint();
+  let prior = null, committed = null;
   try {
-    const m = fs.readFileSync(path.join(__dirname, "index.html"), "utf8").match(/build-\d{14}/);
-    if (m) return m[0];
+    committed = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+    const m = committed.match(STAMP_RE);
+    if (m) prior = m[0];
+  } catch (e) {}
+  if (!prior) return mint();
+  if (process.argv.includes("--keep-stamp")) return prior;
+  /* Assemble once under the prior stamp and compare masked. `assemble` is the same function the real
+     build uses, so this cannot drift from what ships — a second copy of the assembly would be the
+     defect this whole file exists downstream of. */
+  try {
+    const trial = assemble(prior).replace(STAMP_RE, "");
+    if (trial === committed.replace(STAMP_RE, "")) return prior;   /* nothing changed: keep it */
   } catch (e) {}
   return mint();
 })();
 
-/* ---------- dist/index.html assembly ---------- */
-const html = `<!doctype html>
+/* ---------- dist/index.html assembly ----------
+ * A FUNCTION rather than a bare template, so the stamp block above can assemble a trial copy through
+ * exactly this code. A second copy of the assembly, written to answer "did anything change?", would be
+ * two sources of truth for what ships — the defect class this repository keeps finding — and it would
+ * drift the first time a line was added here and not there. Hoisted, and every value it reads is
+ * initialised well above the stamp block that calls it. */
+function assemble(stamp) { return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -127,9 +158,11 @@ ${COMPILED["25_card.js"]}
 ${COMPILED["30_ui.jsx"]}
 </script>
 </body>
-<!-- ${STAMP} -->
+<!-- ${stamp} -->
 </html>
-`;
+`; }
+
+const html = assemble(STAMP);
 
 fs.mkdirSync(DIST, { recursive: true });
 fs.writeFileSync(path.join(DIST, "index.html"), html);

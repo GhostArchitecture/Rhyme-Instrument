@@ -603,6 +603,54 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
   assert.match(ui, /^var FLOOR_HEAT_GAIN = 0\.6;/m, "the gain is authored and named as authored");
 });
 
+test("2.30 — the stamp moves with the content, because a stamp that does not is not a check", () => {
+  const fs = require("fs"), cp = require("child_process");
+  const b = fs.readFileSync(path.join(ROOT, "build.js"), "utf8");
+
+  /* THE DEFECT THIS CLOSES, measured on this repository's own history: build-20260910054846 was minted
+     at 2.27 and then carried unchanged through 2.28 and its steps 3, 4+5 and 6, because every build
+     after the first was a plain one and a plain one preserved. The host served four releases of content
+     under one stamp. Verifying a deploy by stamp is the whole procedure the sibling repo's section 1
+     step 4 states; a stamp that does not move with the content makes that check answer a question it
+     never asked. Preserve-unless-asked is right for iteration and blind at exactly one boundary. */
+  assert.match(b, /const STAMP_RE = \/build-\\d\{14\}\/g;/, "the mask is one definition");
+  assert.match(b, /assemble\(prior\)\.replace\(STAMP_RE, ""\)/,
+    "the decision compares this build's output against the committed artifact with both stamps masked");
+  assert.match(b, /if \(trial === committed\.replace\(STAMP_RE, ""\)\) return prior;/,
+    "identical content keeps its stamp, so CI's byte-identical regeneration check stays strict");
+
+  /* ONE ASSEMBLY, and this is the part that would rot first. A second copy written to answer "did
+     anything change?" is two sources of truth for what ships, and it drifts the first time a line is
+     added to one and not the other. */
+  assert.match(b, /^function assemble\(stamp\) \{ return `<!doctype html>/m, "the assembly is a function");
+  assert.match(b, /^const html = assemble\(STAMP\);/m, "and the real build goes through it");
+  assert.equal((b.match(/<!doctype html>/g) || []).length, 1, "there is exactly one assembly in this file");
+  assert.match(b, /<!-- \$\{stamp\} -->/, "which takes the stamp as its argument rather than closing over it");
+
+  /* DRIVEN, not read: the three paths, each proved by running the shipped build. Restores whatever it
+     touches, and asserts the restore, so a failure here cannot leave the tree dirty. */
+  const cssPath = path.join(ROOT, "tome-src", "20_style.css");
+  const before = fs.readFileSync(cssPath, "utf8");
+  const stampOf = () => (fs.readFileSync(path.join(ROOT, "dist", "index.html"), "utf8").match(/build-\d{14}/) || [])[0];
+  const build = args => cp.execFileSync(process.execPath, [path.join(ROOT, "build.js")].concat(args || []),
+    { cwd: ROOT, stdio: "pipe" });
+  try {
+    build([]);
+    const kept = stampOf();
+    fs.writeFileSync(cssPath, before + "\n/* stamp probe */\n");
+    build([]);
+    assert.notEqual(stampOf(), kept, "a real content change MINTS a new stamp");
+    build(["--keep-stamp"]);
+    assert.equal(stampOf(), kept, "--keep-stamp still forces the old behaviour for a deliberate re-cut");
+  } finally {
+    fs.writeFileSync(cssPath, before);
+    build([]);
+  }
+  assert.equal(fs.readFileSync(cssPath, "utf8"), before, "the probe restored the source it touched");
+  assert.equal(stampOf(), (fs.readFileSync(path.join(ROOT, "index.html"), "utf8").match(/build-\d{14}/) || [])[0],
+    "and the rebuilt artifact matches the committed one again");
+});
+
 test("2.28 — the metaball floor: one filter, and the weight outside it", () => {
   const fs = require("fs");
   const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
