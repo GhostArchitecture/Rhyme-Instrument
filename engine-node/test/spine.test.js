@@ -513,7 +513,11 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
 /* Loads the floor out of the BUILT artifact and runs it against a recording canvas, so what is asserted
    is what ships rather than what the source says. jsdom is not in this repo's dependencies and is not
    needed: the floor touches a 2-D context, getComputedStyle and rAF, and all three are stubbed here. */
-function loadFloor(over) {
+function loadFloor(over, size) {
+  /* 2.39 — the canvas size is a parameter now, DEFAULT UNCHANGED at 320x480 so every test written
+     against it is untouched. It exists because a guard that cannot reach the defect it names is
+     decoration: the containment case below is a property of the vessel's WIDTH, and at 320x480 the
+     chain never gets deep enough to exercise it. */
   const vm = require("vm");
   const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
   /* 2.31 — the cut is the FENCE, not a pair of identifiers that happen to bracket the code. The old
@@ -534,7 +538,7 @@ function loadFloor(over) {
     },
     set(t, k, v) { ops.push(["set:" + String(k), v]); t[k] = v; return true; }
   });
-  const canvas = { width: 0, height: 0, getContext: () => ctx2d, getBoundingClientRect: () => ({ width: 320, height: 480 }) };
+  const canvas = { width: 0, height: 0, getContext: () => ctx2d, getBoundingClientRect: () => ({ width: (size && size.width) || 320, height: (size && size.height) || 480 }) };
   const frames = [];
   const made = [];
   const sandbox = {
@@ -1047,17 +1051,13 @@ test("2.39 — a peanut may rejoin at the coil, and the rigid body stays one lev
     }
   }
   /* AND A RIGID BODY IS RIGID THROUGHOUT, not merely pairwise. Every lobe holds a constant
-     separation from EVERY other lobe of the same body — that is what "a frozen bridge does not
-     stretch" means once a body has more than two lobes, and it is the property a two-level chain
-     breaks: the follower pass makes ONE sweep over `drops`, so a grand-follower placed before its
-     parent reads a stale position and its distance to the leader wanders. Asserted as the physics
-     rather than as the absence of a chain, because the chain is not observable from a canvas.
-     STATED LIMIT, because a guard's reach should not be assumed from its intent: this did NOT bite
-     when the leader ordering was removed. Driven both ways at this field size, the two-level chain
-     that appears then happens to place its grand-follower after its parent in `drops`, so nothing
-     goes stale and every separation stays constant. The ordering is therefore held by the source
-     assertion above and by that alone — a proxy, named as one — and this clause is kept because the
-     rigidity it states is the real physics and would catch the same defect under a different order. */
+     separation from EVERY other lobe of the same body — what "a frozen bridge does not stretch"
+     means once a body has more than two lobes.
+     IT IS ASSERTED AS THE PHYSICS, AND IT IS NOT THE GUARD ON THE ORDERING, which the first draft
+     of this block claimed it might be. A grand-follower cannot read a stale parent: the coil loop
+     is `for i; for j = i + 1` and the arrest writes `join.lockedTo = lead`, so the chain is always
+     parent-before-child in `drops`. Driven at four viewports, both ways: 0 non-rigid pairs every
+     time. What guards the ordering is the containment case below, which reaches the real defect. */
   for (const g of bonded.values()) {
     const idx = [...g];
     for (let a = 0; a < idx.length; a++) for (let b = a + 1; b < idx.length; b++) {
@@ -1072,16 +1072,39 @@ test("2.39 — a peanut may rejoin at the coil, and the rigid body stays one lev
     `a body reached ${biggest} lobes; before 2.39 the ceiling was 2, because a locked lobe was ` +
     "excluded from every future weld — so anything above 2 IS the peanut rejoining");
 
-  /* AND THE VESSEL STILL HOLDS. A body with more lobes has wider extents, and 2.38's containment
-     clamps the BODY rather than the lobe — so more lobes is exactly the case that could break it.
-     Driven over the same run: no rim past the glass, at all, ever. */
-  const w = canvas.getBoundingClientRect().width;
-  let over = 0, worst = 0;
-  for (const f of snaps) for (const [x, , r] of f) {
-    const o = Math.max(0, r - x, (x + r) - w);
-    if (o > 1e-3) { over++; worst = Math.max(worst, o); }
+  /* Containment under accretion is its own test below, because it needs a wider vessel than this
+     one to reach the case it is guarding. */
+});
+
+test("2.39 — accretion does not carry a lobe through the glass, driven where that is reachable", () => {
+  /* WHY THIS IS NOT IN THE TEST ABOVE. 2.38's clamp bounds the BODY, and the extent loop that
+     computes it reads DIRECT followers only — so a two-level chain hangs a grand-follower outside
+     the bound and can push it through the wall. Reaching that needs a wide enough vessel AND a deep
+     enough chain, and the harness's default 320x480 gives neither: the chain there never passes
+     depth 1 even with the ordering removed, so a guard written at that size cannot fail and is
+     decoration. Measured to find the cheapest size that CAN fail: 390x844 reaches depth 2 and still
+     crosses nothing over 2,664,000 lobe-frames; 520x900 over 25,000 frames crosses 486 times at
+     15.1 px worst once the ordering is removed, and 720x1400 over an hour crosses 4,984 times at
+     38.6 px. 520x900 is taken — it is the smallest that bites, and it costs ~7 s. */
+  const { sandbox, canvas, frames, made, ops } = loadFloor(null, { width: 520, height: 900 });
+  sandbox.ambientFloor(canvas, false);
+  const w = 520;
+  let t = 0, over = 0, worst = 0, lobeFrames = 0;
+  const buf = () => (made.length ? made[0]._ops : ops);
+  for (let i = 0; i < 25000 && frames.length; i++) {
+    const b = buf(), before = b.length;
+    t += 90; frames[frames.length - 1](t);
+    for (const o of b.slice(before)) {
+      if (o[0] !== "arc") continue;
+      lobeFrames++;
+      const past = Math.max(0, o[3] - o[1], (o[1] + o[3]) - w);
+      if (past > 1e-3) { over++; worst = Math.max(worst, past); }
+    }
   }
-  assert.equal(over, 0, `containment survives accretion — worst overhang ${worst.toFixed(3)} px`);
+  assert.ok(lobeFrames > 100000,
+    `the run actually drove the field (${lobeFrames} lobe-frames) — a silent zero would pass vacuously`);
+  assert.equal(over, 0,
+    `no lobe past the glass in ${lobeFrames} lobe-frames; worst overhang ${worst.toFixed(3)} px`);
 });
 
 test("2.28 step 5 — the arrested bridge height follows the Bingham number, with the right limits", () => {
