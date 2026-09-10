@@ -1153,3 +1153,20 @@ test("2.24 — three authored weights, each pinned to the measurement that chose
   assert.match(ui, /^var PULSE_STRIKE = 0\.32;/m, "a decay long enough to be a beat rather than a frame");
   assert.match(ui, /setPhase\(u < PULSE_STRIKE \? 1 - u \/ PULSE_STRIKE : 0\);/, "and the hook reads the named constant");
 });
+
+test("2.36 — the safe area is read once into a token, so an inset can actually be driven", () => {
+  /* From a recording on the owner's phone: this tool's sticky binding carried the inset inline and
+     nothing else did, so a panel header scrolled to the top of the viewport collided with the system
+     clock. The sibling was worse — no inset anywhere — and both had the same root cause: env() cannot
+     be set from a harness and no engine here emulates a notch, so an inset written inline into a rule
+     is an inset nobody can test. Read once into a property, it is drivable: measured in Chromium at
+     0 the binding pads 12px and the band is 0 tall, at 59px the binding pads 59 and the band is 59. */
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, " ");
+  const envs = bare.match(/env\(safe-area-inset-[a-z]+/g) || [];
+  assert.equal(envs.length, 2, `env() should appear once per edge and only in the token: ${envs.join(" ")}`);
+  assert.match(bare, /--safe-top:\s*env\(safe-area-inset-top/, "--safe-top is declared from env()");
+  assert.match(bare, /padding-top:\s*max\(12px,\s*var\(--safe-top\)\)/, "the binding reads the token");
+  assert.match(bare.replace(/\s+/g, " "), /body::after \{[^}]*height: var\(--safe-top\)/,
+    "an opaque band exactly the inset tall covers whatever scrolls under the status bar");
+});
