@@ -1006,8 +1006,19 @@ test("2.22 — the auditor measures the per-tool grant, through the path the run
   const rhyme = LA.readTool(LA.TOOLS.find(t => /Rhyme/.test(t.name)));
   assert.equal(L13.measure(rhyme).state, "CONFORMS", "the granted floor conforms where it was granted");
   assert.match(L13.measure(rhyme).detail, /reduced-motion guarded/);
-  assert.equal(L13.measure({ name: "BTC Terminal", own: rhyme.own }).state, "DIVERGES",
-    "and the identical source in the withheld tool diverges — the split is the law's, not the file's");
+  /* 2.34 — BTC IS NO LONGER WITHHELD, it is granted ONE surface, so the claim this line used to make
+     ("the identical source in the withheld tool diverges") is retired with the withholding. What
+     replaces it is the bound: Rhyme's floor relabelled as BTC's still diverges, because it names no
+     granted surface, declares no fixed layer and mounts nothing ahead of a content column. The split
+     is still the law's rather than the file's — it is a split about SURFACE now instead of about tool.
+     And the shape passed in is the runner's: this line handed the measure {name, own} with no `raw`,
+     which threw the moment the measure read markup, and it is the THIRD time a fixture on this one law
+     has been built to a shape readTool does not produce. It is built from readTool's output now. */
+  const asBtc = Object.assign({}, rhyme, { name: "BTC Terminal" });
+  assert.equal(L13.measure(asBtc).state, "DIVERGES",
+    "this tool's floor, relabelled, misses every bound BTC's grant is bounded by");
+  assert.match(L13.measure(asBtc).detail, /granted surface|position:fixed|content column/,
+    "and it says which bound, rather than only that something is wrong");
 });
 
 test("2.22 — the committed artifact is what a build produces, and the worker came with it", () => {
