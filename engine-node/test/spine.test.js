@@ -543,7 +543,23 @@ function loadFloor(over, size) {
   const made = [];
   const sandbox = {
     Math, performance: { now: () => 0 },
-    OCCVM_GLOBULES: require(path.join(ROOT, "occvm", "globules.js")),
+    /* 2.40 — the shipped part, with `field` wrapped so the harness can see the drop objects it
+       hands out. Everything else is the real module through the prototype, so no assertion elsewhere
+       changes; this exists because the defect 2.40 guards against is about WHERE a shed lobe goes,
+       and that is a fact about the body graph rather than about pixels. */
+    OCCVM_GLOBULES: (function () {
+      const real = require(path.join(ROOT, "occvm", "globules.js"));
+      const seen = [], wrap = Object.create(real);
+      wrap.field = function (o) {
+        const f = real.field(o);
+        f.drops.forEach(d => seen.push(d));
+        const sp = f.spawn;
+        f.spawn = function (a) { const d = sp(a); seen.push(d); return d; };
+        return f;
+      };
+      wrap.__seen = seen;
+      return wrap;
+    })(),
     /* 2.28 — the floor reads the substance's cessation curve for the turn at each end of the cycle.
        Without it in the sandbox the fallback straight ramp is what gets driven, and the harness would
        be testing the degradation rather than the code. */
@@ -1020,10 +1036,15 @@ test("2.39 — a peanut may rejoin at the coil, and the rigid body stays one lev
   /* Driven, because the failure this replaces was invisible to every regex: the shipped coil fired
      ten welds on a phone and then stopped forever, with 20 of 37 drops locked out permanently.
      Read off the canvas, not off the source. */
-  const { sandbox, canvas, frames, made, ops } = loadFloor();
+  /* 2.40 — DRIVEN AT 520x900 NOW, AND THE DEFAULT WAS THE WRONG SIZE FOR THIS TOO. At 320x480 the
+     field holds 17 drops; measured over a full run they never reach three lobes at all, because too
+     few pairs ever meet and the ones that do are large enough that a third clears 2.40's ceiling.
+     So the accretion this asserts is not observable there — the same undersized-instrument error the
+     containment clause below was already corrected for. 52 drops at 520x900 reach four. */
+  const { sandbox, canvas, frames, made, ops } = loadFloor(null, { width: 520, height: 900 });
   sandbox.ambientFloor(canvas, false);
   let t = 0;
-  for (let i = 0; i < 40000 && frames.length; i++) { t += 90; frames[frames.length - 1](t); }
+  for (let i = 0; i < 30000 && frames.length; i++) { t += 90; frames[frames.length - 1](t); }
 
   /* Every drop is one `arc` per frame. A body of k lobes bonded rigidly holds k−1 constant
      separations; the shipped ceiling before 2.39 was a PAIR, so a run that ever shows three lobes
@@ -1074,6 +1095,76 @@ test("2.39 — a peanut may rejoin at the coil, and the rigid body stays one lev
 
   /* Containment under accretion is its own test below, because it needs a wider vessel than this
      one to reach the case it is guarding. */
+});
+
+test("2.40 — the field sheds as well as merges, and the fragment DEPARTS rather than rebounding", () => {
+  /* WHAT THIS GUARDS IS NOT "sheds happen". The first build of 2.40 sheared plenty and achieved
+     nothing: it set the fragment's phase to its parent's, which keeps the two in step forever, so
+     the lobe came back to the coil beside the body every cycle and re-attached. Measured then:
+     90 sheds, 83 of them re-welds, median 3.0 s free — 0.20% of a cycle — and 86.7% back to the
+     SAME body. The weld count read 1,066 and looked like a living field; it was a limit cycle, the
+     shape 2.39's naive unlock already produced once at 3,502.
+     A count cannot tell those apart. WHERE the lobe goes can, so that is what is asserted. */
+  const { sandbox, canvas, frames } = loadFloor(null, { width: 520, height: 900 });
+  sandbox.ambientFloor(canvas, false);
+  const seen = sandbox.OCCVM_GLOBULES.__seen;
+  let t = 0, sheds = 0;
+  const prev = new Map(), freed = new Map(), gaps = [], same = [];
+  for (let i = 0; i < 30000 && frames.length; i++) {
+    t += 90; frames[frames.length - 1](t);
+    for (const d of seen) {
+      if (d.gone) continue;
+      const now = d.lockedTo || null, was = prev.has(d) ? prev.get(d) : undefined;
+      if (was !== undefined && was && !now) { freed.set(d, { i: i, from: was }); sheds++; }
+      if (was !== undefined && !was && now && freed.has(d)) {
+        const g = freed.get(d);
+        gaps.push(i - g.i); same.push(now === g.from ? 1 : 0); freed.delete(d);
+      }
+      prev.set(d, now);
+    }
+  }
+  assert.ok(sheds > 0, `the shed fires at all — ${sheds} over the run`);
+
+  /* THE ONE THAT BITES: a fragment must not be handed back to the body it was cut from. */
+  const back = same.length ? same.reduce((a, b) => a + b, 0) / same.length : 0;
+  assert.ok(back < 0.25,
+    `${(back * 100).toFixed(1)}% of re-welds returned to the body the lobe was severed from ` +
+    `(${same.length} re-welds sampled); the phase-locked build read 86.7% and that is the limit ` +
+    "cycle this exists to catch");
+
+  /* and it stays away for a real share of a cycle rather than a handful of frames */
+  if (gaps.length) {
+    const med = gaps.slice().sort((a, b) => a - b)[gaps.length >> 1];
+    assert.ok(med > 500,
+      `median ${med} frames free before re-welding; the phase-locked build read 59, which is 0.20% ` +
+      "of a cycle and is what a rebound looks like");
+  }
+});
+
+test("2.40 — a body cannot exceed the field's own ceiling, and a dumbbell is never swept away", () => {
+  /* The threshold adds no constant: it is R[1], the biggest drop the field will spawn, authored at
+     2.25. Asserted as the arithmetic on the shared part rather than as a digit, so it survives a
+     change to the band. */
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  assert.equal(G.bodyRadius([9, 9]).toFixed(3), G.merged(9, 9).toFixed(3),
+    "a two-lobe body's equivalent radius IS the field's own merge convention");
+  /* THE THRESHOLD FOR A TWIN PAIR IS DERIVED, NOT TYPED, and the first draft of this clause
+     overclaimed. It asserted a dumbbell survives at every size in the band; it does not. A twin
+     pair's equivalent radius is r·2^(1/3), so it clears the ceiling above R[1]/2^(1/3) = 23.811 px
+     — the top 29.5% of the band by radius sheds. That is the honest statement, and the figure is
+     recomputed here from R[1] and MERGE_POWER so a change to either moves it. */
+  const twinLimit = G.R[1] / Math.pow(2, 1 / G.MERGE_POWER);
+  assert.ok(Math.abs(twinLimit - 23.811) < 0.01, `twin threshold ${twinLimit.toFixed(3)} px`);
+  for (const r of [9, 15, 20, 23]) assert.ok(!G.overCeiling([r, r]),
+    `a dumbbell at r=${r} is under the twin threshold and survives — 96.2% of merges arrest into ` +
+    "one and the shed must not erase the substance's own signature outcome");
+  for (const r of [24, 30]) assert.ok(G.overCeiling([r, r]),
+    `a dumbbell at r=${r} is over the ceiling and sheds`);
+  assert.ok(G.overCeiling([19, 19, 19, 19]), "four ordinary lobes is over the ceiling and sheds");
+  assert.ok(!G.overCeiling([19, 19, 19]), "three is not");
+  /* and the ceiling is the band's, not a number typed here */
+  assert.ok(G.bodyRadius([G.R[1], G.R[1]]) > G.R[1] && !G.overCeiling([G.R[1]]),
+    "the criterion is exactly 'bigger than the biggest drop the field spawns'");
 });
 
 test("2.39 — accretion does not carry a lobe through the glass, driven where that is reachable", () => {
