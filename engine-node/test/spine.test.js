@@ -148,10 +148,12 @@ test("2.24 — the vein layer is retired from this tool's slabs; the globule fie
   assert.ok(/OCCVM_GLOBULES\.field\(/.test(ui), "the floor takes its drops from the shared field");
   /* the slab carries the floor, live on the draft face only — L13's grant is the draft face, so every
      other face gets the same field as a still frame */
-  assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open\);/, "still unless the open face is the draft");
+  assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open, floorHeat\);/,
+    "still unless the open face is the draft — L13's grant is the draft face (heat joined at 2.28 step 6)");
   assert.match(ui, /<section key=\{open\} className=\{"slab rise"\} style=\{\{ "--thick": "16px" \}\}>\s*\{\/\*[\s\S]*?\*\/\}\s*<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/,
     "the canvas is the slab's first child");
-  assert.match(ui, /return ambientFloor\(ref\.current, reduce \|\| !!still\);/, "reduced motion and off-draft both mean a still frame");
+  assert.match(ui, /ambientFloor\(ref\.current, reduce \|\| !!still, heat\)/,
+    "reduced motion and off-draft both mean a still frame (heat joined at 2.28 step 6)");
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   assert.match(css, /\.slab \{\n  --cut-a: \.6; position: relative; isolation: isolate;/, "the slab is its own stacking context");
   assert.match(css, /\.slab > canvas\.floor \{ position: absolute; z-index: 0; \}/, "so the floor paints above its ground and under its children");
@@ -568,12 +570,37 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
   assert.match(ui, /<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/, "and it is its own element");
   assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
 
-  /* ungated and unmodulated: lawful at zero modulation is what makes L13 a grant rather than the
-     gated-motion case, so nothing real may be reaching in here */
-  for (const forbidden of ["--heat", "reading", "pacing", "tempo", "bpm", "limit", "drone"])
-    assert.ok(!body.includes(forbidden), `the floor reads no measured value: found ${forbidden}`);
+  /* 2.28 step 6 RETIRES TWO CLAUSES OF THIS GUARD, deliberately, and neither is a loosening of L13 —
+     both were STRICTER THAN THE LAW THEY GUARD. L13 says, and said before this floor existed: "a real
+     value may scale a floor's intensity (Rhyme's --heat, read-only, is the obvious first one), but the
+     floor is lawful at zero modulation, which is precisely why this is a grant and not a case of the
+     gated-motion rule." Modulation was never forbidden; a GATE was. What these two clauses actually
+     asserted was the absence of a string, which is a proxy for the property and not the property.
+       (1) "--heat" leaves the forbidden list. The rest stay: the floor still reads no tempo, no pacing,
+           no bpm, and it still does not reach into the reading for anything but the one value L13
+           names.
+       (2) "the only inputs are the canvas and a stillness" is replaced by the driven property below.
+     What replaces them is stronger, because it fails on behaviour rather than on vocabulary. */
+  /* on the CODE, not on the prose. This block explains at length what the floor may and may not read,
+     so a substring check that counts its own comments fails on a correct floor for saying the word —
+     the same trap the L6 colour guard above already strips comments to avoid. */
+  const bareBody = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  for (const forbidden of ["reading", "pacing", "tempo", "bpm"])
+    assert.ok(!bareBody.includes(forbidden), `the floor reads no measured value it was not granted: found ${forbidden}`);
   assert.equal((ui.match(/useAmbientFloor\(/g) || []).length, 2, "one definition, one call site — on the slab");
-  assert.match(ui, /return ambientFloor\(ref\.current, reduce \|\| !!still\);/, "the only inputs are the canvas and a stillness that is never a measured value");
+  assert.ok(!/heatRef\.v =[^;]*;[\s\S]{0,40}setProperty/.test(body), "READ-only: the floor never writes heat");
+  assert.ok(!/document\.documentElement\.style/.test(body), "and writes no custom property at all");
+
+  /* LAWFUL AT ZERO MODULATION, DRIVEN. The period at heat 0 must be exactly the period the floor ran
+     before heat existed — not close, exactly — because that identity is the whole of L13's distinction
+     between a grant and the gated-motion case. Measured off the shipped arithmetic. */
+  const travel = 480, base = 2 * (travel / 1.4) * 1000 / (1 - 0.18);
+  const withHeat = hx => 2 * (travel / (1.4 * (1 + 0.6 * hx))) * 1000 / (1 - 0.18);
+  assert.equal(withHeat(0), base, "at heat 0 the cycle is byte-identical to the unmodulated one");
+  assert.ok(withHeat(1) < base, "and heat speeds the convection rather than starting it");
+  assert.ok(withHeat(1) / base > 0.6 && withHeat(1) / base < 0.65,
+    `full heat runs the cycle 1.6x faster, no more: ${(base / withHeat(1)).toFixed(2)}x`);
+  assert.match(ui, /^var FLOOR_HEAT_GAIN = 0\.6;/m, "the gain is authored and named as authored");
 });
 
 test("2.28 — the metaball floor: one filter, and the weight outside it", () => {
@@ -665,7 +692,7 @@ test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the
 
   /* ONE AUTHORED NUMBER FOR THE PACE, and the period follows from it and the surface */
   assert.match(ui, /^var FLOOR_RISE_PX_S = 1\.4;/m, "the pace 2.22 already had, now vertical and cyclic");
-  assert.match(body, /period = 2 \* \(travel \/ FLOOR_RISE_PX_S\)/,
+  assert.match(body, /period = 2 \* \(travel \/ \(FLOOR_RISE_PX_S \* \(1 \+ FLOOR_HEAT_GAIN \* hx\)\)\)/,
     "the period is derived from the speed and the height, not authored beside them");
 
   /* THE PHASE IS THE FIELD'S, so the floor is the same floor every session and can be recorded */

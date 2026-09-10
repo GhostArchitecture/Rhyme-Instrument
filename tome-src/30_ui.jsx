@@ -669,6 +669,17 @@ var FLOOR_SEED = 0x0CCF1005;  /* fixed, so the field is the same field every ses
  * rest, and this system already owns exactly one curve for coming to rest irreversibly. */
 var FLOOR_RISE_PX_S = 1.4;    /* authored: see above — the substance's own answer here is zero */
 var FLOOR_DWELL = 0.18;       /* authored: the share of each half-cycle spent attached at an end */
+/* 2.28 step 6 — HEAT MODULATES, IT DOES NOT GATE, and L13 named this case in advance: "a real value may
+   scale a floor's intensity (Rhyme's --heat, read-only, is the obvious first one), but the floor is
+   lawful at zero modulation, which is precisely why this is a grant and not a case of the gated-motion
+   rule." So the law already permitted this; the guards written at 2.22 were stricter than the law they
+   guard, and step 6 brings them back to it rather than loosening anything.
+   WHAT IT MODULATES IS THE CONVECTION RATE, which is the one thing this model already has a
+   heat-driven mechanism for: a lamp's bulb is its heat source and the cycle rate scales with it, so
+   heat reaching the period is the model's own variable rather than a parameter picked to have
+   something to attach. FLOOR_HEAT_GAIN is authored: at full heat the cycle runs 1.6x its base rate.
+   At heat 0 the period is EXACTLY the unmodulated one — asserted by driving both, not by reading. */
+var FLOOR_HEAT_GAIN = 0.6;    /* authored: the share of the base rate full heat adds */
 
 /* The substance's cessation curve, sampled ONCE: `easing` integrates 4,000 steps and the curve is a
    property of the substance, not of the frame, so calling it per drop per frame would be the wrong
@@ -700,7 +711,7 @@ function cyclePos(u) {
    not satisfy and which is the one substitution anybody is likely to make here. */
 function bridgeRadius(ms) { return FLOOR_MERGE_PX_S * Math.max(0, ms) / 1000; }
 
-function ambientFloor(canvas, still) {
+function ambientFloor(canvas, still, heat) {
   if (!canvas || !canvas.getContext) return function () {};
   /* named, not aliased: the L10 auditor measures the consumer by this call */
   if (typeof OCCVM_GLOBULES === "undefined" || !OCCVM_GLOBULES.field) return function () {};
@@ -738,6 +749,10 @@ function ambientFloor(canvas, still) {
     } catch (e) { return null; }
   })();
 
+  /* a box rather than a captured value, so a changed reading reaches the running floor without the
+     floor being torn down and reseeded — a field that reshuffled every time the writing changed would
+     be a floor nobody could look at */
+  var heatRef = { v: heat };
   var ctx = canvas.getContext("2d"), fld = null;
   var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0, clock = 0;
 
@@ -774,7 +789,11 @@ function ambientFloor(canvas, still) {
     var i, j;
     /* 2.28 — the cycle's period follows from the authored speed and the surface's own height, so the
        floor keeps its pace on a face of any size rather than carrying a second authored constant. */
-    var travel = Math.max(1, h), period = 2 * (travel / FLOOR_RISE_PX_S) * 1000 / (1 - FLOOR_DWELL);
+    var travel = Math.max(1, h);
+    /* READ-ONLY, and clamped here rather than trusted: the floor never writes --heat and never decides
+       what it means. At heat 0 this is exactly the unmodulated period. */
+    var hx = Math.max(0, Math.min(1, +heatRef.v || 0));
+    var period = 2 * (travel / (FLOOR_RISE_PX_S * (1 + FLOOR_HEAT_GAIN * hx))) * 1000 / (1 - FLOOR_DWELL);
     clock += dt;
     for (i = 0; i < drops.length; i++) {
       var d = drops[i];
@@ -907,19 +926,30 @@ function ambientFloor(canvas, still) {
   window.addEventListener("resize", onResize);
   var ro = null;
   if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(onResize); ro.observe(canvas.parentNode || canvas); }
-  return function () {
+  var stop = function () {
     cancelAnimationFrame(raf);
     window.removeEventListener("resize", onResize);
     if (ro) ro.disconnect();
   };
+  stop.setHeat = function (v) { heatRef.v = v; };
+  return stop;
 }
 
-function useAmbientFloor(ref, still, key) {
+/* 2.28 step 6 — `heat` is a THIRD input and it is a measured value, which the 2.22 guard forbade
+   outright. That guard was stricter than L13, which names this exact case. What stays true and is now
+   asserted by DRIVING rather than by the absence of a string: the floor runs at heat 0, at the same
+   period it ran before heat existed. Heat is passed through a ref-setter rather than into the effect's
+   dependency list, because re-running the effect would tear the canvas down and reseed the field every
+   time the writing changed — a floor that reshuffles as you type is not a floor. */
+function useAmbientFloor(ref, still, key, heat) {
+  const stopRef = useRef(null);
   useEffect(() => {
     let reduce = false;
     try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
-    return ambientFloor(ref.current, reduce || !!still);
+    stopRef.current = ambientFloor(ref.current, reduce || !!still, heat);
+    return stopRef.current;
   }, [still, key]);
+  useEffect(() => { if (stopRef.current && stopRef.current.setHeat) stopRef.current.setHeat(heat); }, [heat]);
 }
 
 /* ---- bank ---- */
@@ -1130,7 +1160,13 @@ function Tome() {
   }[id]);
   const idx = FACES.findIndex(f => f.id === open);
   const floorRef = useRef(null);
-  useAmbientFloor(floorRef, open !== "draft", open);
+  /* THE DRAFT'S OWN DRONE DEPTH, read for exactly what it already means and nothing more: how far past
+     the pop line the worst vowel run has gone, 0 when nothing is past it. `.bar` already carries the
+     same quantity per bar as --heat; this is the draft-level reading of it, and the floor never writes
+     it, never decides what it means, and still runs when it is 0. */
+  const floorHeat = quick && quick.limit && quick.maxRun > quick.limit
+    ? Math.min(1, (quick.maxRun - quick.limit) / Math.max(1, quick.limit)) : 0;
+  useAmbientFloor(floorRef, open !== "draft", open, floorHeat);
   return (
     <div>
       <header className="binding">
