@@ -320,7 +320,7 @@ function Shelf({ shelf, current, setCurrent, newDraft, renameDraft, removeDraft 
     </div>
   );
 }
-function SharePanel({ reading, mineral, onClose }) {
+function SharePanel({ reading, palette, onClose }) {
   const filled = reading.bars.filter(Boolean);
   const [scope, setScope] = useState("one"); const [format, setFormat] = useState("feed");
   const [one, setOne] = useState(filled.length ? filled[filled.length - 1].i : 0);
@@ -329,10 +329,10 @@ function SharePanel({ reading, mineral, onClose }) {
   const holder = useRef(null); const canvasRef = useRef(null);
   const chosen = scope === "one" ? [one] : filled.filter(b => b.i >= start).slice(0, len).map(b => b.i);
   useEffect(() => {
-    const cv = CARD.render({ reading, bars: chosen, format: format === "story" ? "story" : "feed", mineral });
+    const cv = CARD.render({ reading, bars: chosen, format: format === "story" ? "story" : "feed", palette });
     canvasRef.current = cv; const h = holder.current; if (!h) return;
     h.innerHTML = ""; cv.style.width = "100%"; cv.style.height = "auto"; cv.style.display = "block"; cv.style.borderRadius = "4px"; h.appendChild(cv);
-  }, [reading, scope, format, one, start, len, mineral]);
+  }, [reading, scope, format, one, start, len, palette]);
   return (
     <div className="share">
       <div className="row" style={{ marginTop: 0 }}>
@@ -463,7 +463,7 @@ function TempoPanel({ tempo, setTempo, pacing, onClose }) {
     </div>
   );
 }
-function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral, tempo, setTempo }) {
+function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, palette, tempo, setTempo }) {
   const [pick, setPick] = useState(null);
   const [editing, setEditing] = useState(null);           // line index being cut
   const [quarry, setQuarry] = useState(false);
@@ -503,7 +503,7 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}
       {tempoOpen && <TempoPanel tempo={tempo} setTempo={setTempo} pacing={pacing} onClose={() => setTempoOpen(false)} />}
       {meterOpen && <MeterPanel reading={reading} shelf={shelfProps.shelf} pop={pop} onClose={() => setMeterOpen(false)} />}
-      {share && reading.bars.some(Boolean) && <SharePanel reading={reading} mineral={mineral} onClose={() => setShare(false)} />}
+      {share && reading.bars.some(Boolean) && <SharePanel reading={reading} palette={palette} onClose={() => setShare(false)} />}
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
         <div className="bars" ref={host}>
@@ -615,7 +615,7 @@ function Check({ eng }) {
    WHAT THE LAW FORBIDS AND THIS RESPECTS. The floor is a LAYER on the material, never the material
    deforming at rest — it is its own canvas, painted under the bars, and no surface's own geometry moves.
    It never draws over a bar: `.bar` carries --heat, a measured value, and L13 bars a floor from any
-   surface carrying one. It takes its colour from the mineral tokens and carries no literal of its own,
+   surface carrying one. It takes its colour from the pigment tokens and carries no literal of its own,
    so an unresolved palette paints nothing rather than painting an invented accent (L6). And it is
    lawful at zero modulation: nothing gates it, nothing triggers it, no real value scales it. */
 /* 2.24: the floor is the SUBSTRATE LAYER on every slab now, not an underlayer on one face — see the
@@ -834,9 +834,12 @@ function Tune({ prefs, setPrefs, engStatus, migrated, onExport, onImport }) {
         <Cast on={!!place} patina onClick={locate}>{place ? `${place.name} · ${place.lat}, ${place.lon}` : "use my location"}</Cast>
       </div>
       {geo && <div className="note" style={{ marginTop: 6 }}>{geo}</div>}
-      <div className="label">mineral</div>
+      <div className="label">palette</div>
       <div className="row">
-        {Object.keys(MINERALS).map(m => <Cast key={m} on={prefs.mineral === m} onClick={() => setPrefs({ ...prefs, mineral: m })} style={{ "--m": MINERALS[m].m }}>{m}</Cast>)}
+        {/* OCCVM-L6 — each swatch wears the palette it offers through --m (the decorative accent), and
+            the selected one is the Cast's own `on` state. Five, not three: the closed mineral set died
+            with the crystal at 2.8 and the count now follows occvm/pigments.js rather than this line. */}
+        {Object.keys(PIGMENTS).map(k => <Cast key={k} on={prefs.palette === k} onClick={() => setPrefs({ ...prefs, palette: k })} style={{ "--m": PIGMENTS[k].m }}>{k}</Cast>)}
       </div>
       <div className="label">spacing</div>
       <div className="row">{["comfy", "dense"].map(d => <Cast key={d} on={prefs.density === d} patina onClick={() => setPrefs({ ...prefs, density: d })}>{d}</Cast>)}</div>
@@ -869,7 +872,7 @@ function Tome() {
   const [open, setOpen] = useState(null);
   const [bank, setBank_] = useState([]); const [overrides, setOverrides_] = useState({});
   const [shelf, setShelf_] = useState([]); const [current, setCurrent_] = useState(null);
-  const [prefs, setPrefs_] = useState({ mineral: "amethyst", density: "comfy", motion: "on" });
+  const [prefs, setPrefs_] = useState({ palette: OCCVM_PIGMENT_DEFAULT, density: "comfy", motion: "on" });
   const [pop, setPop_] = useState("rap");
   const [loaded, setLoaded] = useState(false); const [migrated, setMigrated] = useState(false);
   const [engStatus, setEngStatus] = useState("idle"); const [sun, setSun] = useState(null);
@@ -881,15 +884,23 @@ function Tome() {
     if (!sh.some(d => d.id === cur)) cur = sh[0].id;
     setShelf_(sh); setCurrent_(cur);
     const o = STORE.get("overrides", {}); OVERRIDES = o; setOverrides_(o);
-    setPrefs_(STORE.get("prefs", { mineral: "amethyst", density: "comfy", motion: "on" })); setPop_(STORE.get("pop", "rap"));
+    /* 2.27 — a stored `mineral` from before the palettes is read once and resolved to a palette rather
+       than left to fall through to the default silently. amethyst was the default and obsidian is the
+       palette that preserves it; the other two were accents this tool never mapped to a palette. */
+    const sp = STORE.get("prefs", { palette: OCCVM_PIGMENT_DEFAULT, density: "comfy", motion: "on" });
+    if (sp.mineral !== undefined && !sp.palette) { sp.palette = OCCVM_PIGMENT_DEFAULT; sp.migratedFrom = { mineral: sp.mineral }; delete sp.mineral; STORE.set("prefs", sp); }
+    if (!PIGMENTS[sp.palette]) sp.palette = OCCVM_PIGMENT_DEFAULT;
+    setPrefs_(sp); setPop_(STORE.get("pop", "rap"));
     setLoaded(true); E2.load(setEngStatus);
   }, []);
   useEffect(() => { const t = () => setSun(SUN.apply(new Date())); t(); const id = setInterval(t, 60000); return () => clearInterval(id); }, []);
   useEffect(() => { SUN.setPlace(prefs.place); setSun(SUN.apply(new Date())); }, [prefs.place]);
   useEffect(() => { E2.setOwn([...bank, ...shelf.flatMap(d => d.text.split(/\s+/))]); }, [bank, shelf]);
   useEffect(() => {
-    const m = MINERALS[prefs.mineral] || MINERALS.amethyst, rs = document.documentElement.style;
-    rs.setProperty("--mineral", m.m); rs.setProperty("--mineral-lo", m.mlo); rs.setProperty("--vein-hi", m.hi); rs.setProperty("--vein-lo", m.lo);
+    /* one call, one part, both tools — see occvm/pigments.js. Before 2.27 this hand-wrote four
+       properties here and BTC hand-wrote the same four in its own applyMineral, which is how a shared
+       set acquires a local exception. */
+    occvmApplyPigment(prefs.palette, document.documentElement.style);
     document.body.className = (prefs.density === "dense" ? "dense " : "") + (prefs.motion === "on" ? "motion" : "");
   }, [prefs]);
   const setBank = v => { setBank_(v); STORE.set("bank", v); };
@@ -946,10 +957,10 @@ function Tome() {
     lookup: engStatus === "ready" ? `${E2.size().toLocaleString()} words` : engStatus === "loading" ? "loading…" : "curated list",
     check: "a ~ b",
     bank: `${bank.length} word${bank.length === 1 ? "" : "s"} · ${nOv} cut${nOv === 1 ? "" : "s"}`,
-    tune: `${prefs.mineral} · ${prefs.density}`,
+    tune: `${prefs.palette} · ${prefs.density}`,
   };
   const face = id => ({
-    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} mineral={prefs.mineral} tempo={tempo} setTempo={setTempo} />,
+    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} palette={prefs.palette} tempo={tempo} setTempo={setTempo} />,
     lookup: <Lookup bank={bank} setBank={setBank} eng={eng} />,
     check: <Check eng={eng} />,
     bank: <Bank bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride} eng={eng} />,

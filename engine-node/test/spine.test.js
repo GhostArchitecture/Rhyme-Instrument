@@ -39,7 +39,7 @@ test("the spine sits above the tool's own declarations", () => {
      If a block moves below the tool's own declarations it stops being inert and starts overriding. */
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   const js = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
-  assert.ok(css.indexOf(fence("spine.css").open) < css.indexOf("--mineral:"));
+  assert.ok(css.indexOf(fence("spine.css").open) < css.indexOf("--pigment:"));
   /* the sundial must be defined before the tool's own SUN closure consumes it */
   assert.ok(js.indexOf(fence("sundial.js").open) < js.indexOf("const SUN ="));
 });
