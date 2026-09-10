@@ -513,7 +513,11 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
 /* Loads the floor out of the BUILT artifact and runs it against a recording canvas, so what is asserted
    is what ships rather than what the source says. jsdom is not in this repo's dependencies and is not
    needed: the floor touches a 2-D context, getComputedStyle and rAF, and all three are stubbed here. */
-function loadFloor(over) {
+function loadFloor(over, size) {
+  /* 2.39 — the canvas size is a parameter now, DEFAULT UNCHANGED at 320x480 so every test written
+     against it is untouched. It exists because a guard that cannot reach the defect it names is
+     decoration: the containment case below is a property of the vessel's WIDTH, and at 320x480 the
+     chain never gets deep enough to exercise it. */
   const vm = require("vm");
   const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
   /* 2.31 — the cut is the FENCE, not a pair of identifiers that happen to bracket the code. The old
@@ -534,12 +538,28 @@ function loadFloor(over) {
     },
     set(t, k, v) { ops.push(["set:" + String(k), v]); t[k] = v; return true; }
   });
-  const canvas = { width: 0, height: 0, getContext: () => ctx2d, getBoundingClientRect: () => ({ width: 320, height: 480 }) };
+  const canvas = { width: 0, height: 0, getContext: () => ctx2d, getBoundingClientRect: () => ({ width: (size && size.width) || 320, height: (size && size.height) || 480 }) };
   const frames = [];
   const made = [];
   const sandbox = {
     Math, performance: { now: () => 0 },
-    OCCVM_GLOBULES: require(path.join(ROOT, "occvm", "globules.js")),
+    /* 2.40 — the shipped part, with `field` wrapped so the harness can see the drop objects it
+       hands out. Everything else is the real module through the prototype, so no assertion elsewhere
+       changes; this exists because the defect 2.40 guards against is about WHERE a shed lobe goes,
+       and that is a fact about the body graph rather than about pixels. */
+    OCCVM_GLOBULES: (function () {
+      const real = require(path.join(ROOT, "occvm", "globules.js"));
+      const seen = [], wrap = Object.create(real);
+      wrap.field = function (o) {
+        const f = real.field(o);
+        f.drops.forEach(d => seen.push(d));
+        const sp = f.spawn;
+        f.spawn = function (a) { const d = sp(a); seen.push(d); return d; };
+        return f;
+      };
+      wrap.__seen = seen;
+      return wrap;
+    })(),
     /* 2.28 — the floor reads the substance's cessation curve for the turn at each end of the cycle.
        Without it in the sandbox the fallback straight ramp is what gets driven, and the harness would
        be testing the degradation rather than the code. */
@@ -993,8 +1013,189 @@ test("2.28 steps 4+5 — the coil decides where, tau0 decides what, driven not r
     "sharing a phase is not enough: two lobes of different radius compute different heights from it");
   assert.ok(!/a\.r = OCCVM_GLOBULES\.merged\(a\.r, b\.r\);[\s\S]{0,80}locked/.test(body),
     "an arrested pair does NOT become one drop: the lobes remain, which is what a frozen dumbbell is");
-  assert.match(body, /p\.merging \|\| q\.merging \|\| p\.locked \|\| q\.locked/,
-    "and a locked pair never welds again — the bridge would have to beat a stress that already stopped it");
+  /* 2.39 — ONE ASSERTION RETIRED HERE, AND RETIRING ONE IS THE MOVE THIS PROJECT DISTRUSTS MOST, SO
+     IT IS NAMED. It read:
+         assert.match(body, /p\.merging \|\| q\.merging \|\| p\.locked \|\| q\.locked/,
+           "and a locked pair never welds again — the bridge would have to beat a stress that
+            already stopped it");
+     The sentence is true of the FROZEN BRIDGE and the code drew it wider than that. A third drop
+     touching the body elsewhere opens a NEW bridge with its own capillary drive γ/R; the arrested
+     one is not in its way. Retired because what it pinned is wrong, not because it was inconvenient,
+     and what replaces it is strictly narrower — the two exclusions that ARE structural. */
+  assert.match(body, /if \(p\.lockedTo \|\| q\.lockedTo\) continue;/,
+    "a follower is an interior lobe, not a free surface a drop can land on");
+  assert.match(body, /if \(p\.locked && q\.locked\) continue;/,
+    "a body accretes a free drop and never another body — the placement is one level deep");
+  assert.match(body, /var lead = q\.locked \? q : p, join = q\.locked \? p : q;/,
+    "and the body leads, or the arrest branch makes an existing leader somebody's follower");
+  assert.ok(!/p\.locked \|\| q\.locked\) continue/.test(body),
+    "the blanket exclusion is gone, not merely supplemented");
+});
+
+test("2.39 — a peanut may rejoin at the coil, and the rigid body stays one level deep", () => {
+  /* Driven, because the failure this replaces was invisible to every regex: the shipped coil fired
+     ten welds on a phone and then stopped forever, with 20 of 37 drops locked out permanently.
+     Read off the canvas, not off the source. */
+  /* 2.40 — DRIVEN AT 520x900 NOW, AND THE DEFAULT WAS THE WRONG SIZE FOR THIS TOO. At 320x480 the
+     field holds 17 drops; measured over a full run they never reach three lobes at all, because too
+     few pairs ever meet and the ones that do are large enough that a third clears 2.40's ceiling.
+     So the accretion this asserts is not observable there — the same undersized-instrument error the
+     containment clause below was already corrected for. 52 drops at 520x900 reach four. */
+  const { sandbox, canvas, frames, made, ops } = loadFloor(null, { width: 520, height: 900 });
+  sandbox.ambientFloor(canvas, false);
+  let t = 0;
+  for (let i = 0; i < 30000 && frames.length; i++) { t += 90; frames[frames.length - 1](t); }
+
+  /* Every drop is one `arc` per frame. A body of k lobes bonded rigidly holds k−1 constant
+     separations; the shipped ceiling before 2.39 was a PAIR, so a run that ever shows three lobes
+     locked together is the accretion this release opened, and cannot be faked by proximity. */
+  /* 2.33's lesson, and the first draft of THIS guard walked straight into it: the arcs land on the
+     BUFFER, not the display context — the drops are drawn opaque offscreen and the display takes one
+     filtered composite. Reading `ops` here counts zero arcs and the guard reports a field of one
+     lobe from correct code, which is what it did. `made[0]` is the buffer. */
+  const arcsOf = () => { const buf = made.length ? made[0]._ops : ops; const before = buf.length;
+    t += 90; frames[frames.length - 1](t);
+    return buf.slice(before).filter(o => o[0] === "arc").map(o => [o[1], o[2], o[3]]); };
+  const snaps = []; for (let i = 0; i < 6; i++) snaps.push(arcsOf());
+  const n = snaps[0].length;
+  assert.ok(snaps.every(f => f.length === n), "the lobe count is stable across the sampled frames");
+
+  /* group by constant pairwise separation: the observable signature of one rigid object */
+  const sep = (f, i, j) => Math.hypot(f[i][0] - f[j][0], f[i][1] - f[j][1]);
+  const bonded = new Map();
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const s0 = sep(snaps[0], i, j);
+    if (snaps.every(f => Math.abs(sep(f, i, j) - s0) < 1e-6)) {
+      if (!bonded.has(i)) bonded.set(i, new Set([i]));
+      bonded.get(i).add(j);
+      if (bonded.has(j)) for (const m of bonded.get(j)) bonded.get(i).add(m);
+    }
+  }
+  /* AND A RIGID BODY IS RIGID THROUGHOUT, not merely pairwise. Every lobe holds a constant
+     separation from EVERY other lobe of the same body — what "a frozen bridge does not stretch"
+     means once a body has more than two lobes.
+     IT IS ASSERTED AS THE PHYSICS, AND IT IS NOT THE GUARD ON THE ORDERING, which the first draft
+     of this block claimed it might be. A grand-follower cannot read a stale parent: the coil loop
+     is `for i; for j = i + 1` and the arrest writes `join.lockedTo = lead`, so the chain is always
+     parent-before-child in `drops`. Driven at four viewports, both ways: 0 non-rigid pairs every
+     time. What guards the ordering is the containment case below, which reaches the real defect. */
+  for (const g of bonded.values()) {
+    const idx = [...g];
+    for (let a = 0; a < idx.length; a++) for (let b = a + 1; b < idx.length; b++) {
+      const s0 = sep(snaps[0], idx[a], idx[b]);
+      assert.ok(snaps.every(f => Math.abs(sep(f, idx[a], idx[b]) - s0) < 1e-6),
+        `lobes ${idx[a]} and ${idx[b]} are in one body and their separation moves — the body is not rigid`);
+    }
+  }
+
+  const biggest = Math.max(1, ...[...bonded.values()].map(g => g.size));
+  assert.ok(biggest >= 3,
+    `a body reached ${biggest} lobes; before 2.39 the ceiling was 2, because a locked lobe was ` +
+    "excluded from every future weld — so anything above 2 IS the peanut rejoining");
+
+  /* Containment under accretion is its own test below, because it needs a wider vessel than this
+     one to reach the case it is guarding. */
+});
+
+test("2.40 — the field sheds as well as merges, and the fragment DEPARTS rather than rebounding", () => {
+  /* WHAT THIS GUARDS IS NOT "sheds happen". The first build of 2.40 sheared plenty and achieved
+     nothing: it set the fragment's phase to its parent's, which keeps the two in step forever, so
+     the lobe came back to the coil beside the body every cycle and re-attached. Measured then:
+     90 sheds, 83 of them re-welds, median 3.0 s free — 0.20% of a cycle — and 86.7% back to the
+     SAME body. The weld count read 1,066 and looked like a living field; it was a limit cycle, the
+     shape 2.39's naive unlock already produced once at 3,502.
+     A count cannot tell those apart. WHERE the lobe goes can, so that is what is asserted. */
+  const { sandbox, canvas, frames } = loadFloor(null, { width: 520, height: 900 });
+  sandbox.ambientFloor(canvas, false);
+  const seen = sandbox.OCCVM_GLOBULES.__seen;
+  let t = 0, sheds = 0;
+  const prev = new Map(), freed = new Map(), gaps = [], same = [];
+  for (let i = 0; i < 30000 && frames.length; i++) {
+    t += 90; frames[frames.length - 1](t);
+    for (const d of seen) {
+      if (d.gone) continue;
+      const now = d.lockedTo || null, was = prev.has(d) ? prev.get(d) : undefined;
+      if (was !== undefined && was && !now) { freed.set(d, { i: i, from: was }); sheds++; }
+      if (was !== undefined && !was && now && freed.has(d)) {
+        const g = freed.get(d);
+        gaps.push(i - g.i); same.push(now === g.from ? 1 : 0); freed.delete(d);
+      }
+      prev.set(d, now);
+    }
+  }
+  assert.ok(sheds > 0, `the shed fires at all — ${sheds} over the run`);
+
+  /* THE ONE THAT BITES: a fragment must not be handed back to the body it was cut from. */
+  const back = same.length ? same.reduce((a, b) => a + b, 0) / same.length : 0;
+  assert.ok(back < 0.25,
+    `${(back * 100).toFixed(1)}% of re-welds returned to the body the lobe was severed from ` +
+    `(${same.length} re-welds sampled); the phase-locked build read 86.7% and that is the limit ` +
+    "cycle this exists to catch");
+
+  /* and it stays away for a real share of a cycle rather than a handful of frames */
+  if (gaps.length) {
+    const med = gaps.slice().sort((a, b) => a - b)[gaps.length >> 1];
+    assert.ok(med > 500,
+      `median ${med} frames free before re-welding; the phase-locked build read 59, which is 0.20% ` +
+      "of a cycle and is what a rebound looks like");
+  }
+});
+
+test("2.40 — a body cannot exceed the field's own ceiling, and a dumbbell is never swept away", () => {
+  /* The threshold adds no constant: it is R[1], the biggest drop the field will spawn, authored at
+     2.25. Asserted as the arithmetic on the shared part rather than as a digit, so it survives a
+     change to the band. */
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  assert.equal(G.bodyRadius([9, 9]).toFixed(3), G.merged(9, 9).toFixed(3),
+    "a two-lobe body's equivalent radius IS the field's own merge convention");
+  /* THE THRESHOLD FOR A TWIN PAIR IS DERIVED, NOT TYPED, and the first draft of this clause
+     overclaimed. It asserted a dumbbell survives at every size in the band; it does not. A twin
+     pair's equivalent radius is r·2^(1/3), so it clears the ceiling above R[1]/2^(1/3) = 23.811 px
+     — the top 29.5% of the band by radius sheds. That is the honest statement, and the figure is
+     recomputed here from R[1] and MERGE_POWER so a change to either moves it. */
+  const twinLimit = G.R[1] / Math.pow(2, 1 / G.MERGE_POWER);
+  assert.ok(Math.abs(twinLimit - 23.811) < 0.01, `twin threshold ${twinLimit.toFixed(3)} px`);
+  for (const r of [9, 15, 20, 23]) assert.ok(!G.overCeiling([r, r]),
+    `a dumbbell at r=${r} is under the twin threshold and survives — 96.2% of merges arrest into ` +
+    "one and the shed must not erase the substance's own signature outcome");
+  for (const r of [24, 30]) assert.ok(G.overCeiling([r, r]),
+    `a dumbbell at r=${r} is over the ceiling and sheds`);
+  assert.ok(G.overCeiling([19, 19, 19, 19]), "four ordinary lobes is over the ceiling and sheds");
+  assert.ok(!G.overCeiling([19, 19, 19]), "three is not");
+  /* and the ceiling is the band's, not a number typed here */
+  assert.ok(G.bodyRadius([G.R[1], G.R[1]]) > G.R[1] && !G.overCeiling([G.R[1]]),
+    "the criterion is exactly 'bigger than the biggest drop the field spawns'");
+});
+
+test("2.39 — accretion does not carry a lobe through the glass, driven where that is reachable", () => {
+  /* WHY THIS IS NOT IN THE TEST ABOVE. 2.38's clamp bounds the BODY, and the extent loop that
+     computes it reads DIRECT followers only — so a two-level chain hangs a grand-follower outside
+     the bound and can push it through the wall. Reaching that needs a wide enough vessel AND a deep
+     enough chain, and the harness's default 320x480 gives neither: the chain there never passes
+     depth 1 even with the ordering removed, so a guard written at that size cannot fail and is
+     decoration. Measured to find the cheapest size that CAN fail: 390x844 reaches depth 2 and still
+     crosses nothing over 2,664,000 lobe-frames; 520x900 over 25,000 frames crosses 486 times at
+     15.1 px worst once the ordering is removed, and 720x1400 over an hour crosses 4,984 times at
+     38.6 px. 520x900 is taken — it is the smallest that bites, and it costs ~7 s. */
+  const { sandbox, canvas, frames, made, ops } = loadFloor(null, { width: 520, height: 900 });
+  sandbox.ambientFloor(canvas, false);
+  const w = 520;
+  let t = 0, over = 0, worst = 0, lobeFrames = 0;
+  const buf = () => (made.length ? made[0]._ops : ops);
+  for (let i = 0; i < 25000 && frames.length; i++) {
+    const b = buf(), before = b.length;
+    t += 90; frames[frames.length - 1](t);
+    for (const o of b.slice(before)) {
+      if (o[0] !== "arc") continue;
+      lobeFrames++;
+      const past = Math.max(0, o[3] - o[1], (o[1] + o[3]) - w);
+      if (past > 1e-3) { over++; worst = Math.max(worst, past); }
+    }
+  }
+  assert.ok(lobeFrames > 100000,
+    `the run actually drove the field (${lobeFrames} lobe-frames) — a silent zero would pass vacuously`);
+  assert.equal(over, 0,
+    `no lobe past the glass in ${lobeFrames} lobe-frames; worst overhang ${worst.toFixed(3)} px`);
 });
 
 test("2.28 step 5 — the arrested bridge height follows the Bingham number, with the right limits", () => {
