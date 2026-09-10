@@ -13,6 +13,12 @@ const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, "..", "..");
 const { block, fence, PARTS } = require(path.join(ROOT, "occvm", "tools", "splice-spine.js"));
 const built = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+/* 2.31 — the floor moved to occvm/floor.js, shared with BTC now that L13 grants it a page ground.
+   Every assertion below that used to slice the floor out of 30_ui.jsx reads the PART instead: the
+   source of truth moved, so the guards read the new source rather than a copy of it. What still reads
+   30_ui.jsx is the CALL SITE — useAmbientFloor and the slab that mounts it — because that half did not
+   move and is the half L13 measures per tool. */
+const floorSrc = fs.readFileSync(path.join(ROOT, "occvm", "floor.js"), "utf8");
 
 for (const p of PARTS) {
   const src = fs.readFileSync(path.join(ROOT, "occvm", p.name), "utf8");
@@ -145,14 +151,14 @@ test("2.24 — the vein layer is retired from this tool's slabs; the globule fie
      kept in occvm/ as the generator the L10 record cites. The field is one shared part. */
   assert.ok(/var OCCVM_GLOBULES =/.test(eng), "the globule field is the shared part this tool reads");
   assert.ok(!/var OCCVM_VEINS =/.test(eng), "and the vein generator no longer ships here");
-  assert.ok(/OCCVM_GLOBULES\.field\(/.test(ui), "the floor takes its drops from the shared field");
+  assert.ok(/OCCVM_GLOBULES\.field\(/.test(floorSrc), "the floor takes its drops from the shared field");
   /* the slab carries the floor, live on the draft face only — L13's grant is the draft face, so every
      other face gets the same field as a still frame */
   assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open, floorHeat\);/,
     "still unless the open face is the draft — L13's grant is the draft face (heat joined at 2.28 step 6)");
   assert.match(ui, /<section key=\{open\} className=\{"slab rise"\} style=\{\{ "--thick": "16px" \}\}>\s*\{\/\*[\s\S]*?\*\/\}\s*<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/,
     "the canvas is the slab's first child");
-  assert.match(ui, /ambientFloor\(ref\.current, reduce \|\| !!still, heat\)/,
+  assert.match(ui, /OCCVM_FLOOR\.ambientFloor\(ref\.current, reduce \|\| !!still, heat\)/,
     "reduced motion and off-draft both mean a still frame (heat joined at 2.28 step 6)");
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   assert.match(css, /\.slab \{\n  --cut-a: \.6; position: relative; isolation: isolate;/, "the slab is its own stacking context");
@@ -485,7 +491,12 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
 function loadFloor(over) {
   const vm = require("vm");
   const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
-  const code = cut("var FLOOR_MERGE_PX_S =", "function useAmbientFloor");   /* cyclePos and floorEase are module-scope: pure curves, drivable */
+  /* 2.31 — the cut is the FENCE, not a pair of identifiers that happen to bracket the code. The old
+     markers were "var FLOOR_MERGE_PX_S =" to "function useAmbientFloor", and once the floor moved into
+     the engine those two straddled 25_card.js and most of 30_ui.jsx — a slab of JSX no vm can run. The
+     fence is the part's own boundary and cannot drift from it. Still cut from `built`, because what is
+     driven has to be what ships. */
+  const code = cut("/* ==== OCCVM SPINE floor.js", "/* ==== END OCCVM floor.js");
   const ops = [];
   const ctx2d = new Proxy({}, {
     get(t, k) {
@@ -512,8 +523,14 @@ function loadFloor(over) {
     requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
     cancelAnimationFrame() {}
   };
+  sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(code, sandbox);
+  /* the part exposes one global; the old flat names are reached through it so every assertion below
+     drives the shipped surface rather than a shape only this harness produces */
+  sandbox.ambientFloor = sandbox.OCCVM_FLOOR.ambientFloor;
+  sandbox.cyclePos = sandbox.OCCVM_FLOOR.cyclePos;
+  sandbox.bridgeRadius = sandbox.OCCVM_FLOOR.bridgeRadius;
   return { sandbox, canvas, ops, frames };
 }
 
@@ -534,7 +551,7 @@ test("2.22 — P-3: the bridge grows LINEARLY in time, which is the viscous law 
 test("2.22 — L6: the floor carries no colour of its own, and paints nothing without the palette", () => {
   const fs = require("fs");
   const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
-  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("function useAmbientFloor"));
+  const body = floorSrc;   /* 2.31: the part IS the body — no slicing a file for a function any more */
   const bare = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
   assert.ok(!/#[0-9a-f]{3,8}\b/i.test(bare.replace(/#\[0-9a-f\]\{6\}/g, "")), "no hex literal");
   assert.ok(!/\brgba?\s*\(/.test(bare), "no rgb() triplet");
@@ -563,7 +580,7 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
   const fs = require("fs");
   const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
-  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const body = floorSrc;   /* 2.31: the part IS the body */
 
   /* a LAYER on the material, never the material deforming at rest: its own canvas, under every bar */
   assert.match(css, /\.floor \{ position: absolute; inset: 0; z-index: -1;/, "it paints beneath the in-flow bars");
@@ -600,7 +617,7 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
   assert.ok(withHeat(1) < base, "and heat speeds the convection rather than starting it");
   assert.ok(withHeat(1) / base > 0.6 && withHeat(1) / base < 0.65,
     `full heat runs the cycle 1.6x faster, no more: ${(base / withHeat(1)).toFixed(2)}x`);
-  assert.match(ui, /^var FLOOR_HEAT_GAIN = 0\.6;/m, "the gain is authored and named as authored");
+  assert.match(floorSrc, /^  var HEAT_GAIN = 0\.6;/m, "the gain is authored and named as authored");
 });
 
 test("2.30 — the stamp moves with the content, because a stamp that does not is not a check", () => {
@@ -654,7 +671,7 @@ test("2.30 — the stamp moves with the content, because a stamp that does not i
 test("2.28 — the metaball floor: one filter, and the weight outside it", () => {
   const fs = require("fs");
   const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
-  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const body = floorSrc;   /* 2.31: the part IS the body */
   const G = require(path.join(ROOT, "occvm", "globules.js"));
 
   /* THE DEFECT THIS RELEASE SHIPPED AND CAUGHT. The isosurface cuts at alpha 0.5 (Blinn), so drawing
@@ -666,9 +683,9 @@ test("2.28 — the metaball floor: one filter, and the weight outside it", () =>
      already had in its <g opacity>. Both halves pinned, so neither can drift back. */
   assert.match(body, /blob\(bctx, drops\[i\], 1\)/,
     "the field is drawn OPAQUE through the filter — anything less is below the iso-level and vanishes");
-  assert.match(body, /ctx\.globalAlpha = FLOOR_ALPHA;[\s\S]{0,200}ctx\.drawImage\(buf, 0, 0\)/,
+  assert.match(body, /ctx\.globalAlpha = alpha;[\s\S]{0,200}ctx\.drawImage\(buf, 0, 0\)/,
     "and the weight is applied to the composited buffer, after the threshold");
-  assert.ok(!/bctx\.globalAlpha = FLOOR_ALPHA/.test(body),
+  assert.ok(!/bctx\.globalAlpha = alpha/.test(body),
     "the buffer must never carry the weight: that is the erasure");
   assert.ok(G.ISO === 0.5, "Blinn's half-density surface, which is what makes 0.24 fatal and 1 correct");
 
@@ -685,7 +702,7 @@ test("2.28 — the metaball floor: one filter, and the weight outside it", () =>
   assert.ok(!/bridge\(welds\[i\]/.test(body), "and nothing calls one");
 
   /* A DEGRADATION, NEVER A BLANK — the same rule L8 applies to reduced motion. */
-  assert.match(body, /blob\(ctx, drops\[i\], FLOOR_ALPHA\)/,
+  assert.match(body, /blob\(ctx, drops\[i\], alpha\)/,
     "without SVG-filter support on a 2D context the unthresholded 2.25 field still paints");
 
   /* merge conservation has ONE owner and it is not this file */
@@ -698,7 +715,7 @@ test("2.28 — the metaball floor: one filter, and the weight outside it", () =>
 test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the substance says zero", () => {
   const fs = require("fs");
   const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
-  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const body = floorSrc;   /* 2.31: the part IS the body */
   const G = require(path.join(ROOT, "occvm", "globules.js"));
   const R = require(path.join(ROOT, "occvm", "rheology.js"));
 
@@ -733,14 +750,42 @@ test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the
      arrival is derived and the departure inherits it rather than a time-reversal being invented. */
   /* module scope, beside cyclePos: neither is a function of a canvas, so the harness drives the curve
      itself rather than inferring it from a closure */
-  assert.match(ui, /OCCVM_RHEOLOGY\.easing\(OCCVM_RHEOLOGY\.SUBSTANCE, 1, 33\)/,
+  assert.match(floorSrc, /OCCVM_RHEOLOGY\.easing\(OCCVM_RHEOLOGY\.SUBSTANCE, 1, 33\)/,
     "the cessation curve, sampled once — it is a property of the substance, not of the frame");
-  assert.ok(!/cubic-bezier|easeInOut|\* \* \(3 - 2 \*/.test(ui), "no invented easing sits beside it");
+  assert.ok(!/cubic-bezier|easeInOut|\* \* \(3 - 2 \*/.test(floorSrc), "no invented easing sits beside it");
+
+  /* 2.31 — ONCE, AND LAZILY, and the second half is the one that matters now that this is a spliced
+     part. Sampling at load would capture whatever OCCVM_RHEOLOGY was at that instant, and the splicer
+     puts parts in after one anchor, so a part's position is insertion history rather than the list's
+     order. That is exactly how fracture.js captured a null OCCVM_VEINS at 2.0: it threw on every call
+     in the browser and passed in Node, because `require` resolved what the page could not. Driven both
+     ways rather than read — the part evaluates with NO substance in scope and still exposes its API,
+     and the curve is integrated exactly once however many times it is read. */
+  {
+    const vm2 = require("vm");
+    const code = built.slice(built.indexOf("/* ==== OCCVM SPINE floor.js"), built.indexOf("/* ==== END OCCVM floor.js"));
+    const bare = { Math };
+    bare.globalThis = bare; vm2.createContext(bare);
+    assert.doesNotThrow(() => vm2.runInContext(code, bare),
+      "the part evaluates with no sibling global in scope — nothing is captured at load");
+    assert.ok(bare.OCCVM_FLOOR && typeof bare.OCCVM_FLOOR.ambientFloor === "function",
+      "and it still exposes its API");
+    assert.equal(bare.OCCVM_FLOOR.cyclePos(0.25) > 0, true,
+      "with no substance the curve degrades to the straight ramp rather than throwing");
+
+    let integrations = 0;
+    const R2 = require(path.join(ROOT, "occvm", "rheology.js"));
+    const spy = { Math, OCCVM_RHEOLOGY: { SUBSTANCE: R2.SUBSTANCE, easing: (...a) => { integrations++; return R2.easing(...a); } } };
+    spy.globalThis = spy; vm2.createContext(spy); vm2.runInContext(code, spy);
+    assert.equal(integrations, 0, "nothing is integrated while the part evaluates");
+    spy.OCCVM_FLOOR.cyclePos(0.1); spy.OCCVM_FLOOR.cyclePos(0.2); spy.OCCVM_FLOOR.cyclePos(0.3);
+    assert.equal(integrations, 1, "and exactly once however many times the curve is read");
+  }
   assert.ok(pos(0.1) > 0.1 * (1 / move), "and the curve is not a straight ramp");
 
   /* ONE AUTHORED NUMBER FOR THE PACE, and the period follows from it and the surface */
-  assert.match(ui, /^var FLOOR_RISE_PX_S = 1\.4;/m, "the pace 2.22 already had, now vertical and cyclic");
-  assert.match(body, /period = 2 \* \(travel \/ \(FLOOR_RISE_PX_S \* \(1 \+ FLOOR_HEAT_GAIN \* hx\)\)\)/,
+  assert.match(floorSrc, /^  var RISE_PX_S = 1\.4;/m, "the pace 2.22 already had, now vertical and cyclic");
+  assert.match(body, /period = 2 \* \(travel \/ \(RISE_PX_S \* \(1 \+ HEAT_GAIN \* hx\)\)\)/,
     "the period is derived from the speed and the height, not authored beside them");
 
   /* THE PHASE IS THE FIELD'S, so the floor is the same floor every session and can be recorded */
@@ -795,7 +840,7 @@ test("2.28 steps 4+5 — the coil decides where, tau0 decides what, driven not r
   /* THE COIL: a weld may only begin while BOTH drops rest at the bottom of the cycle. Driven on the
      shipped predicate rather than asserted from the source. */
   const ui = require("fs").readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
-  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const body = floorSrc;   /* 2.31: the part IS the body */
   assert.match(body, /if \(!atCoil\(p, period\) \|\| !atCoil\(q, period\)\) continue;/,
     "recombination happens at the coil, not wherever two globules touch");
   assert.match(body, /return cyclePos\(\(\(clock \/ period\) \+ d\.phase\) % 1\) === 0;/,
@@ -921,9 +966,9 @@ test("2.22b — the floor tracks the face it sits behind, and sits behind the fa
      that is nearly empty until bars exist, and nothing re-measured: 356×44 px behind a face several
      times that. Every assertion in this file passed. A canvas whose backing store is set from a
      measurement needs an observer on the thing it measures, or it is sized to a moment. */
-  assert.match(ui, /new ResizeObserver\(onResize\)/, "the floor observes its own container");
-  assert.match(ui, /ro\.observe\(canvas\.parentNode \|\| canvas\)/, "and observes the element it fills");
-  assert.match(ui, /if \(ro\) ro\.disconnect\(\)/, "and disconnects on teardown");
+  assert.match(floorSrc, /new ResizeObserver\(onResize\)/, "the floor observes its own container");
+  assert.match(floorSrc, /ro\.observe\(canvas\.parentNode \|\| canvas\)/, "and observes the element it fills");
+  assert.match(floorSrc, /if \(ro\) ro\.disconnect\(\)/, "and disconnects on teardown");
 
   /* AND WHERE IT SITS WAS ALSO MEASURED. Inside `.bars` it moved 0.81% of pixels at a mean 1.18 L*: the
      bar cards are opaque, so a floor between them has almost nowhere to show. Behind the whole face it
@@ -1010,7 +1055,7 @@ test("2.24 — three authored weights, each pinned to the measurement that chose
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   /* the globule field as the slab's substrate: 0.05 → 0.78 L*, 0.10 → 1.43, 0.16 → 2.20, 0.24 → 3.21,
      0.32 → 4.20 mean over the moved region of a live lookup slab */
-  assert.match(ui, /^var FLOOR_ALPHA = 0\.24;/m, "the field is seen: 3.21 L* mean, under a beat strike's 4.6");
+  assert.match(floorSrc, /^  var ALPHA = 0\.24;/m, "the field is seen: 3.21 L* mean, under a beat strike's 4.6");
   /* Reading B's mix: 9% → 1.66 L*, 25% → 5.05, 40% → 8.36, 55% → 11.65 over the moved region at peak */
   assert.match(css, /calc\(var\(--pulse, 0\) \* 25%\)/, "the face strikes at the control's measured weight (Reading A: 5.9)");
   /* the strike window: 0.18 of a beat was ~7 frames at 95 bpm; 0.32 measured 35 of 120 samples non-zero */
