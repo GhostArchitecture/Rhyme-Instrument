@@ -128,10 +128,10 @@ const CARD = (() => {
   }
   const clean2 = s => (s || "").toLowerCase().replace(/[^a-z']/g, "");
 
-  function render({ reading, bars, format, mineral, mark }) {
+  function render({ reading, bars, format, palette, mark }) {
     const W = 1080, H = format === "story" ? 1920 : 1350;
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    const ctx = cv.getContext("2d"); const L = light(); const m = MINERALS[mineral] || MINERALS.amethyst;
+    const ctx = cv.getContext("2d"); const L = light(); const m = PIGMENTS[palette] || PIGMENTS[OCCVM_PIGMENT_DEFAULT];
     /* ground */
     ctx.fillStyle = "#09080d"; ctx.fillRect(0, 0, W, H);
     const bg = ctx.createRadialGradient(W / 2, -H * .1, 0, W / 2, -H * .1, H * .9); bg.addColorStop(0, hex2(m.m, .22)); bg.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);

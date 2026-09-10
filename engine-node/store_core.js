@@ -12,7 +12,10 @@ const STORE = {
       if (draft) STORE.set("shelf", [{ id: "carried", name: "carried draft", text: draft, updated: Date.now() }]);
       if (draft) STORE.set("current", "carried");
       if (ov) STORE.set("overrides", ov);
-      if (mp) STORE.set("prefs", { mineral: mp.accent === "slime" ? "malachite" : "amethyst", density: mp.density || "comfy", motion: mp.motion || "on" });
+      /* 2.27 — the pre-OCCVM migration now lands on a PALETTE. `slime` and the mineral names it mapped
+         to are both gone; obsidian is the palette that preserves what those readers were looking at,
+         so both branches resolve there and the old accent is kept beside it rather than discarded. */
+      if (mp) STORE.set("prefs", { palette: OCCVM_PIGMENT_DEFAULT, migratedFrom: { accent: mp.accent || null }, density: mp.density || "comfy", motion: mp.motion || "on" });
       localStorage.setItem("tome:migrated", "1");
       return !!(bank || draft || ov);
     } catch (e) { return false; }

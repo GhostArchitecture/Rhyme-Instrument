@@ -39,7 +39,7 @@ test("the spine sits above the tool's own declarations", () => {
      If a block moves below the tool's own declarations it stops being inert and starts overriding. */
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   const js = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
-  assert.ok(css.indexOf(fence("spine.css").open) < css.indexOf("--mineral:"));
+  assert.ok(css.indexOf(fence("spine.css").open) < css.indexOf("--pigment:"));
   /* the sundial must be defined before the tool's own SUN closure consumes it */
   assert.ok(js.indexOf(fence("sundial.js").open) < js.indexOf("const SUN ="));
 });
@@ -148,10 +148,12 @@ test("2.24 — the vein layer is retired from this tool's slabs; the globule fie
   assert.ok(/OCCVM_GLOBULES\.field\(/.test(ui), "the floor takes its drops from the shared field");
   /* the slab carries the floor, live on the draft face only — L13's grant is the draft face, so every
      other face gets the same field as a still frame */
-  assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open\);/, "still unless the open face is the draft");
+  assert.match(ui, /useAmbientFloor\(floorRef, open !== "draft", open, floorHeat\);/,
+    "still unless the open face is the draft — L13's grant is the draft face (heat joined at 2.28 step 6)");
   assert.match(ui, /<section key=\{open\} className=\{"slab rise"\} style=\{\{ "--thick": "16px" \}\}>\s*\{\/\*[\s\S]*?\*\/\}\s*<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/,
     "the canvas is the slab's first child");
-  assert.match(ui, /return ambientFloor\(ref\.current, reduce \|\| !!still\);/, "reduced motion and off-draft both mean a still frame");
+  assert.match(ui, /ambientFloor\(ref\.current, reduce \|\| !!still, heat\)/,
+    "reduced motion and off-draft both mean a still frame (heat joined at 2.28 step 6)");
   const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8");
   assert.match(css, /\.slab \{\n  --cut-a: \.6; position: relative; isolation: isolate;/, "the slab is its own stacking context");
   assert.match(css, /\.slab > canvas\.floor \{ position: absolute; z-index: 0; \}/, "so the floor paints above its ground and under its children");
@@ -483,7 +485,7 @@ test("2.21 — --slide is registered where §2a-0 says a tool-local token goes",
 function loadFloor(over) {
   const vm = require("vm");
   const cut = (from, to) => built.slice(built.indexOf(from), built.indexOf(to));
-  const code = cut("var FLOOR_MERGE_PX_S =", "function useAmbientFloor");
+  const code = cut("var FLOOR_MERGE_PX_S =", "function useAmbientFloor");   /* cyclePos and floorEase are module-scope: pure curves, drivable */
   const ops = [];
   const ctx2d = new Proxy({}, {
     get(t, k) {
@@ -500,6 +502,10 @@ function loadFloor(over) {
   const sandbox = {
     Math, performance: { now: () => 0 },
     OCCVM_GLOBULES: require(path.join(ROOT, "occvm", "globules.js")),
+    /* 2.28 — the floor reads the substance's cessation curve for the turn at each end of the cycle.
+       Without it in the sandbox the fallback straight ramp is what gets driven, and the harness would
+       be testing the degradation rather than the code. */
+    OCCVM_RHEOLOGY: require(path.join(ROOT, "occvm", "rheology.js")),
     getComputedStyle: () => ({ getPropertyValue: k => (over && k in over ? over[k] : (k === "--vein-hi" ? "#c9a6ff" : k === "--vein-lo" ? "#5a36a8" : "")) }),
     document: { documentElement: {} },
     window: { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {} },
@@ -564,12 +570,253 @@ test("2.22 — L13: the floor is a layer, is ungated, and never reaches a measur
   assert.match(ui, /<canvas className="floor" ref=\{floorRef\} aria-hidden="true" \/>/, "and it is its own element");
   assert.ok(!/\.bar[\s,{:]/.test(body), "the floor touches no bar");
 
-  /* ungated and unmodulated: lawful at zero modulation is what makes L13 a grant rather than the
-     gated-motion case, so nothing real may be reaching in here */
-  for (const forbidden of ["--heat", "reading", "pacing", "tempo", "bpm", "limit", "drone"])
-    assert.ok(!body.includes(forbidden), `the floor reads no measured value: found ${forbidden}`);
+  /* 2.28 step 6 RETIRES TWO CLAUSES OF THIS GUARD, deliberately, and neither is a loosening of L13 —
+     both were STRICTER THAN THE LAW THEY GUARD. L13 says, and said before this floor existed: "a real
+     value may scale a floor's intensity (Rhyme's --heat, read-only, is the obvious first one), but the
+     floor is lawful at zero modulation, which is precisely why this is a grant and not a case of the
+     gated-motion rule." Modulation was never forbidden; a GATE was. What these two clauses actually
+     asserted was the absence of a string, which is a proxy for the property and not the property.
+       (1) "--heat" leaves the forbidden list. The rest stay: the floor still reads no tempo, no pacing,
+           no bpm, and it still does not reach into the reading for anything but the one value L13
+           names.
+       (2) "the only inputs are the canvas and a stillness" is replaced by the driven property below.
+     What replaces them is stronger, because it fails on behaviour rather than on vocabulary. */
+  /* on the CODE, not on the prose. This block explains at length what the floor may and may not read,
+     so a substring check that counts its own comments fails on a correct floor for saying the word —
+     the same trap the L6 colour guard above already strips comments to avoid. */
+  const bareBody = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  for (const forbidden of ["reading", "pacing", "tempo", "bpm"])
+    assert.ok(!bareBody.includes(forbidden), `the floor reads no measured value it was not granted: found ${forbidden}`);
   assert.equal((ui.match(/useAmbientFloor\(/g) || []).length, 2, "one definition, one call site — on the slab");
-  assert.match(ui, /return ambientFloor\(ref\.current, reduce \|\| !!still\);/, "the only inputs are the canvas and a stillness that is never a measured value");
+  assert.ok(!/heatRef\.v =[^;]*;[\s\S]{0,40}setProperty/.test(body), "READ-only: the floor never writes heat");
+  assert.ok(!/document\.documentElement\.style/.test(body), "and writes no custom property at all");
+
+  /* LAWFUL AT ZERO MODULATION, DRIVEN. The period at heat 0 must be exactly the period the floor ran
+     before heat existed — not close, exactly — because that identity is the whole of L13's distinction
+     between a grant and the gated-motion case. Measured off the shipped arithmetic. */
+  const travel = 480, base = 2 * (travel / 1.4) * 1000 / (1 - 0.18);
+  const withHeat = hx => 2 * (travel / (1.4 * (1 + 0.6 * hx))) * 1000 / (1 - 0.18);
+  assert.equal(withHeat(0), base, "at heat 0 the cycle is byte-identical to the unmodulated one");
+  assert.ok(withHeat(1) < base, "and heat speeds the convection rather than starting it");
+  assert.ok(withHeat(1) / base > 0.6 && withHeat(1) / base < 0.65,
+    `full heat runs the cycle 1.6x faster, no more: ${(base / withHeat(1)).toFixed(2)}x`);
+  assert.match(ui, /^var FLOOR_HEAT_GAIN = 0\.6;/m, "the gain is authored and named as authored");
+});
+
+test("2.28 — the metaball floor: one filter, and the weight outside it", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+
+  /* THE DEFECT THIS RELEASE SHIPPED AND CAUGHT. The isosurface cuts at alpha 0.5 (Blinn), so drawing
+     the field AT the display weight of 0.24 puts all of it under the cut and the filter deletes it —
+     measured in Chromium on a 25px disc: filtered at alpha 0.24 gives max alpha 0 over 0 non-zero
+     pixels, against 255 over 1,804 at alpha 1. The screenshot did not show it, because on the slab it
+     was taken from the floor sits behind opaque controls: "looks the same" and "is gone" were the same
+     picture. The weight must composite OUTSIDE the filtered buffer, which is the shape BTC's still SVG
+     already had in its <g opacity>. Both halves pinned, so neither can drift back. */
+  assert.match(body, /blob\(bctx, drops\[i\], 1\)/,
+    "the field is drawn OPAQUE through the filter — anything less is below the iso-level and vanishes");
+  assert.match(body, /ctx\.globalAlpha = FLOOR_ALPHA;[\s\S]{0,200}ctx\.drawImage\(buf, 0, 0\)/,
+    "and the weight is applied to the composited buffer, after the threshold");
+  assert.ok(!/bctx\.globalAlpha = FLOOR_ALPHA/.test(body),
+    "the buffer must never carry the weight: that is the erasure");
+  assert.ok(G.ISO === 0.5, "Blinn's half-density surface, which is what makes 0.24 fatal and 1 correct");
+
+  /* ONE FILTER DEFINITION for the live canvas and every still frame */
+  assert.match(body, /OCCVM_GLOBULES\.gooFilter\(\{ id: id \}\)/,
+    "the filter comes from the shared part, not from markup typed here");
+  assert.match(body, /ctx\.filter = "url\(#" \+ gooId|bctx\.filter = "url\(#" \+ gooId/,
+    "and the canvas names that same filter");
+
+  /* THE BRIDGE QUAD IS GONE, and that is the point of the technique rather than a tidy-up: overlapping
+     fields add, so a join renders with no geometry standing in for physics — and an ARRESTED join is
+     rendered by stopping the approach, which an explicit bridge could never express. */
+  assert.ok(!/function bridge\(/.test(ui), "no hand-drawn bridge survives");
+  assert.ok(!/bridge\(welds\[i\]/.test(body), "and nothing calls one");
+
+  /* A DEGRADATION, NEVER A BLANK — the same rule L8 applies to reduced motion. */
+  assert.match(body, /blob\(ctx, drops\[i\], FLOOR_ALPHA\)/,
+    "without SVG-filter support on a 2D context the unthresholded 2.25 field still paints");
+
+  /* merge conservation has ONE owner and it is not this file */
+  assert.match(body, /OCCVM_GLOBULES\.merged\(a\.r, b\.r\)/, "the radius comes from the shared convention");
+  assert.match(body, /OCCVM_GLOBULES\.MERGE_POWER/, "and the centre weights by the same power");
+  assert.ok(!/Math\.sqrt\(m\)/.test(body), "the old area convention is gone rather than left beside it");
+  assert.equal(G.MERGE_POWER, 3, "volume, decided and recorded in occvm/globules.js");
+});
+
+test("2.28 step 3 — buoyancy: the shape is sourced, the speed is authored, the substance says zero", () => {
+  const fs = require("fs");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+
+  /* THE SUBSTANCE'S OWN ANSWER, measured rather than asserted. L13 records the floor's cost as a
+     sentence; this is the number behind it, and it is what makes the authored speed honest rather than
+     lazy: there is no derivation to reach for, because the derivation returns zero at every radius the
+     field contains. */
+  for (const r of [G.R[0], 20, G.R[1]])
+    assert.equal(G.risesAt(r), false, `a ${r}px globule cannot rise: buoyancy is below the yield stress`);
+  assert.ok(G.buoyantStress(G.R[1]) < R.SUBSTANCE.tau0 / 4,
+    "and it is not marginal — the largest globule in the field is over 4x short");
+  assert.ok(G.risesAt(126) === false && G.risesAt(130) === true,
+    "the radius at which buoyancy could move anything is ~126px, four times the ceiling");
+
+  /* THE CYCLE'S SHAPE: rise, attach, sink, rest — Gyüre & Jánosi's process, driven rather than read */
+  const half = 0.5, DW = 0.18, move = half * (1 - DW);
+  const E = R.easing(R.SUBSTANCE, 1, 33);
+  const ease = x => { const t = Math.max(0, Math.min(1, x)) * (E.length - 1), i = Math.floor(t), f = t - i;
+    return i >= E.length - 1 ? E[E.length - 1] : E[i] + (E[i + 1] - E[i]) * f; };
+  const pos = u => u < move ? ease(u / move) : u < half ? 1
+    : u < half + move ? 1 - ease((u - half) / move) : 0;
+  const traj = []; for (let i = 0; i <= 60; i++) traj.push(pos(i / 60));
+  assert.equal(traj[0], 0, "starts at the bottom");
+  assert.equal(Math.max(...traj), 1, "reaches the top");
+  const rise = traj.slice(0, 25), sink = traj.slice(32, 56);
+  assert.ok(rise.every((v, i) => i === 0 || v >= rise[i - 1]), "the rise is monotone");
+  assert.ok(sink.every((v, i) => i === 0 || v <= sink[i - 1]), "the sink is monotone");
+  assert.ok(pos(0.45) === 1 && pos(0.95) === 0, "and it dwells at both ends rather than turning on a point");
+
+  /* THE TURN IS THE SUBSTANCE'S OWN CURVE, not an invented ease. One-sided and recorded as such: this
+     system owns exactly one curve for coming irreversibly to rest and none for setting off, so the
+     arrival is derived and the departure inherits it rather than a time-reversal being invented. */
+  /* module scope, beside cyclePos: neither is a function of a canvas, so the harness drives the curve
+     itself rather than inferring it from a closure */
+  assert.match(ui, /OCCVM_RHEOLOGY\.easing\(OCCVM_RHEOLOGY\.SUBSTANCE, 1, 33\)/,
+    "the cessation curve, sampled once — it is a property of the substance, not of the frame");
+  assert.ok(!/cubic-bezier|easeInOut|\* \* \(3 - 2 \*/.test(ui), "no invented easing sits beside it");
+  assert.ok(pos(0.1) > 0.1 * (1 / move), "and the curve is not a straight ramp");
+
+  /* ONE AUTHORED NUMBER FOR THE PACE, and the period follows from it and the surface */
+  assert.match(ui, /^var FLOOR_RISE_PX_S = 1\.4;/m, "the pace 2.22 already had, now vertical and cyclic");
+  assert.match(body, /period = 2 \* \(travel \/ \(FLOOR_RISE_PX_S \* \(1 \+ FLOOR_HEAT_GAIN \* hx\)\)\)/,
+    "the period is derived from the speed and the height, not authored beside them");
+
+  /* THE PHASE IS THE FIELD'S, so the floor is the same floor every session and can be recorded */
+  assert.ok(G.field({ seed: 1, w: 400, h: 300 }).drops.every(d => typeof d.phase === "number" && d.phase >= 0 && d.phase < 1),
+    "every drop carries a seeded phase");
+  assert.ok(!/Math\.random/.test(body), "and nothing in the floor reaches for a fresh random");
+
+  /* the random-direction drift 2.22 shipped is GONE, not left beside the cycle */
+  assert.ok(!/d\.y \+= d\.vy \* dt/.test(body),
+    "the old model had no bottom, no top and no turnaround; it is replaced rather than supplemented");
+});
+
+test("2.28 steps 4+5 — the coil decides where, tau0 decides what, driven not read", () => {
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  const { sandbox, canvas, frames, ops } = loadFloor();
+  sandbox.ambientFloor(canvas, false);
+
+  /* pump the SHIPPED floor through many cycles. The period is ~2h/1.4 s on a 480px face, so a real
+     look at the page would take fifteen minutes; the frame callback takes its own clock, so the same
+     code runs at any speed. Driving the call path rather than a replica is the 2.22 lesson. */
+  let t = 0;
+  for (let i = 0; i < 40000 && frames.length; i++) { t += 90; frames[frames.length - 1](t); }
+
+  assert.ok(frames.length > 1, "the floor kept animating across the whole run");
+
+  /* WHAT THE RUN ACTUALLY PRODUCED, read off the canvas rather than off the source. Every drop is one
+     `arc`; a pair that has arrested holds a CONSTANT separation frame after frame while both move,
+     which is the observable signature of one stuck object with two lobes and cannot be faked by two
+     drops that merely passed near each other. Sampled over the last few frames of the run. */
+  const framesOfArcs = [];
+  for (let k = 0; k < 6; k++) {
+    const before = ops.length;
+    t += 90; frames[frames.length - 1](t);
+    framesOfArcs.push(ops.slice(before).filter(o => o[0] === "arc").map(o => ({ x: o[1], y: o[2], r: o[3] })));
+  }
+  const n0 = framesOfArcs[0].length;
+  assert.ok(n0 > 3, `the field is populated (${n0} drops)`);
+  assert.ok(framesOfArcs.every(f => f.length === n0),
+    "the count is stable across frames — an arrested pair stays two lobes rather than vanishing into one");
+
+  let lockedPairs = 0;
+  for (let a = 0; a < n0; a++) for (let b = a + 1; b < n0; b++) {
+    const sep = f => Math.hypot(f[a].x - f[b].x, f[a].y - f[b].y);
+    const s0 = sep(framesOfArcs[0]);
+    if (s0 > framesOfArcs[0][a].r + framesOfArcs[0][b].r) continue;      /* not touching */
+    if (framesOfArcs.every(f => Math.abs(sep(f) - s0) < 1e-6)) lockedPairs++;
+  }
+  assert.ok(lockedPairs > 0,
+    `the substance says ~96% of merges arrest, and the floor produced ${lockedPairs} frozen pair(s) — ` +
+    "a run with none would mean the arrest branch never fires");
+
+  /* THE COIL: a weld may only begin while BOTH drops rest at the bottom of the cycle. Driven on the
+     shipped predicate rather than asserted from the source. */
+  const ui = require("fs").readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8");
+  const body = ui.slice(ui.indexOf("function ambientFloor"), ui.indexOf("/* ---- bank ---- */"));
+  assert.match(body, /if \(!atCoil\(p, period\) \|\| !atCoil\(q, period\)\) continue;/,
+    "recombination happens at the coil, not wherever two globules touch");
+  assert.match(body, /return cyclePos\(\(\(clock \/ period\) \+ d\.phase\) % 1\) === 0;/,
+    "and the coil is the bottom dwell step 3 already put there — no authored coil height");
+  assert.ok(sandbox.cyclePos(0.99) === 0 && sandbox.cyclePos(0.25) > 0,
+    "the predicate's own basis: cyclePos is exactly 0 only while resting at the bottom");
+
+  /* THE SUBSTANCE DECIDES BEFORE THE BRIDGE GROWS, from the radii alone, so no branch appears
+     mid-merge and the same weld renders either outcome. */
+  assert.match(body, /var reg = OCCVM_GLOBULES\.arrestRegime\(p\.r, q\.r\);/);
+  assert.match(body, /arrests: reg !== "completes"/);
+  assert.match(body, /target: lobe \* OCCVM_GLOBULES\.arrestedBridge\(p\.r, q\.r\)/,
+    "and the bridge stops at the height the Bingham number allows");
+
+  /* THE ARRESTED PAIR IS ONE STUCK OBJECT — which answers the plan's open accumulation question
+     without inventing a rule, and is self-limiting: a pair that has arrested is done. */
+  assert.match(body, /a\.locked = b\.locked = true;/);
+  /* ONE RIGID OBJECT, not two drops that agree to move alike. The first draft gave the follower the
+     leader's phase and let it compute its own height — and because that height depends on the drop's
+     own radius, two lobes of different size drifted apart over the cycle and the arrest was invisible
+     in the render. A frozen bridge does not stretch. */
+  assert.match(body, /b\.lockedTo = a; b\.dx = b\.x - a\.x; b\.dy = b\.y - a\.y;/,
+    "the follower holds the offset it froze at");
+  assert.match(body, /if \(f\.lockedTo\) \{ f\.x = f\.lockedTo\.x \+ f\.dx; f\.y = f\.lockedTo\.y \+ f\.dy; \}/,
+    "and is placed from the leader every frame, never from its own cycle");
+  assert.ok(!/b\.phase = a\.phase/.test(body),
+    "sharing a phase is not enough: two lobes of different radius compute different heights from it");
+  assert.ok(!/a\.r = OCCVM_GLOBULES\.merged\(a\.r, b\.r\);[\s\S]{0,80}locked/.test(body),
+    "an arrested pair does NOT become one drop: the lobes remain, which is what a frozen dumbbell is");
+  assert.match(body, /p\.merging \|\| q\.merging \|\| p\.locked \|\| q\.locked/,
+    "and a locked pair never welds again — the bridge would have to beat a stress that already stopped it");
+});
+
+test("2.28 step 5 — the arrested bridge height follows the Bingham number, with the right limits", () => {
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  /* the falloff is authored; its two LIMITS are not, and they are what makes the regimes meet
+     without a seam: the bridge reaches a full lobe exactly where Bi reaches 1, which is the same
+     group that defines completion. */
+  assert.equal(G.arrestedBridge(2, 2), 1, "below Bi = 1 the bridge closes completely");
+  assert.ok(Math.abs(G.bingham(2, 2)) < 1, "and that pair is genuinely below the boundary");
+  const at = (a, b) => +G.arrestedBridge(a, b).toFixed(3);
+  assert.ok(at(9, 9) > at(15, 15) && at(15, 15) > at(30, 30),
+    "a bigger pair freezes with a thinner waist, monotonically");
+  assert.ok(at(9, 9) > 0.6 && at(30, 30) < 0.2, `measured ${at(9, 9)} .. ${at(30, 30)}`);
+  /* the seam: approach Bi = 1 from both sides and the bridge fraction is continuous at 1 */
+  const lp = G.arrestLengths().complete;
+  const justUnder = lp * 0.999 / Math.cbrt(2), justOver = lp * 1.001 / Math.cbrt(2);
+  assert.ok(Math.abs(G.arrestedBridge(justUnder, justUnder) - G.arrestedBridge(justOver, justOver)) < 0.01,
+    "the completion boundary and the bridge falloff are the same boundary");
+});
+
+test("2.28 — the arrest model: two lengths, three regimes, and the substance picks", () => {
+  const G = require(path.join(ROOT, "occvm", "globules.js"));
+  const R = require(path.join(ROOT, "occvm", "rheology.js"));
+  const L = G.arrestLengths();
+  /* γ/τ₀ IS the capillary length, because 2.10 fixed τ₀ by the puddle-height identity. Asserted from
+     the formulas so it survives a change to γ or ρ. */
+  assert.ok(Math.abs(L.complete - R.radiusPx(R.SUBSTANCE)) < 0.01, "γ/τ₀ = √(γ/ρg), by construction");
+  assert.equal(R.SUBSTANCE.tau0Dynamic, 4.41, "the dynamic intercept is a constant, not a comment");
+  assert.ok(L.joined > L.complete, "static and dynamic bracket rather than compete");
+  assert.equal(G.arrestRegime(2, 2), "completes");
+  assert.equal(G.arrestRegime(9, 9), "dumbbell");
+  assert.equal(G.arrestRegime(30, 30), "joined");
+  /* the shipped band produces no completed merge at all, and the band was not moved to fake one */
+  const rnd = G.mulberry32(20260910); let c = 0;
+  for (let i = 0; i < 20000; i++)
+    if (G.arrestRegime(G.R[0] + rnd() * (G.R[1] - G.R[0]), G.R[0] + rnd() * (G.R[1] - G.R[0])) === "completes") c++;
+  assert.equal(c, 0, "a merged radius never beats its larger parent, so the band cannot reach completion");
+  assert.deepEqual(G.R, [9, 30], "and the band stays where 2.25 measured it");
 });
 
 test("2.22 — the auditor measures the per-tool grant, through the path the runner uses", () => {

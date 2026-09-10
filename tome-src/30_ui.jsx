@@ -320,7 +320,7 @@ function Shelf({ shelf, current, setCurrent, newDraft, renameDraft, removeDraft 
     </div>
   );
 }
-function SharePanel({ reading, mineral, onClose }) {
+function SharePanel({ reading, palette, onClose }) {
   const filled = reading.bars.filter(Boolean);
   const [scope, setScope] = useState("one"); const [format, setFormat] = useState("feed");
   const [one, setOne] = useState(filled.length ? filled[filled.length - 1].i : 0);
@@ -329,10 +329,10 @@ function SharePanel({ reading, mineral, onClose }) {
   const holder = useRef(null); const canvasRef = useRef(null);
   const chosen = scope === "one" ? [one] : filled.filter(b => b.i >= start).slice(0, len).map(b => b.i);
   useEffect(() => {
-    const cv = CARD.render({ reading, bars: chosen, format: format === "story" ? "story" : "feed", mineral });
+    const cv = CARD.render({ reading, bars: chosen, format: format === "story" ? "story" : "feed", palette });
     canvasRef.current = cv; const h = holder.current; if (!h) return;
     h.innerHTML = ""; cv.style.width = "100%"; cv.style.height = "auto"; cv.style.display = "block"; cv.style.borderRadius = "4px"; h.appendChild(cv);
-  }, [reading, scope, format, one, start, len, mineral]);
+  }, [reading, scope, format, one, start, len, palette]);
   return (
     <div className="share">
       <div className="row" style={{ marginTop: 0 }}>
@@ -463,7 +463,7 @@ function TempoPanel({ tempo, setTempo, pacing, onClose }) {
     </div>
   );
 }
-function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, mineral, tempo, setTempo }) {
+function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shelfProps, palette, tempo, setTempo }) {
   const [pick, setPick] = useState(null);
   const [editing, setEditing] = useState(null);           // line index being cut
   const [quarry, setQuarry] = useState(false);
@@ -503,7 +503,7 @@ function Draft({ draft, setDraft, overrides, setOverride, pop, setPop, eng, shel
       {quarry && <textarea className="cut" style={{ marginTop: 10 }} value={draft} onChange={e => setDraft(e.target.value)} placeholder="paste or cut the whole draft here — one bar per line" rows={9} spellCheck={false} />}
       {tempoOpen && <TempoPanel tempo={tempo} setTempo={setTempo} pacing={pacing} onClose={() => setTempoOpen(false)} />}
       {meterOpen && <MeterPanel reading={reading} shelf={shelfProps.shelf} pop={pop} onClose={() => setMeterOpen(false)} />}
-      {share && reading.bars.some(Boolean) && <SharePanel reading={reading} mineral={mineral} onClose={() => setShare(false)} />}
+      {share && reading.bars.some(Boolean) && <SharePanel reading={reading} palette={palette} onClose={() => setShare(false)} />}
       <div style={{ marginTop: 16 }}>
         {reading.maxRun > limit && <div className="drone">drone: {reading.maxRun} straight bars on one vowel — past the {pop} line of {limit}.</div>}
         <div className="bars" ref={host}>
@@ -615,7 +615,7 @@ function Check({ eng }) {
    WHAT THE LAW FORBIDS AND THIS RESPECTS. The floor is a LAYER on the material, never the material
    deforming at rest — it is its own canvas, painted under the bars, and no surface's own geometry moves.
    It never draws over a bar: `.bar` carries --heat, a measured value, and L13 bars a floor from any
-   surface carrying one. It takes its colour from the mineral tokens and carries no literal of its own,
+   surface carrying one. It takes its colour from the pigment tokens and carries no literal of its own,
    so an unresolved palette paints nothing rather than painting an invented accent (L6). And it is
    lawful at zero modulation: nothing gates it, nothing triggers it, no real value scales it. */
 /* 2.24: the floor is the SUBSTRATE LAYER on every slab now, not an underlayer on one face — see the
@@ -636,12 +636,82 @@ var FLOOR_MERGE_PX_S = 2.6;   /* authored MAGNITUDE; the linearity above it is d
 var FLOOR_ALPHA = 0.24;
 var FLOOR_SEED = 0x0CCF1005;  /* fixed, so the field is the same field every session and can be recorded */
 
+/* ---- 2.28 step 3: the buoyancy cycle ------------------------------------------------------------
+ * The build plan's finding that reshapes this: a lava lamp is not one substance getting restless, it
+ * is TWO IMMISCIBLE PHASES IN A HEAT-DRIVEN DENSITY RACE. The wax sits very slightly denser at rest;
+ * heat expands it more than the carrier; past a crossover it becomes buoyant, rises, cools, becomes
+ * dense again, sinks. **The motion is buoyancy. Rheology governs shape and merging, not drive** — which
+ * is why the drift that shipped at 2.22 (a random constant direction per drop) was the wrong model
+ * rather than a coarse one: it had no bottom, no top, and no turnaround.
+ *
+ * WHAT IS ADOPTED FROM THE SOURCE IS THE SHAPE. Gyüre & Jánosi, "Basics of lava-lamp convection",
+ * Phys. Rev. E 80, 046307 (2009), a real two-fluid lab analog: warm blobs rise from the bottom, ATTACH
+ * at the top surface, then sink again — rise, dwell, sink, dwell. They identify two modes, one
+ * heat-transport limited and one **viscosity-limited with constant periodicity**; the constant-period
+ * mode is the one taken, so every drop shares one period and differs only in phase, which is the
+ * field's own seeded number rather than a fresh random per session.
+ *
+ * WHAT IS AUTHORED IS THE SPEED, AND THE SUBSTANCE SAYS THE SPEED IS ZERO. occvm/globules.js measures
+ * it: at the density contrast the 30 px ceiling implies, the buoyant stress on a globule is 1.509 Pa at
+ * r = 9 and 5.031 Pa at r = 30, against τ₀ = 21.15 — **14× short at the smallest drop in the field,
+ * 4.2× at the largest**, and a globule would need a 126 px radius before buoyancy could move it at all.
+ * That is not a reason to abandon the floor; L13 grants it and records the cost. It is a reason to
+ * state the number rather than to reach for a derivation that returns zero, and to keep the pace this
+ * floor already had rather than inventing a new one alongside a new model.
+ *
+ * FLOOR_RISE_PX_S is therefore 1.4 — the same magnitude `OCCVM_GLOBULES.DRIFT_PX_S` has carried since
+ * 2.22, now vertical and cyclic instead of random. The period FOLLOWS from it and the surface's own
+ * height rather than being a second authored number: a drop crosses the face at that speed, so a tall
+ * face cycles slowly and a short one quickly, which is what a taller vessel does.
+ *
+ * The turn at each end rides the substance's OWN cessation curve (OCCVM_RHEOLOGY.easing, derived at
+ * 2.8 with its hard stop), not an invented ease: a blob arriving at the top surface decelerates to
+ * rest, and this system already owns exactly one curve for coming to rest irreversibly. */
+var FLOOR_RISE_PX_S = 1.4;    /* authored: see above — the substance's own answer here is zero */
+var FLOOR_DWELL = 0.18;       /* authored: the share of each half-cycle spent attached at an end */
+/* 2.28 step 6 — HEAT MODULATES, IT DOES NOT GATE, and L13 named this case in advance: "a real value may
+   scale a floor's intensity (Rhyme's --heat, read-only, is the obvious first one), but the floor is
+   lawful at zero modulation, which is precisely why this is a grant and not a case of the gated-motion
+   rule." So the law already permitted this; the guards written at 2.22 were stricter than the law they
+   guard, and step 6 brings them back to it rather than loosening anything.
+   WHAT IT MODULATES IS THE CONVECTION RATE, which is the one thing this model already has a
+   heat-driven mechanism for: a lamp's bulb is its heat source and the cycle rate scales with it, so
+   heat reaching the period is the model's own variable rather than a parameter picked to have
+   something to attach. FLOOR_HEAT_GAIN is authored: at full heat the cycle runs 1.6x its base rate.
+   At heat 0 the period is EXACTLY the unmodulated one — asserted by driving both, not by reading. */
+var FLOOR_HEAT_GAIN = 0.6;    /* authored: the share of the base rate full heat adds */
+
+/* The substance's cessation curve, sampled ONCE: `easing` integrates 4,000 steps and the curve is a
+   property of the substance, not of the frame, so calling it per drop per frame would be the wrong
+   price. Linear interpolation between samples. At module scope with cyclePos because neither is a
+   function of a canvas — a pure curve a harness can drive, rather than a closure it has to infer. */
+var FLOOR_EASE = (function () {
+  try { return OCCVM_RHEOLOGY.easing(OCCVM_RHEOLOGY.SUBSTANCE, 1, 33); } catch (e) { return null; }
+})();
+function floorEase(x) {
+  if (!FLOOR_EASE) return Math.max(0, Math.min(1, x));       /* no substance spliced: straight ramp */
+  var t = Math.max(0, Math.min(1, x)) * (FLOOR_EASE.length - 1), i = Math.floor(t), f = t - i;
+  return i >= FLOOR_EASE.length - 1 ? FLOOR_EASE[FLOOR_EASE.length - 1]
+       : FLOOR_EASE[i] + (FLOOR_EASE[i + 1] - FLOOR_EASE[i]) * f;
+}
+/* one drop's height in its cycle: 0 at the bottom of the travel, 1 at the top — rise, attach, sink,
+   rest, with the turn at each end on the substance's own cessation curve rather than an invented ease.
+   It is exactly 0 only while resting at the bottom, which is what lets it BE the coil predicate as
+   well as the position: no authored coil height, because step 3 already put one there. */
+function cyclePos(u) {
+  var half = 0.5, move = half * (1 - FLOOR_DWELL);
+  if (u < move) return floorEase(u / move);                      /* rising  */
+  if (u < half) return 1;                                        /* attached at the top */
+  if (u < half + move) return 1 - floorEase((u - half) / move);  /* sinking */
+  return 0;                                                      /* resting at the bottom */
+}
+
 /* P-3's confirmed law, on its own so it can be driven rather than read. Linear in t, and the guard
    proves linearity by doubling rather than by matching the source text: r(2t) = 2·r(t), which √t does
    not satisfy and which is the one substitution anybody is likely to make here. */
 function bridgeRadius(ms) { return FLOOR_MERGE_PX_S * Math.max(0, ms) / 1000; }
 
-function ambientFloor(canvas, still) {
+function ambientFloor(canvas, still, heat) {
   if (!canvas || !canvas.getContext) return function () {};
   /* named, not aliased: the L10 auditor measures the consumer by this call */
   if (typeof OCCVM_GLOBULES === "undefined" || !OCCVM_GLOBULES.field) return function () {};
@@ -656,8 +726,35 @@ function ambientFloor(canvas, still) {
   })();
   if (!ink) return function () {};
 
+  /* 2.28 — METABALL RENDERING, the build plan's own first recommendation and the same threshold BTC's
+     still frame uses. `OCCVM_GLOBULES.gooFilter` is the one definition; here it goes into a hidden
+     <svg> in the document and the canvas names it, so the live floor and every still slab cut their
+     isosurface at the same level. What it buys is not the silhouette — it is that overlapping fields
+     ADD, so two approaching drops join with no merge code at all. The explicit bridge quad this
+     replaced was geometry standing in for physics, and worse, it could only ever draw a merge that
+     completes; a field-based join is arrested by stopping the approach, which is the only way the
+     frozen dumbbell of the plan's §2 can be rendered without a second special case. */
+  var gooId = (function () {
+    try {
+      var id = "occvm-goo";
+      if (!document.getElementById(id)) {
+        var host = document.createElement("div");
+        host.setAttribute("aria-hidden", "true");
+        host.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
+        host.innerHTML = "<svg xmlns='http://www.w3.org/2000/svg'><defs>" +
+          OCCVM_GLOBULES.gooFilter({ id: id }) + "</defs></svg>";
+        document.body.appendChild(host);
+      }
+      return id;
+    } catch (e) { return null; }
+  })();
+
+  /* a box rather than a captured value, so a changed reading reaches the running floor without the
+     floor being torn down and reseeded — a field that reshuffled every time the writing changed would
+     be a floor nobody could look at */
+  var heatRef = { v: heat };
   var ctx = canvas.getContext("2d"), fld = null;
-  var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0;
+  var w = 0, h = 0, pw = 0, ph = 0, dpr = 1, drops = [], welds = [], raf = 0, last = 0, clock = 0;
 
   function count() { return fld ? fld.count() : 3; }
   function spawn(seedEdge) { return fld.spawn(seedEdge); }
@@ -674,56 +771,140 @@ function ambientFloor(canvas, still) {
     pw = w; ph = h;
   }
 
-  function blob(d, alpha) {
-    var g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
+  function blob(c2, d, alpha) {
+    var g = c2.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
     g.addColorStop(0, ink[0]); g.addColorStop(1, ink[1]);
-    ctx.globalAlpha = alpha; ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+    c2.globalAlpha = alpha; c2.fillStyle = g;
+    c2.beginPath(); c2.arc(d.x, d.y, d.r, 0, Math.PI * 2); c2.fill();
   }
 
-  /* the bridge: a band between two centres whose half-width is the bridge radius, growing linearly */
-  function bridge(a, b, rb) {
-    var dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
-    ctx.globalAlpha = FLOOR_ALPHA; ctx.fillStyle = ink[1];
-    ctx.beginPath();
-    ctx.moveTo(a.x + nx * rb, a.y + ny * rb); ctx.lineTo(b.x + nx * rb, b.y + ny * rb);
-    ctx.lineTo(b.x - nx * rb, b.y - ny * rb); ctx.lineTo(a.x - nx * rb, a.y - ny * rb);
-    ctx.closePath(); ctx.fill();
+  /* at the coil = resting at the bottom of the cycle, which cyclePos returns exactly 0 for. It reads
+     this instance's own clock, so unlike cyclePos it is not a pure curve and stays inside. */
+  function atCoil(d, period) {
+    if (d.phase === undefined) return true;
+    return cyclePos(((clock / period) + d.phase) % 1) === 0;
   }
 
   function step(dt) {
     var i, j;
+    /* 2.28 — the cycle's period follows from the authored speed and the surface's own height, so the
+       floor keeps its pace on a face of any size rather than carrying a second authored constant. */
+    var travel = Math.max(1, h);
+    /* READ-ONLY, and clamped here rather than trusted: the floor never writes --heat and never decides
+       what it means. At heat 0 this is exactly the unmodulated period. */
+    var hx = Math.max(0, Math.min(1, +heatRef.v || 0));
+    var period = 2 * (travel / (FLOOR_RISE_PX_S * (1 + FLOOR_HEAT_GAIN * hx))) * 1000 / (1 - FLOOR_DWELL);
+    clock += dt;
     for (i = 0; i < drops.length; i++) {
       var d = drops[i];
-      d.x += d.vx * dt; d.y += d.vy * dt;
+      d.x += d.vx * dt;                                        /* the lateral wander a real lamp shows */
       if (d.x < -d.r * 2) d.x = w + d.r; else if (d.x > w + d.r * 2) d.x = -d.r;
-      if (d.y < -d.r * 2) d.y = h + d.r; else if (d.y > h + d.r * 2) d.y = -d.r;
+      if (d.merging) continue;                                 /* a welding pair is driven by the weld */
+      if (d.lockedTo) continue;                                /* a follower lobe is placed below */
+      var u = ((clock / period) + (d.phase === undefined ? 0 : d.phase)) % 1;
+      d.y = (h - d.r) - cyclePos(u) * (h - 2 * d.r);
+    }
+    /* the follower lobes, after every leader has moved: a frozen bridge holds its offset exactly */
+    for (i = 0; i < drops.length; i++) {
+      var f = drops[i];
+      if (f.lockedTo) { f.x = f.lockedTo.x + f.dx; f.y = f.lockedTo.y + f.dy; }
     }
     for (i = 0; i < welds.length; i++) {
       var wd = welds[i];
       wd.t += dt; wd.rb = bridgeRadius(wd.t);              /* r ∝ t — the derived half */
       if (wd.rb >= wd.target) {
-        var a = wd.a, b = wd.b, m = a.r * a.r + b.r * b.r;  /* area conserved through the merge */
-        a.x = (a.x * a.r * a.r + b.x * b.r * b.r) / m; a.y = (a.y * a.r * a.r + b.y * b.r * b.r) / m;
-        a.r = Math.sqrt(m); a.merging = false; b.gone = true;
+        var a = wd.a, b = wd.b;
+        if (wd.arrests) {
+          /* 2.28 step 5 — IT FREEZES. The bridge reached the height the Bingham number allows and the
+             yield stress holds it there: "the effect of the yield stress evident only in its final
+             arrested shape". The pair does NOT become one drop. It stays two lobes locked at the
+             separation they froze at, which is what a frozen dumbbell IS, and it answers the build
+             plan's open accumulation question without inventing a rule: an arrested pair is one stuck
+             object, so it drifts off on the cycle rather than piling up at the coil. It also cannot
+             grow without bound — a pair that has arrested is done, and a third arrival would need the
+             bridge to grow again against a yield stress that already stopped it. */
+          a.locked = b.locked = true; a.merging = b.merging = false;
+          /* ONE RIGID OBJECT, not two drops that agree to move alike. The first draft gave the follower
+             the leader's phase and let it compute its own height — and because that height depends on
+             the drop's own radius, two lobes of different size drifted apart over the cycle. A frozen
+             bridge does not stretch: the follower's position is the leader's plus the offset they froze
+             at, and nothing else. */
+          b.lockedTo = a; b.dx = b.x - a.x; b.dy = b.y - a.y;
+          welds.splice(i--, 1);
+          continue;
+        }
+        /* 2.28 — the conservation convention is the SHARED part's, not this file's. It shipped here as
+           area (r² = r₁² + r₂²); occvm/globules.js decides volume (r³ = r₁³ + r₂³) and records why, and
+           the arrest boundaries are computed against that choice, so two conventions would put the
+           renderer and the physics on different drops. Centres weight by the same power. */
+        var P = OCCVM_GLOBULES.MERGE_POWER;
+        var wa = Math.pow(a.r, P), wb = Math.pow(b.r, P), m = wa + wb;
+        a.x = (a.x * wa + b.x * wb) / m; a.y = (a.y * wa + b.y * wb) / m;
+        a.r = OCCVM_GLOBULES.merged(a.r, b.r); a.merging = false; b.gone = true;
         welds.splice(i--, 1);
         drops = drops.filter(function (x) { return !x.gone; });
         while (drops.length < count()) drops.push(spawn(true));
       }
     }
+    /* 2.28 step 4 — RECOMBINATION HAPPENS AT THE COIL, not wherever two globules touch.
+       A real lava lamp carries a metallic wire coil at the base acting as a surface-tension breaker,
+       recombining cooled wax after it descends; free-floating pairwise merging anywhere on screen is
+       the easier build and is not what the object does. The coil determines WHERE globules meet; τ₀
+       determines WHAT the meeting produces.
+       The coil needs no geometry and no authored height here, because step 3 already put one at the
+       bottom: a drop is at the coil exactly when it is in the bottom dwell of its cycle. Two drops can
+       only begin a weld while both are resting there, which is also when a real lamp's wax pools. */
     for (i = 0; i < drops.length; i++) for (j = i + 1; j < drops.length; j++) {
       var p = drops[i], q = drops[j];
-      if (p.merging || q.merging) continue;
+      if (p.merging || q.merging || p.locked || q.locked) continue;
+      if (!atCoil(p, period) || !atCoil(q, period)) continue;
       if (Math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r) continue;
+      /* the substance decides the outcome BEFORE the bridge starts growing, from the radii alone —
+         so the same weld renders a completion or a freeze without a branch appearing mid-merge */
+      var reg = OCCVM_GLOBULES.arrestRegime(p.r, q.r);
+      var lobe = Math.min(p.r, q.r);
       p.merging = q.merging = true;
-      welds.push({ a: p, b: q, t: 0, rb: 0, target: Math.min(p.r, q.r) });
+      welds.push({ a: p, b: q, t: 0, rb: 0, arrests: reg !== "completes",
+                   target: lobe * OCCVM_GLOBULES.arrestedBridge(p.r, q.r) });
     }
   }
 
+  /* THE WEIGHT GOES OUTSIDE THE FILTER, and getting that wrong erases the floor completely.
+     The isosurface cuts at alpha 0.5 (Blinn). Drawing the blobs AT `FLOOR_ALPHA` = 0.24 puts the whole
+     field below the cut, so the threshold deletes it: measured in Chromium on a 25 px disc, filtered at
+     alpha 0.24 gives max alpha 0 over 0 non-zero pixels, against 255 over 1,804 at alpha 1. The first
+     version of this shipped that way and the screenshot did not show it — the slab it was measured on
+     has the floor behind opaque controls, so "looks the same" and "is gone" were the same picture.
+     Caught by probing the pixels rather than by looking.
+     BTC's still frame never had the bug because its `<g opacity>` wraps the FILTERED group; the canvas
+     needs the same shape, so the field is drawn opaque on an offscreen buffer, thresholded there, and
+     composited at the weight. One extra canvas, no extra field. */
+  var buf = null, bctx = null;
   function paint() {
     ctx.clearRect(0, 0, w, h);
-    for (var i = 0; i < welds.length; i++) bridge(welds[i].a, welds[i].b, welds[i].rb);
-    for (i = 0; i < drops.length; i++) blob(drops[i], FLOOR_ALPHA);
+    var i, filtered = false;
+    if (gooId) {
+      try {
+        if (!buf) { buf = document.createElement("canvas"); bctx = buf.getContext("2d"); }
+        if (buf.width !== canvas.width || buf.height !== canvas.height) { buf.width = canvas.width; buf.height = canvas.height; }
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        bctx.clearRect(0, 0, w, h);
+        bctx.filter = "url(#" + gooId + ")";
+        filtered = bctx.filter !== "none";
+      } catch (e) { filtered = false; }
+    }
+    if (filtered) {
+      for (i = 0; i < drops.length; i++) blob(bctx, drops[i], 1);
+      bctx.filter = "none"; bctx.globalAlpha = 1;
+      ctx.globalAlpha = FLOOR_ALPHA;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(buf, 0, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else {
+      /* no SVG-filter support on a 2D context: the unthresholded field, which is what shipped at 2.25.
+         A degradation, never a blank — the same rule L8 applies to reduced motion. */
+      for (i = 0; i < drops.length; i++) blob(ctx, drops[i], FLOOR_ALPHA);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -745,19 +926,30 @@ function ambientFloor(canvas, still) {
   window.addEventListener("resize", onResize);
   var ro = null;
   if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(onResize); ro.observe(canvas.parentNode || canvas); }
-  return function () {
+  var stop = function () {
     cancelAnimationFrame(raf);
     window.removeEventListener("resize", onResize);
     if (ro) ro.disconnect();
   };
+  stop.setHeat = function (v) { heatRef.v = v; };
+  return stop;
 }
 
-function useAmbientFloor(ref, still, key) {
+/* 2.28 step 6 — `heat` is a THIRD input and it is a measured value, which the 2.22 guard forbade
+   outright. That guard was stricter than L13, which names this exact case. What stays true and is now
+   asserted by DRIVING rather than by the absence of a string: the floor runs at heat 0, at the same
+   period it ran before heat existed. Heat is passed through a ref-setter rather than into the effect's
+   dependency list, because re-running the effect would tear the canvas down and reseed the field every
+   time the writing changed — a floor that reshuffles as you type is not a floor. */
+function useAmbientFloor(ref, still, key, heat) {
+  const stopRef = useRef(null);
   useEffect(() => {
     let reduce = false;
     try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
-    return ambientFloor(ref.current, reduce || !!still);
+    stopRef.current = ambientFloor(ref.current, reduce || !!still, heat);
+    return stopRef.current;
   }, [still, key]);
+  useEffect(() => { if (stopRef.current && stopRef.current.setHeat) stopRef.current.setHeat(heat); }, [heat]);
 }
 
 /* ---- bank ---- */
@@ -834,9 +1026,12 @@ function Tune({ prefs, setPrefs, engStatus, migrated, onExport, onImport }) {
         <Cast on={!!place} patina onClick={locate}>{place ? `${place.name} · ${place.lat}, ${place.lon}` : "use my location"}</Cast>
       </div>
       {geo && <div className="note" style={{ marginTop: 6 }}>{geo}</div>}
-      <div className="label">mineral</div>
+      <div className="label">palette</div>
       <div className="row">
-        {Object.keys(MINERALS).map(m => <Cast key={m} on={prefs.mineral === m} onClick={() => setPrefs({ ...prefs, mineral: m })} style={{ "--m": MINERALS[m].m }}>{m}</Cast>)}
+        {/* OCCVM-L6 — each swatch wears the palette it offers through --m (the decorative accent), and
+            the selected one is the Cast's own `on` state. Five, not three: the closed mineral set died
+            with the crystal at 2.8 and the count now follows occvm/pigments.js rather than this line. */}
+        {Object.keys(PIGMENTS).map(k => <Cast key={k} on={prefs.palette === k} onClick={() => setPrefs({ ...prefs, palette: k })} style={{ "--m": PIGMENTS[k].m }}>{k}</Cast>)}
       </div>
       <div className="label">spacing</div>
       <div className="row">{["comfy", "dense"].map(d => <Cast key={d} on={prefs.density === d} patina onClick={() => setPrefs({ ...prefs, density: d })}>{d}</Cast>)}</div>
@@ -869,7 +1064,7 @@ function Tome() {
   const [open, setOpen] = useState(null);
   const [bank, setBank_] = useState([]); const [overrides, setOverrides_] = useState({});
   const [shelf, setShelf_] = useState([]); const [current, setCurrent_] = useState(null);
-  const [prefs, setPrefs_] = useState({ mineral: "amethyst", density: "comfy", motion: "on" });
+  const [prefs, setPrefs_] = useState({ palette: OCCVM_PIGMENT_DEFAULT, density: "comfy", motion: "on" });
   const [pop, setPop_] = useState("rap");
   const [loaded, setLoaded] = useState(false); const [migrated, setMigrated] = useState(false);
   const [engStatus, setEngStatus] = useState("idle"); const [sun, setSun] = useState(null);
@@ -881,15 +1076,23 @@ function Tome() {
     if (!sh.some(d => d.id === cur)) cur = sh[0].id;
     setShelf_(sh); setCurrent_(cur);
     const o = STORE.get("overrides", {}); OVERRIDES = o; setOverrides_(o);
-    setPrefs_(STORE.get("prefs", { mineral: "amethyst", density: "comfy", motion: "on" })); setPop_(STORE.get("pop", "rap"));
+    /* 2.27 — a stored `mineral` from before the palettes is read once and resolved to a palette rather
+       than left to fall through to the default silently. amethyst was the default and obsidian is the
+       palette that preserves it; the other two were accents this tool never mapped to a palette. */
+    const sp = STORE.get("prefs", { palette: OCCVM_PIGMENT_DEFAULT, density: "comfy", motion: "on" });
+    if (sp.mineral !== undefined && !sp.palette) { sp.palette = OCCVM_PIGMENT_DEFAULT; sp.migratedFrom = { mineral: sp.mineral }; delete sp.mineral; STORE.set("prefs", sp); }
+    if (!PIGMENTS[sp.palette]) sp.palette = OCCVM_PIGMENT_DEFAULT;
+    setPrefs_(sp); setPop_(STORE.get("pop", "rap"));
     setLoaded(true); E2.load(setEngStatus);
   }, []);
   useEffect(() => { const t = () => setSun(SUN.apply(new Date())); t(); const id = setInterval(t, 60000); return () => clearInterval(id); }, []);
   useEffect(() => { SUN.setPlace(prefs.place); setSun(SUN.apply(new Date())); }, [prefs.place]);
   useEffect(() => { E2.setOwn([...bank, ...shelf.flatMap(d => d.text.split(/\s+/))]); }, [bank, shelf]);
   useEffect(() => {
-    const m = MINERALS[prefs.mineral] || MINERALS.amethyst, rs = document.documentElement.style;
-    rs.setProperty("--mineral", m.m); rs.setProperty("--mineral-lo", m.mlo); rs.setProperty("--vein-hi", m.hi); rs.setProperty("--vein-lo", m.lo);
+    /* one call, one part, both tools — see occvm/pigments.js. Before 2.27 this hand-wrote four
+       properties here and BTC hand-wrote the same four in its own applyMineral, which is how a shared
+       set acquires a local exception. */
+    occvmApplyPigment(prefs.palette, document.documentElement.style);
     document.body.className = (prefs.density === "dense" ? "dense " : "") + (prefs.motion === "on" ? "motion" : "");
   }, [prefs]);
   const setBank = v => { setBank_(v); STORE.set("bank", v); };
@@ -946,10 +1149,10 @@ function Tome() {
     lookup: engStatus === "ready" ? `${E2.size().toLocaleString()} words` : engStatus === "loading" ? "loading…" : "curated list",
     check: "a ~ b",
     bank: `${bank.length} word${bank.length === 1 ? "" : "s"} · ${nOv} cut${nOv === 1 ? "" : "s"}`,
-    tune: `${prefs.mineral} · ${prefs.density}`,
+    tune: `${prefs.palette} · ${prefs.density}`,
   };
   const face = id => ({
-    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} mineral={prefs.mineral} tempo={tempo} setTempo={setTempo} />,
+    draft: <Draft draft={draft} setDraft={setDraft} overrides={overrides} setOverride={setOverride} pop={pop} setPop={setPop} eng={eng} shelfProps={shelfProps} palette={prefs.palette} tempo={tempo} setTempo={setTempo} />,
     lookup: <Lookup bank={bank} setBank={setBank} eng={eng} />,
     check: <Check eng={eng} />,
     bank: <Bank bank={bank} setBank={setBank} overrides={overrides} setOverride={setOverride} eng={eng} />,
@@ -957,7 +1160,13 @@ function Tome() {
   }[id]);
   const idx = FACES.findIndex(f => f.id === open);
   const floorRef = useRef(null);
-  useAmbientFloor(floorRef, open !== "draft", open);
+  /* THE DRAFT'S OWN DRONE DEPTH, read for exactly what it already means and nothing more: how far past
+     the pop line the worst vowel run has gone, 0 when nothing is past it. `.bar` already carries the
+     same quantity per bar as --heat; this is the draft-level reading of it, and the floor never writes
+     it, never decides what it means, and still runs when it is 0. */
+  const floorHeat = quick && quick.limit && quick.maxRun > quick.limit
+    ? Math.min(1, (quick.maxRun - quick.limit) / Math.max(1, quick.limit)) : 0;
+  useAmbientFloor(floorRef, open !== "draft", open, floorHeat);
   return (
     <div>
       <header className="binding">
