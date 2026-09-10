@@ -321,6 +321,11 @@
      palette's own values, which is why selecting obsidian is a no-op and why the suite asserts this
      line as a set identity rather than trusting it. A fallback that drifted from the palette it
      mirrors is a second source of truth, which is the restatement L6 exists to catch. */
+  /* 2.36 — the safe area read once into properties so a harness can drive it; see SPINE.md 6b. The
+     binding had the inset inline and nothing else did, so a panel header that reached the top of the
+     viewport collided with the system clock on a real phone. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
   --pigment: #8d5cf0; --pigment-lo: #4a2a8c; --vein-hi: #c9a6ff; --vein-lo: #5a36a8;
   --bronze-a: #d9a866; --bronze-b: #8f6a35; --bronze-c: #4f3a1c; --verdigris: #3f9a86; --verdigris-lo: #23574c;
   --pad: 16px; --text: 17px; --stone-h: 20px;
@@ -331,13 +336,19 @@
    doing two jobs here: the heads and every line a writer reads. `--reading` is Faustina, embedded by
    occvm/reading.css; `--serif` stays on the heads below. */
 html, body { margin: 0; background: #09080d; color: var(--bone); font-family: var(--reading); -webkit-text-size-adjust: 100%; }
+/* 2.36 — the inset on the binding only protects the binding. Any panel scrolled to the top of the
+   viewport reached the system clock, which is what the field recording showed. An opaque band exactly
+   the inset tall, above everything, hides whatever passes under the status bar; at an inset of 0 it
+   has no height and paints nothing. */
+body::after { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top);
+  background: #100e16; z-index: 90; pointer-events: none; }
 body { min-height: 100vh; background-image: radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--pigment) 18%, transparent) 0%, transparent 60%), linear-gradient(180deg, #100e16, #09080d 40%); }
-#root { max-width: 720px; margin: 0 auto; padding: 0 0 max(24px, env(safe-area-inset-bottom)); }
+#root { max-width: 720px; margin: 0 auto; padding: 0 0 max(24px, var(--safe-bottom)); }
 input, textarea, button { font: inherit; }
 input, textarea { -webkit-appearance: none; appearance: none; }
 
 /* ---- binding: raw bronze, verdigris in the seams ---- */
-.binding { position: sticky; top: 0; z-index: 30; padding: 12px var(--pad) 10px; padding-top: max(12px, env(safe-area-inset-top));
+.binding { position: sticky; top: 0; z-index: 30; padding: 12px var(--pad) 10px; padding-top: max(12px, var(--safe-top));
   background: linear-gradient(calc(atan2(var(--ly), var(--lx)) * 1rad + 90deg), rgba(255,235,190,calc(.18 * var(--elev))) 0%, transparent 40%, rgba(0,0,0,.25) 100%),
     repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px),
     linear-gradient(180deg, var(--bronze-a) -30%, var(--bronze-b) 45%, var(--bronze-c) 100%);
