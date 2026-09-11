@@ -321,7 +321,7 @@
      2.4 L* at noon AND at midnight — the darkest reading of either tool, and completely static. */
   --field: #09080d; --field-hi: #100e16;
   --bone: #ece3d0; --bone-lo: #b7ad9c;
-  --gilt-a: #ffe9a3; --gilt-b: #d9a52c; --gilt-c: #7a5510;
+  --gilt-a: #ffde00; --gilt-b: #cf9a00; --gilt-c: #704b00;
   /* OCCVM-L6 / SPINE.md 2ad — these four are FALLBACKS. occvmApplyPigment overwrites them from
      occvm/pigments.js at load and on every palette change; what stands here is the `obsidian`
      palette's own values, which is why selecting obsidian is a no-op and why the suite asserts this
@@ -337,8 +337,8 @@
   --tile-fill: 38%;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --pigment: #8d5cf0; --pigment-lo: #4a2a8c; --vein-hi: #c9a6ff; --vein-lo: #5a36a8;
-  --bronze-a: #d9a866; --bronze-b: #8f6a35; --bronze-c: #4f3a1c; --verdigris: #3f9a86; --verdigris-lo: #23574c;
+  --pigment: #7b44ff; --pigment-lo: #381592; --vein-hi: #bd95ff; --vein-lo: #4720b1;
+  --bronze-a: #d9a866; --bronze-b: #8f6a35; --bronze-c: #4f3a1c; --verdigris: #04ab91; --verdigris-lo: #126557;
   --pad: 16px; --text: 17px; --stone-h: 20px;
 }
 .dense { --pad: 11px; --text: 15px; --stone-h: 18px; }
@@ -443,11 +443,31 @@ textarea.cut { min-height: 9.5em; }
    govern. L6 names four roles and one of them is exactly this case: verdigris-adjacent is active.
    The sibling has painted its own on-state from --verdigris all along (`button[aria-pressed="true"],
    button.sel`), so this is the two tools agreeing rather than a new opinion, and `.cast.patina.on`
-   directly below already used it. The --m override stays: a button that names its own colour, like
-   the palette swatches offering a palette, is not a state. */
-.cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--m, var(--verdigris)), color-mix(in srgb, var(--m, var(--verdigris)) 55%, black));
-  box-shadow: 0 0 0 1px var(--m, var(--verdigris)) inset, 0 0 14px color-mix(in srgb, var(--m, var(--verdigris)) 45%, transparent), 0 2px 0 #1f1508; }
+   directly below already used it.
+   2.42 RETIRES THE --m OVERRIDE that 2.37 kept. It existed for exactly one caller, the palette
+   swatches, and those have their own rule now (.pgsw, below) — so what was a fallback chain on every
+   control in the tool is one rule on the five controls that need it. Every other .cast.on is the
+   active colour and nothing else, which is what 2.37 was arguing for and could not finish. */
+.cast.on { color: #fff; border-color: rgba(0,0,0,.6); background: linear-gradient(180deg, var(--verdigris), color-mix(in srgb, var(--verdigris) 55%, black));
+  box-shadow: 0 0 0 1px var(--verdigris) inset, 0 0 14px color-mix(in srgb, var(--verdigris) 45%, transparent), 0 2px 0 #1f1508; }
 .cast.patina.on { background: linear-gradient(180deg, var(--verdigris), var(--verdigris-lo)); box-shadow: 0 0 0 1px var(--verdigris) inset, 0 2px 0 #1f1508; }
+
+/* OCCVM-L6 (2.42) — THE PALETTE PICKER WEARS THE PALETTE IT IS OFFERING, AND THE BRONZE LEAVES IT.
+   Until now these five swatches were the tool's bronze binding at rest and only took a colour once
+   selected, so the row read as four unlabelled bronze buttons and one coloured one — the offer was
+   invisible until after it was taken. The sibling has had the opposite arrangement since 2.27: each
+   unselected swatch wears its own palette's accent, the selected one drops the override and reads the
+   LIVE tokens, so the row shows four offers and one applied state. That is the arrangement here now,
+   and the two tools stop disagreeing about what a picker is.
+   NO NEW HEX. `--pg`/`--pg-lo` are set inline from occvm/pigments.js — each palette's own `m` and
+   `mlo`, the accent ramp it already ships — and the selected swatch reads `--pigment`/`--pigment-lo`,
+   which is that same ramp after applyPigment() has written it. A swatch naming its own colour is an
+   offer and not a state, which is why this is a rule about the picker and not a reopening of what
+   2.37 settled: `--verdigris` still means selected, and here it is the ring rather than the fill. */
+.cast.pgsw { background: linear-gradient(180deg, var(--pg, var(--pigment)), var(--pg-lo, var(--pigment-lo)));
+  border-color: rgba(0,0,0,.55); color: var(--bone); text-shadow: 0 1px 2px rgba(0,0,0,.75); }
+.cast.pgsw.on { color: #fff; background: linear-gradient(180deg, var(--pigment), var(--pigment-lo));
+  box-shadow: 0 0 0 1px var(--verdigris) inset, 0 0 14px color-mix(in srgb, var(--verdigris) 45%, transparent), 0 2px 0 #1f1508; }
 /* OCCVM-L13 (2.18) — Reading A. --pulse is written by useBeatPulse and is 0 unless a real tempo is set,
    so with no tempo this rule resolves to exactly the surface the button already had: the fallback IS the
    off state, and nothing here can beat under a default nobody chose. The strike lands on the rim rather

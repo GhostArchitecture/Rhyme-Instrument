@@ -10,7 +10,18 @@ const CARD = (() => {
   function light() {
     const lx = cssVar("--lx"), ly = cssVar("--ly"), elev = cssVar("--elev"), night = cssVar("--night"), glow = cssVar("--glow") || .6;
     const rs = getComputedStyle(document.documentElement);
-    return { lx, ly, elev, night, glow, sub: rs.getPropertyValue("--sub").trim() || "#1b1a22", subHi: rs.getPropertyValue("--sub-hi").trim() || "#2c2a36", subLo: rs.getPropertyValue("--sub-lo").trim() || "#0e0d13", bone: rs.getPropertyValue("--bone").trim() || "#ece3d0" };
+    /* 2.42 — THE CARD READS THE PALETTE'S OWN RAMP INSTEAD OF RESTATING IT. `m.m` reached the ground
+       radial from 2.27, but the gilt ramp below and the seam were typed hexes, so a palette change
+       never touched them and the card painted obsidian's gilt whatever the page was wearing. That is
+       BTC's 2.17 `PAL` defect one tool along, and 2.42 is the release that would have made it visible:
+       every one of these values moves in this release. `--field` joins them for the same reason one
+       release later — it became sundial-written at 2.41 and this canvas kept the literal, so the card's
+       ground sat at midnight while the page moved with the day. Resolved through the page exactly as
+       `--sub` and `--bone` already are, with the fallback each token's own `:root` declaration carries,
+       because jsdom resolves no custom property. */
+    const tok = (k, f) => rs.getPropertyValue(k).trim() || f;
+    return { lx, ly, elev, night, glow, sub: tok("--sub", "#1b1a22"), subHi: tok("--sub-hi", "#2c2a36"), subLo: tok("--sub-lo", "#0e0d13"), bone: tok("--bone", "#ece3d0"),
+      field: tok("--field", "#09080d"), gilt: tok("--gilt-a", "#ffde00"), giltB: tok("--gilt-b", "#cf9a00"), giltC: tok("--gilt-c", "#704b00"), verdLo: tok("--verdigris-lo", "#126557") };
   }
 
   /* text engraved into the surface: dark cut toward the light, lit lip away from it */
@@ -20,7 +31,7 @@ const CARD = (() => {
     ctx.fillStyle = `rgba(255,255,255,${(.4 * L.elev + .06).toFixed(3)})`; ctx.fillText(text, x - L.lx * size * .045, y - L.ly * size * .045);
     if (gilt) {
       const g = ctx.createLinearGradient(x, y - size, x + size * 2.5, y + size * .4);
-      g.addColorStop(0, "#7a5510"); g.addColorStop(.35, "#d9a52c"); g.addColorStop(.55, "#ffe9a3"); g.addColorStop(.75, "#d9a52c"); g.addColorStop(1, "#7a5510");
+      g.addColorStop(0, L.giltC); g.addColorStop(.35, L.giltB); g.addColorStop(.55, L.gilt); g.addColorStop(.75, L.giltB); g.addColorStop(1, L.giltC);
       ctx.fillStyle = g;
       if (L.night > 0) { ctx.shadowColor = "rgba(255,215,120,.7)"; ctx.shadowBlur = 10 * L.night; }
     } else {
@@ -133,12 +144,12 @@ const CARD = (() => {
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d"); const L = light(); const m = PIGMENTS[palette] || PIGMENTS[OCCVM_PIGMENT_DEFAULT];
     /* ground */
-    ctx.fillStyle = "#09080d"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = L.field; ctx.fillRect(0, 0, W, H);
     const bg = ctx.createRadialGradient(W / 2, -H * .1, 0, W / 2, -H * .1, H * .9); bg.addColorStop(0, hex2(m.m, .22)); bg.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
     /* binding strip */
     const bh = 92; const bg2 = ctx.createLinearGradient(0, 0, 0, bh); bg2.addColorStop(0, "#d9a866"); bg2.addColorStop(.45, "#8f6a35"); bg2.addColorStop(1, "#4f3a1c"); ctx.fillStyle = bg2; ctx.fillRect(0, 0, W, bh);
     ctx.fillStyle = "rgba(255,255,255,.035)"; for (let i = 0; i < W; i += 3) ctx.fillRect(i, 0, 1, bh);
-    ctx.fillStyle = "#23574c"; ctx.fillRect(0, bh - 3, W, 3); ctx.fillStyle = "rgba(63,154,134,.6)"; ctx.fillRect(0, bh - 4, W, 1);
+    ctx.fillStyle = L.verdLo; ctx.fillRect(0, bh - 3, W, 3); ctx.fillStyle = "rgba(63,154,134,.6)"; ctx.fillRect(0, bh - 4, W, 1);
     ctx.font = `400 34px ${FONT}`; ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillText("rhyme instrument", 49, 59); ctx.fillStyle = "#fff3da"; ctx.fillText("rhyme instrument", 48, 58);
     const sun = SUN.solar(new Date()); const dirs = ["N","NE","E","SE","S","SW","W","NW"];
     ctx.font = `400 24px ${FONT}`; ctx.textAlign = "right"; ctx.fillStyle = "#e6d2ac";
