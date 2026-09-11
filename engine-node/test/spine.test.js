@@ -1500,3 +1500,34 @@ test("2.38 — the shared parts are copied between the repositories by hand, and
   const orphan = mine.filter(f => !theirs.has(f) && SIBLING_ONLY.indexOf(f) < 0);
   assert.deepEqual(orphan, [], `parts here that the sibling lacks: ${orphan.join(", ")}`);
 });
+
+test("2.41 — this tool's page ground reads the one light, and stops restating two hexes", () => {
+  /* Until 2.41 this file typed #09080d and #100e16 straight into `html, body`, the body gradient and
+     the 2.36 safe-area band: three copies of two values BTC held as tokens, and none of them reading
+     the sun. Measured before the change, Rhyme's frame median was 2.4 L* at noon AND at midnight —
+     the darkest reading of either tool and completely static, while every surface above it moved.
+     BTC's suite carries the shared half of this (the ground IS the substrate's shadow face, at every
+     elevation). What is this tool's own is that its rules read the token rather than a hex. */
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8")
+                .replace(/\/\*[\s\S]*?\*\//g, "");            /* comments stripped: a guard that reads
+                                                                 its own prose has been the defect
+                                                                 five releases running */
+  const hexes = (css.match(/#(?:09080d|100e16)\b/gi) || []).length;
+  const fallbacks = (css.match(/--field(?:-hi)?\s*:\s*#(?:09080d|100e16)/gi) || []).length;
+  assert.equal(hexes, fallbacks,
+    `${hexes} ground hexes, only ${fallbacks} of them the permitted :root fallback (SPINE.md 2ad)`);
+  assert.ok(fallbacks >= 2, "both ground tokens must keep a fallback: the page paints before the part runs");
+
+  /* the three rules that carry the ground now read it */
+  assert.match(css, /html,\s*body\s*\{[^}]*background:\s*var\(--field\)/,
+    "html,body must read --field");
+  assert.match(css, /linear-gradient\(180deg,\s*var\(--field-hi\),\s*var\(--field\)/,
+    "the ground gradient must read both tokens");
+  assert.match(css, /body::after\s*\{[\s\S]{0,240}?background:\s*var\(--field-hi\)/,
+    "the 2.36 safe-area band must read --field-hi, not a third copy of the hex (L3)");
+
+  /* and the spliced sundial really does write them, so the tokens are not decorative here either */
+  const engine = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
+  assert.match(engine, /"--field":\s*hex\(subLo\)/, "the spliced sundial writes the ground");
+  assert.match(engine, /"--field-hi":\s*hex\(sub\)/, "and its top");
+});

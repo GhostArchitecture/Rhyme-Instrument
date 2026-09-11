@@ -328,6 +328,12 @@
   --rake: 6px; --nglow: 0px; --nglow-s: 0px; --lxpx: 0px; --lypx: 1px;
   --hi-a: .2; --cut-a: .3; --shade-a: .6;
   --sub: #1b1a22; --sub-hi: #2c2a36; --sub-lo: #0e0d13; --edge: #0b0a10;
+  /* 2.41 — the page ground, SUNDIAL-WRITTEN, and these two are fallbacks (SPINE.md 2ad) exactly as
+     --sub above is. Until now this tool typed #09080d and #100e16 straight into the rules below:
+     the same two hexes BTC held as tokens, restated here as bare literals, which is the second
+     source of truth L3 exists to prevent. Measured before the change, Rhyme's frame median was
+     2.4 L* at noon AND at midnight — the darkest reading of either tool, and completely static. */
+  --field: #09080d; --field-hi: #100e16;
   --bone: #ece3d0; --bone-lo: #b7ad9c;
   --gilt-a: #ffe9a3; --gilt-b: #d9a52c; --gilt-c: #7a5510;
   /* OCCVM-L6 / SPINE.md 2ad — these four are FALLBACKS. occvmApplyPigment overwrites them from
@@ -354,14 +360,17 @@
 /* OCCVM-L7 (2.7) — the reading surface is set in the READING face, not the display serif. One token was
    doing two jobs here: the heads and every line a writer reads. `--reading` is Faustina, embedded by
    occvm/reading.css; `--serif` stays on the heads below. */
-html, body { margin: 0; background: #09080d; color: var(--bone); font-family: var(--reading); -webkit-text-size-adjust: 100%; }
+html, body { margin: 0; background: var(--field); color: var(--bone); font-family: var(--reading); -webkit-text-size-adjust: 100%; }
 /* 2.36 — the inset on the binding only protects the binding. Any panel scrolled to the top of the
    viewport reached the system clock, which is what the field recording showed. An opaque band exactly
    the inset tall, above everything, hides whatever passes under the status bar; at an inset of 0 it
    has no height and paints nothing. */
 body::after { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top);
-  background: #100e16; z-index: 90; pointer-events: none; }
-body { min-height: 100vh; background-image: radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--pigment) 18%, transparent) 0%, transparent 60%), linear-gradient(180deg, #100e16, #09080d 40%); }
+  /* 2.41: var(--field-hi), not a third copy of the hex. BTC promoted this at 2.36 for exactly this
+     reason — one value, two readers (L3) — and this tool kept the literal. With the ground reading
+     the sun from 2.41 a static band would sit visibly lighter than the page it covers at noon. */
+  background: var(--field-hi); z-index: 90; pointer-events: none; }
+body { min-height: 100vh; background-image: radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--pigment) 18%, transparent) 0%, transparent 60%), linear-gradient(180deg, var(--field-hi), var(--field) 40%); }
 #root { max-width: var(--column); margin: 0 auto; padding: 0 0 max(24px, var(--safe-bottom)); }
 input, textarea, button { font: inherit; }
 input, textarea { -webkit-appearance: none; appearance: none; }
@@ -3833,7 +3842,7 @@ if (typeof module !== "undefined") module.exports = OCCVM_RHEOLOGY;
 /* ==== END OCCVM rheology.js ==== */
 
 /* ==== OCCVM SPINE sundial.js — spliced from occvm/sundial.js. do not edit. ==== */
-/* sha256:53ee71c1edf1 */
+/* sha256:f33dfc5a56c6 */
 /* OCCVM 1.2/1.7 — the sundial. One light, shared by every conforming tool (OCCVM-L3).
  *
  * Authored in occvm/SPINE.md; spliced into a tool by occvm/tools/splice-spine.js. Do not hand-edit the
@@ -4086,6 +4095,8 @@ var OCCVM_SUN = function () {
        against the previously authored #b7ad9c — at most 4/255 in any channel, and the price of the
        relationship being structural instead of remembered. */
     var boneLo = mix(bone, EDGE, 0.25);
+    var subHi = mix(sub, [255, 255, 255], faceMix(sub, [255, 255, 255], MAT_HI, e));
+    var subLo = mix(sub, [0, 0, 0], faceMix(sub, [0, 0, 0], MAT_LO, e));
     return {
       "--lx": lx.toFixed(3),
       "--ly": ly.toFixed(3),
@@ -4131,8 +4142,25 @@ var OCCVM_SUN = function () {
       "--nglow": (6 * phosphor + 3 * moonLight).toFixed(2) + "px",
       "--nglow-s": (3 * phosphor + 1.5 * moonLight).toFixed(2) + "px",
       "--sub": hex(sub),
-      "--sub-hi": hex(mix(sub, [255, 255, 255], faceMix(sub, [255, 255, 255], MAT_HI, e))),
-      "--sub-lo": hex(mix(sub, [0, 0, 0], faceMix(sub, [0, 0, 0], MAT_LO, e))),
+      "--sub-hi": hex(subHi),
+      "--sub-lo": hex(subLo),
+      /* 2.41 — OCCVM-L3 REACHES THE PAGE GROUND, which is the last surface it did not.
+         2.35 measured this and deferred it: `--field` and `--field-hi` were fixed :root literals
+         (#09080d and #100e16), so the tools painted the same ground at noon and at midnight while
+         every surface above them moved. Measured before the change, BTC's frame median was 6.22 L*
+         at high sun against 4.43 at night — the day barely reached the picture, and 75% of the
+         frame sat under 10 L* at NOON.
+          THE GROUND ADDS NO CONSTANT. It is the substrate's own shadow face, which the material
+         model already derives (2.4, from rheology's faceRatios): the page ground is the part of the
+         material no light reaches directly, and the gradient runs up from it to the substrate's
+         base. So `--field` IS `--sub-lo` and `--field-hi` IS `--sub`, by role rather than by a new
+         number, and the whole day's motion comes free with them. This is a role assignment and is
+         named as one — it is not a third face ratio, because the material defines exactly two and
+         inventing a third would be an authored constant wearing a derivation's coat.
+          Both keep their :root fallbacks in each tool: a page must paint a ground before this part
+         runs, and jsdom resolves no custom property at all (SPINE.md 2ad). */
+      "--field": hex(subLo),
+      "--field-hi": hex(sub),
       "--bone": hex(bone),
       "--bone-lo": hex(boneLo)
     };
@@ -7365,5 +7393,5 @@ function Tome() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Tome, null));
 </script>
 </body>
-<!-- build-20260910232610 -->
+<!-- build-20260911003555 -->
 </html>
