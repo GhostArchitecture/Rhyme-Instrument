@@ -314,6 +314,12 @@
   --rake: 6px; --nglow: 0px; --nglow-s: 0px; --lxpx: 0px; --lypx: 1px;
   --hi-a: .2; --cut-a: .3; --shade-a: .6;
   --sub: #1b1a22; --sub-hi: #2c2a36; --sub-lo: #0e0d13; --edge: #0b0a10;
+  /* 2.41 — the page ground, SUNDIAL-WRITTEN, and these two are fallbacks (SPINE.md 2ad) exactly as
+     --sub above is. Until now this tool typed #09080d and #100e16 straight into the rules below:
+     the same two hexes BTC held as tokens, restated here as bare literals, which is the second
+     source of truth L3 exists to prevent. Measured before the change, Rhyme's frame median was
+     2.4 L* at noon AND at midnight — the darkest reading of either tool, and completely static. */
+  --field: #09080d; --field-hi: #100e16;
   --bone: #ece3d0; --bone-lo: #b7ad9c;
   --gilt-a: #ffe9a3; --gilt-b: #d9a52c; --gilt-c: #7a5510;
   /* OCCVM-L6 / SPINE.md 2ad — these four are FALLBACKS. occvmApplyPigment overwrites them from
@@ -340,14 +346,17 @@
 /* OCCVM-L7 (2.7) — the reading surface is set in the READING face, not the display serif. One token was
    doing two jobs here: the heads and every line a writer reads. `--reading` is Faustina, embedded by
    occvm/reading.css; `--serif` stays on the heads below. */
-html, body { margin: 0; background: #09080d; color: var(--bone); font-family: var(--reading); -webkit-text-size-adjust: 100%; }
+html, body { margin: 0; background: var(--field); color: var(--bone); font-family: var(--reading); -webkit-text-size-adjust: 100%; }
 /* 2.36 — the inset on the binding only protects the binding. Any panel scrolled to the top of the
    viewport reached the system clock, which is what the field recording showed. An opaque band exactly
    the inset tall, above everything, hides whatever passes under the status bar; at an inset of 0 it
    has no height and paints nothing. */
 body::after { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top);
-  background: #100e16; z-index: 90; pointer-events: none; }
-body { min-height: 100vh; background-image: radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--pigment) 18%, transparent) 0%, transparent 60%), linear-gradient(180deg, #100e16, #09080d 40%); }
+  /* 2.41: var(--field-hi), not a third copy of the hex. BTC promoted this at 2.36 for exactly this
+     reason — one value, two readers (L3) — and this tool kept the literal. With the ground reading
+     the sun from 2.41 a static band would sit visibly lighter than the page it covers at noon. */
+  background: var(--field-hi); z-index: 90; pointer-events: none; }
+body { min-height: 100vh; background-image: radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--pigment) 18%, transparent) 0%, transparent 60%), linear-gradient(180deg, var(--field-hi), var(--field) 40%); }
 #root { max-width: var(--column); margin: 0 auto; padding: 0 0 max(24px, var(--safe-bottom)); }
 input, textarea, button { font: inherit; }
 input, textarea { -webkit-appearance: none; appearance: none; }
