@@ -1530,4 +1530,63 @@ test("2.41 — this tool's page ground reads the one light, and stops restating 
   const engine = fs.readFileSync(path.join(ROOT, "tome-src", "10_engine.js"), "utf8");
   assert.match(engine, /"--field":\s*hex\(subLo\)/, "the spliced sundial writes the ground");
   assert.match(engine, /"--field-hi":\s*hex\(sub\)/, "and its top");
+
+  /* 2.42 WIDENS THIS CLAUSE, because the version above scanned the STYLESHEET and the share card is
+     JavaScript. `25_card.js` painted its ground with a literal `#09080d` through 2.41 and the guard
+     written that release could not see it — so the card sat at midnight while the page moved with the
+     day, which is exactly the defect 2.41 closed, surviving one file along. It reads `--field` now, and
+     any ground hex in that file must be a fallback on that read and nothing else. Caught here rather
+     than shipped: the first draft of the card's fallback was a hex I invented, a THIRD copy of a value
+     that already has two, which is the L3 defect arriving through the repair for it. */
+  const card = fs.readFileSync(path.join(ROOT, "tome-src", "25_card.js"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const cardGround = (card.match(/#(?:09080d|100e16)\b/gi) || []).length;
+  const cardFallback = (card.match(/tok\("--field(?:-hi)?",\s*"#(?:09080d|100e16)"\)/gi) || []).length;
+  assert.equal(cardGround, cardFallback,
+    `the card carries ${cardGround} ground hexes and only ${cardFallback} are a fallback on a token read`);
+  assert.match(card, /ctx\.fillStyle = L\.field;/, "the card's ground must read the token, not a literal");
+  /* and the card's gilt ramp and seam are the palette's, not three more literals. `m.m` reached the
+     ground radial from 2.27 and these did not, so a palette change never touched them — BTC's 2.17
+     `PAL` defect one tool along, and 2.42 is the release that moves every one of these values. */
+  assert.match(card, /addColorStop\(0, L\.giltC\)[\s\S]{0,120}addColorStop\(1, L\.giltC\)/,
+    "the card's gilt ramp must read the palette's gilt ramp");
+  assert.match(card, /ctx\.fillStyle = L\.verdLo;/, "and the binding seam must read --verdigris-lo");
+  for (const dead of ["#7a5510", "#d9a52c", "#ffe9a3", "#23574c"])
+    assert.ok(!card.includes(dead), `the card must not restate ${dead} — it is the palette's to write`);
+});
+
+/* 2.42 — THE PALETTE PICKER WEARS WHAT IT OFFERS, AND THE BRONZE HAS LEFT IT. Until now these five
+   swatches were the tool's bronze binding at rest and took a colour only once selected, so the row read
+   as four unlabelled buttons and one coloured one: the offer was invisible until after it was taken.
+   The sibling has had the opposite arrangement since 2.27. Guarded as the property rather than as the
+   rule text, in three parts — the swatch reads a ramp, the ramp it reads is the palette's own `m`/`mlo`
+   and not a mix invented beside them, and the selected one drops the override for the live tokens. */
+test("2.42 — the palette picker reads each palette's own accent ramp, and no bronze", () => {
+  const css = fs.readFileSync(path.join(ROOT, "tome-src", "20_style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const ui = fs.readFileSync(path.join(ROOT, "tome-src", "30_ui.jsx"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const pg = css.match(/\.cast\.pgsw\s*\{[^}]*\}/);
+  assert.ok(pg, ".cast.pgsw must exist — the picker has its own rule now");
+  assert.match(pg[0], /var\(--pg,\s*var\(--pigment\)\)/, "the rest state reads the offered accent");
+  assert.match(pg[0], /var\(--pg-lo,\s*var\(--pigment-lo\)\)/, "and the offered accent's own deep");
+  assert.ok(!/#[0-9a-f]{6}/i.test(pg[0].replace(/rgba?\([^)]*\)/g, "")),
+    "no hex may be authored in the picker's rest state — the palette supplies it");
+
+  const on = css.match(/\.cast\.pgsw\.on\s*\{[^}]*\}/);
+  assert.ok(on, ".cast.pgsw.on must exist");
+  assert.match(on[0], /linear-gradient\(180deg,\s*var\(--pigment\),\s*var\(--pigment-lo\)\)/,
+    "the selected swatch reads the LIVE tokens, so it shows what is applied rather than what it would apply");
+  assert.match(on[0], /var\(--verdigris\) inset/,
+    "selected is still the active colour (2.37) — here it is the ring rather than the fill");
+
+  /* the inline pair comes from the palette, and only on the swatches that are NOT selected */
+  assert.match(ui, /"--pg":\s*PIGMENTS\[k\]\.m,\s*"--pg-lo":\s*PIGMENTS\[k\]\.mlo/,
+    "each offer wears its own palette's accent ramp, from occvm/pigments.js");
+  assert.match(ui, /prefs\.palette === k \? undefined :/,
+    "the selected swatch sets neither, so it falls through to the live tokens");
+
+  /* 2.37 KEPT the --m override for exactly this caller and 2.42 RETIRES it, because the caller has its
+     own rule now. It was a fallback chain on every control in the tool serving five of them. */
+  assert.ok(!/--m\b/.test(css), "--m is retired: the picker no longer overrides the generic on-state");
+  assert.ok(!/"--m"/.test(ui), "and nothing sets it");
+  assert.match(css, /\.cast\.on\s*\{[^}]*var\(--verdigris\)/,
+    "so the generic on-state is the active colour and nothing else, which is what 2.37 argued for");
 });

@@ -191,8 +191,13 @@ function useSwipeYield(onCommit) {
    aria-pressed is emitted only when the caller passes `on` AND has not marked the control `action`: five
    sites write a bare `on` to mean "styled active", and a button that claims to be a pressed toggle
    announces a state it does not have. */
-function Cast({ on, children, onClick, patina, style, label, action }) {
-  return <button type="button" className={`cast${on ? " on" : ""}${patina ? " patina" : ""} occvm-act`}
+/* 2.42 — `pgsw` joins `patina` as a NAMED modifier rather than a className prop. Cast is the one control
+   and the one a11y contract; an open className would let any caller give it a skin, which is the whole
+   thing it exists to prevent. A closed set of modifiers keeps the vocabulary countable — and the comment
+   sits out here rather than inside because the guard below requires Cast's signature to be followed
+   immediately by its return, which is a deliberate tightness worth more than a convenient comment slot. */
+function Cast({ on, children, onClick, patina, pgsw, style, label, action }) {
+  return <button type="button" className={`cast${on ? " on" : ""}${patina ? " patina" : ""}${pgsw ? " pgsw" : ""} occvm-act`}
     onClick={onClick} style={style} aria-label={label}
     aria-pressed={action || on === undefined ? undefined : !!on}>{children}</button>;
 }
@@ -704,10 +709,14 @@ function Tune({ prefs, setPrefs, engStatus, migrated, onExport, onImport }) {
       {geo && <div className="note" style={{ marginTop: 6 }}>{geo}</div>}
       <div className="label">palette</div>
       <div className="row">
-        {/* OCCVM-L6 — each swatch wears the palette it offers through --m (the decorative accent), and
-            the selected one is the Cast's own `on` state. Five, not three: the closed mineral set died
-            with the crystal at 2.8 and the count now follows occvm/pigments.js rather than this line. */}
-        {Object.keys(PIGMENTS).map(k => <Cast key={k} on={prefs.palette === k} onClick={() => setPrefs({ ...prefs, palette: k })} style={{ "--m": PIGMENTS[k].m }}>{k}</Cast>)}
+        {/* OCCVM-L6 (2.42) — each swatch wears the palette it OFFERS, through that palette's own accent
+            ramp (`m`/`mlo`), and the selected one drops the override so it reads the LIVE tokens and
+            shows what is actually applied rather than what it would apply. The bronze the rest of this
+            tool's controls wear is gone from this row: see `.cast.pgsw` in 20_style.css. `--m` is
+            retired with it — it was this line's alone. Five, not three: the closed mineral set died
+            with the crystal at 2.8 and the count follows occvm/pigments.js rather than this line. */}
+        {Object.keys(PIGMENTS).map(k => <Cast key={k} pgsw on={prefs.palette === k} onClick={() => setPrefs({ ...prefs, palette: k })}
+          style={prefs.palette === k ? undefined : { "--pg": PIGMENTS[k].m, "--pg-lo": PIGMENTS[k].mlo }}>{k}</Cast>)}
       </div>
       <div className="label">spacing</div>
       <div className="row">{["comfy", "dense"].map(d => <Cast key={d} on={prefs.density === d} patina onClick={() => setPrefs({ ...prefs, density: d })}>{d}</Cast>)}</div>
